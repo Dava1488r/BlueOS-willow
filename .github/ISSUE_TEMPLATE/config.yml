@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: "Как установить на Pixel 6a / How to install on a Pixel 6a"
+    url: https://github.com/GDmio/BlueOS/blob/main/INSTALL.md
+    about: "Пошаговая установка и предупреждения / Step-by-step install and warnings"
+  - name: "Как собрать / How to build"
+    url: https://github.com/GDmio/BlueOS/blob/main/BUILDING.md
+    about: "Сборка BlueOS под свой телефон / Building BlueOS for your device"

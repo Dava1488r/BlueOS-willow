@@ -1,0 +1,68 @@
+name: "Сборка или порт / Build or port"
+description: "BlueOS не собирается, патч не встаёт, порт на другой телефон / Build fails, a patch doesn't apply, porting"
+labels: ["build"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Сначала проверьте [BUILDING.md](https://github.com/GDmio/BlueOS/blob/main/BUILDING.md) и «Частые проблемы» в [PORTING.md](https://github.com/GDmio/BlueOS/blob/main/PORTING.md).
+        **Чистая LineageOS 24.0 для вашего телефона должна собираться и загружаться** — если нет, это вопрос к дереву
+        устройства, не к BlueOS. Получилось на новом телефоне — тоже пишите, это поможет другим.
+        Check BUILDING.md and PORTING.md first; plain LineageOS 24.0 must build and boot on your device.
+  - type: input
+    id: device
+    attributes:
+      label: "Телефон и кодовое имя / Device and codename"
+      placeholder: "Xiaomi Redmi Note 12 (tapas)"
+    validations:
+      required: true
+  - type: input
+    id: tree
+    attributes:
+      label: "Дерево устройства / Device tree"
+      description: "Официальное LineageOS или ссылка на неофициальное / official or a link"
+    validations:
+      required: true
+  - type: dropdown
+    id: plain
+    attributes:
+      label: "Чистая LineageOS 24.0 собирается и загружается? / Does plain LineageOS 24.0 build and boot?"
+      options:
+        - "Да / Yes"
+        - "Нет / No"
+        - "Не проверял(а) / Didn't try"
+    validations:
+      required: true
+  - type: dropdown
+    id: step
+    attributes:
+      label: "На каком шаге / At which step"
+      options:
+        - "repo sync"
+        - "source build/envsetup.sh (патчи / patches)"
+        - "breakfast / lunch"
+        - "m bacon (сборка / build)"
+        - "Установка / Install"
+        - "Загрузка телефона / Boot"
+        - "Порт: что-то выглядит не так / Port: something looks wrong"
+    validations:
+      required: true
+  - type: textarea
+    id: patches
+    attributes:
+      label: "Вывод `source build/envsetup.sh` / Its output"
+      description: "Строки `BlueOS: applied …` / `BlueOS: FAILED …`"
+      render: text
+  - type: textarea
+    id: error
+    attributes:
+      label: "Ошибка / Error"
+      description: "Первая ошибка в выводе сборки (обычно строки с `FAILED:` и `error:`) — не весь лог / the first error, not the whole log"
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: host
+    attributes:
+      label: "Компьютер / Host"
+      placeholder: "Ubuntu 24.04 (WSL2), 32 ГБ ОЗУ, 400 ГБ свободно"

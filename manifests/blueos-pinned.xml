@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BlueOS 0.8: the projects BlueOS patches, at the LineageOS revisions its patches were made on.
+     Only if a patch fails on today's lineage-24.0: copy this file to .repo/local_manifests/, repo sync, see BUILDING.md. -->
+<manifest>
+  <extend-project name="LineageOS/android_bootable_recovery" revision="c1ccd0b4a17557f97ed864b96f160674609c1c54" />
+  <extend-project name="LineageOS/android_frameworks_base" revision="0a8b4cbd43ff0b0bde5585dfa85b72af640cf1e3" />
+  <extend-project name="LineageOS/android_frameworks_libs_systemui" revision="0e181d3d5dd8456ee158d9ac8725d9cd59fecd28" />
+  <extend-project name="LineageOS/android_packages_apps_DeskClock" revision="85cde5712f2f3eb6a0ffa9d6951ec4a83734586e" />
+  <extend-project name="LineageOS/android_packages_apps_Etar" revision="8173ec802ed046d1670ec03962e686e393a85335" />
+  <extend-project name="LineageOS/android_packages_apps_Glimpse" revision="89b473594ec8ad01417624e670912450ce5df7e9" />
+  <extend-project name="LineageOS/android_packages_apps_Launcher3" revision="5f26fe66475643ec08fe71a4021946aa57307192" />
+  <extend-project name="LineageOS/android_packages_apps_LineageParts" revision="6ba3c40b0e5b1dc420d7f53e70a32762b6e0586e" />
+  <extend-project name="LineageOS/android_packages_apps_Settings" revision="599c7eb9502474b3035fc599d3e028d6905e705c" />
+  <extend-project name="LineageOS/android_packages_apps_SetupWizard" revision="69174527a30bc72a28a5d55acdec8ce5edaba9e0" />
+  <extend-project name="LineageOS/android_packages_apps_ThemePicker" revision="2a9e5764da4484cb889508a489ffed694912cbe1" />
+  <extend-project name="LineageOS/android_vendor_lineage" revision="58d157ea32aac5908b304f05853d92e1b0ef67ba" />
+</manifest>

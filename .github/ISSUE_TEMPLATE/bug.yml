@@ -1,0 +1,57 @@
+name: "Ошибка в прошивке / Bug"
+description: "Что-то работает не так на телефоне с BlueOS / Something is wrong on a phone running BlueOS"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо! Чем точнее описание, тем быстрее исправим. Проблемы со **сборкой** — другой шаблон.
+        Thanks! Build problems go to the other template.
+  - type: input
+    id: device
+    attributes:
+      label: "Телефон / Device"
+      description: "Модель и кодовое имя / model and codename"
+      placeholder: "Pixel 6a (bluejay)"
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: "Чья сборка / Whose build"
+      options:
+        - "Готовая из Releases / From Releases"
+        - "Собрал(а) сам(а) / Built myself"
+        - "Собрал кто-то другой / Built by someone else"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: "Версия / Version"
+      description: "«Настройки» → «О телефоне» → версия BlueOS и дата сборки / Settings → About phone"
+      placeholder: "BlueOS 0.8, 30 окт. 2026"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: "Что случилось / What happened"
+      description: "Что ожидали и что увидели. Скриншот или видео очень помогают / Expected vs. actual; screenshots help"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Как повторить / Steps to reproduce"
+      placeholder: |
+        1. Открыть «Обои и стиль» → «Цвета»
+        2. ...
+  - type: textarea
+    id: log
+    attributes:
+      label: "Лог (необязательно) / Log (optional)"
+      description: |
+        Если приложение вылетает: `adb logcat -d -b crash > crash.txt` и приложите файл.
+        If an app crashes: `adb logcat -d -b crash > crash.txt` and attach it.
+      render: text

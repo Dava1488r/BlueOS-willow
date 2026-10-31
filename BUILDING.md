@@ -30,6 +30,8 @@ repo sync -j8
   <project path="vendor/blueos" name="BlueOS" remote="blueos" revision="main" />
 </manifest>
 ```
+`revision="main"` — самая свежая BlueOS. Нужна ровно версия из релиза — `revision="refs/tags/v0.8"`.
+
 Подключить BlueOS к сборке — одна строка:
 ```
 mkdir -p vendor/extra
@@ -52,7 +54,18 @@ m bacon -j$(nproc)
 ```
 `source build/envsetup.sh` сам накладывает патчи BlueOS (`vendor/blueos/vendorsetup.sh` → `scripts/apply-patches.sh`).
 **Посмотрите вывод:** должны быть строки `BlueOS: applied …` (при первом запуске) и **ни одной** `BlueOS: FAILED`.
-Повторный запуск безопасен — уже наложенные патчи пропускаются. Если патч не встал — см. PORTING.md, «Патч не применяется».
+Повторный запуск безопасен — уже наложенные патчи пропускаются.
+
+**Если патч не встал** (`BlueOS: FAILED`): LineageOS ушла вперёд от версии, на которой делались патчи. Два пути:
+1. Поправить патч под новый код — PORTING.md, «Частые проблемы» (хорошая задача для ИИ-агента).
+2. Проще: закрепить патчимые проекты на тех версиях LineageOS, где патчи точно встают. Остальная LineageOS остаётся
+   свежей (`repo sync` вернёт эти проекты к чистым версиям, `envsetup.sh` наложит патчи заново):
+```
+cp vendor/blueos/manifests/blueos-pinned.xml .repo/local_manifests/
+repo sync -j8 --force-sync
+source build/envsetup.sh
+```
+   Чтобы вернуться на свежую LineageOS — удалите этот файл из `.repo/local_manifests/` и снова `repo sync`.
 
 Готовый архив: `out/target/product/<устройство>/lineage-24.0-<дата>-UNOFFICIAL-BlueOS-0.8-<устройство>.zip`.
 

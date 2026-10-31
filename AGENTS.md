@@ -22,7 +22,9 @@ check that it worked. Long steps (sync, build) take hours — run them in the ba
 4. Add BlueOS ([BUILDING.md](BUILDING.md)): local manifest for `vendor/blueos`, the hook line in
    `vendor/extra/product.mk`, optional MindTheGapps (`vendor/gapps`, branch `cinnamonbun`).
 5. `source build/envsetup.sh` → read the output: `BlueOS: applied …` / `BlueOS: FAILED …`. Fix failed patches before
-   building (below). `breakfast <device>`, `m bacon`.
+   building: either port the patch to the new code (below), or — simpler for a beginner — pin the patched projects
+   to the revisions the patches were made on: `manifests/blueos-pinned.xml` → `.repo/local_manifests/`, `repo sync`
+   (BUILDING.md §4). `breakfast <device>`, `m bacon`.
 6. Flash, then go through the checklist in [PORTING.md](PORTING.md) on the phone.
 
 ## How the code is organised
