@@ -1,0 +1,5 @@
+# Pick the light/dark boot animation: BlueOS setting + current system theme
+get_prop(bootanim, blueos_bootanim_prop)
+get_prop(bootanim, theme_prop)
+# Wait until persistent properties are loaded before reading them
+get_prop(bootanim, persistent_properties_ready_prop)

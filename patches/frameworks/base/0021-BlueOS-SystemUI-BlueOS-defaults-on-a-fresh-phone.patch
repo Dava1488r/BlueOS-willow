@@ -1,0 +1,161 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sun, 25 Oct 2026 12:33:42 +0100
+Subject: [PATCH 21/30] BlueOS: SystemUI: BlueOS defaults on a fresh phone
+
+- BlueOSDefaults (once, before setup finishes; updates keep the user's
+  choices): light theme, the brand palette with "Bright colors"
+  (VIBRANT), always-on display, widget cards 15 % transparent.
+- Lock screen shortcuts: flashlight on the left, camera on the right.
+- Lock screen widgets: screen time, battery, equalizer (own default list;
+  the allowlist is unchanged).
+
+Change-Id: I3381ef5b02984dcdca2c72bd8efb9599a6003c75
+---
+ packages/SystemUI/res/values/config.xml       | 11 ++-
+ .../android/systemui/blueos/BlueOSDefaults.kt | 69 +++++++++++++++++++
+ .../communal/widgets/CommunalWidgetModule.kt  |  3 +-
+ .../theme/ThemeOverlayController.java         |  3 +
+ 4 files changed, 83 insertions(+), 3 deletions(-)
+ create mode 100644 packages/SystemUI/src/com/android/systemui/blueos/BlueOSDefaults.kt
+
+diff --git a/packages/SystemUI/res/values/config.xml b/packages/SystemUI/res/values/config.xml
+index 140bb805af52..a223dc6c5d3d 100644
+--- a/packages/SystemUI/res/values/config.xml
++++ b/packages/SystemUI/res/values/config.xml
+@@ -855,6 +855,12 @@
+     <string name="config_communalDatabase" translatable="false">communal_db</string>
+     <!-- Component names of allowed communal widgets -->
+     <string-array name="config_communalWidgetAllowlist" translatable="false" />
++    <!-- BlueOS: lock screen widgets on a fresh phone (swipe from the right), in this order -->
++    <string-array name="config_blueosCommunalDefaultWidgets" translatable="false">
++        <item>com.google.android.apps.wellbeing/com.google.android.apps.wellbeing.widget.screentime.ScreenTimeWidgetProviderReceiver_Receiver</item>
++        <item>com.android.systemui/com.android.systemui.blueos.widgets.BlueOSBatteryWidgetProvider</item>
++        <item>com.android.systemui/com.android.systemui.blueos.widgets.BlueOSEqBarsWidgetProvider</item>
++    </string-array>
+ 
+     <!-- Component name for the setup activity shown when the device is upright and charging. -->
+     <string name="config_communalUprightChargingSetupActivityComponent" translatable="false" />
+@@ -994,9 +1000,10 @@
+     default is displayed by System UI as long as the user hasn't made a different choice for that
+     slot. If the user did make a choice, even if the choice is the "None" option, the default is
+     ignored. -->
++    <!-- BlueOS: flashlight on the left, camera on the right -->
+     <string-array name="config_keyguardQuickAffordanceDefaults" translatable="false">
+-        <item>bottom_start:home</item>
+-        <item>bottom_end:wallet</item>
++        <item>bottom_start:flashlight</item>
++        <item>bottom_end:camera</item>
+     </string-array>
+ 
+     <!-- Package name for the app that implements the wallpaper picker. -->
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/BlueOSDefaults.kt b/packages/SystemUI/src/com/android/systemui/blueos/BlueOSDefaults.kt
+new file mode 100644
+index 000000000000..7c4774fee34a
+--- /dev/null
++++ b/packages/SystemUI/src/com/android/systemui/blueos/BlueOSDefaults.kt
+@@ -0,0 +1,69 @@
++/*
++ * Copyright (C) 2026 BlueOS
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.systemui.blueos
++
++import android.app.UiModeManager
++import android.content.Context
++import android.provider.Settings
++import android.util.Log
++import org.json.JSONObject
++
++/**
++ * BlueOS defaults that live in settings rather than resources: applied once, on a fresh phone
++ * (before the setup wizard finishes), so an update never overrides what the user chose.
++ * Light theme, the brand palette "Голубой BA" with "Яркие цвета", always-on display, widget
++ * cards 15 % transparent.
++ */
++object BlueOSDefaults {
++    private const val TAG = "BlueOSDefaults"
++    private const val KEY_APPLIED = "blueos_defaults_version"
++    private const val VERSION = 1
++
++    fun applyOnce(context: Context) {
++        val cr = context.contentResolver
++        if (Settings.Secure.getInt(cr, KEY_APPLIED, 0) >= VERSION) return
++        val fresh = Settings.Secure.getInt(cr, Settings.Secure.USER_SETUP_COMPLETE, 0) == 0
++        if (fresh) {
++            try {
++                if (Settings.Secure.getString(
++                        cr, Settings.Secure.THEME_CUSTOMIZATION_OVERLAY_PACKAGES).isNullOrEmpty()) {
++                    Settings.Secure.putString(
++                        cr,
++                        Settings.Secure.THEME_CUSTOMIZATION_OVERLAY_PACKAGES,
++                        JSONObject()
++                            .put("android.theme.customization.system_palette", "128AFA")
++                            .put("android.theme.customization.accent_color", "128AFA")
++                            .put("android.theme.customization.color_source", "preset")
++                            .put("android.theme.customization.color_index", "1")
++                            .put("android.theme.customization.theme_style", "VIBRANT")
++                            .toString(),
++                    )
++                }
++                Settings.Secure.putInt(cr, Settings.Secure.DOZE_ALWAYS_ON, 1)
++                Settings.Secure.putInt(cr, "blueos_widget_transparency", 15)
++                context
++                    .getSystemService(UiModeManager::class.java)
++                    ?.setNightMode(UiModeManager.MODE_NIGHT_NO)
++            } catch (e: RuntimeException) {
++                Log.w(TAG, "Can't apply the defaults", e)
++                return
++            }
++        }
++        // Updated phones keep their settings; mark them too, so this never runs again
++        Settings.Secure.putInt(cr, KEY_APPLIED, VERSION)
++    }
++}
+diff --git a/packages/SystemUI/src/com/android/systemui/communal/widgets/CommunalWidgetModule.kt b/packages/SystemUI/src/com/android/systemui/communal/widgets/CommunalWidgetModule.kt
+index a235e7ae2b6a..5d4ced09179c 100644
+--- a/packages/SystemUI/src/com/android/systemui/communal/widgets/CommunalWidgetModule.kt
++++ b/packages/SystemUI/src/com/android/systemui/communal/widgets/CommunalWidgetModule.kt
+@@ -81,7 +81,8 @@ interface CommunalWidgetModule {
+         @Provides
+         @Named(DEFAULT_WIDGETS)
+         fun provideDefaultWidgets(@Main resources: Resources): Array<String> {
+-            return resources.getStringArray(R.array.config_communalWidgetAllowlist)
++            // BlueOS: our own defaults; the allowlist stays as it is
++            return resources.getStringArray(R.array.config_blueosCommunalDefaultWidgets)
+         }
+     }
+ }
+diff --git a/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java b/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java
+index 463bfe85d0a3..94ec751452cc 100644
+--- a/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java
++++ b/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java
+@@ -70,6 +70,7 @@ import androidx.annotation.VisibleForTesting;
+ 
+ import com.android.systemui.CoreStartable;
+ import com.android.systemui.Dumpable;
++import com.android.systemui.blueos.BlueOSDefaults;
+ import com.android.systemui.blueos.widgets.BlueOSWidgetStyle;
+ import com.android.systemui.broadcast.BroadcastDispatcher;
+ import com.android.systemui.dagger.SysUISingleton;
+@@ -505,6 +506,8 @@ public class ThemeOverlayController implements CoreStartable, Dumpable {
+     @Override
+     public void start() {
+         if (DEBUG) Log.d(TAG, "Start");
++        // BlueOS: light theme, palette, always-on display and widget defaults on a fresh phone
++        BlueOSDefaults.INSTANCE.applyOnce(mContext);
+         // BlueOS: watches the widget transparency set in Wallpaper & style
+         BlueOSWidgetStyle.INSTANCE.start(mContext);
+         final IntentFilter filter = new IntentFilter();

@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BlueOS <blueos@localhost>
+Date: Sat, 24 Oct 2026 04:59:56 +0200
+Subject: [PATCH 2/4] BlueOS: Don't ship Updater
+
+It would offer official LineageOS builds, which can't be installed over BlueOS (different signing keys).
+
+Change-Id: I8f85daf2cc791807043d628e9390d9a4d1b381f4
+---
+ config/common.mk | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/config/common.mk b/config/common.mk
+index d1a2dbbf..4d87e42e 100644
+--- a/config/common.mk
++++ b/config/common.mk
+@@ -153,12 +153,10 @@ PRODUCT_PACKAGES += \
+     LineageSetupWizard
+ endif
+ 
++# BlueOS: no Updater - it would offer official LineageOS builds, which can't be
++# installed over BlueOS (different signing keys).
+ PRODUCT_PACKAGES += \
+-    LineageSettingsProvider \
+-    Updater
+-
+-PRODUCT_COPY_FILES += \
+-    vendor/lineage/prebuilt/common/etc/init/init.lineage-updater.rc:$(TARGET_COPY_OUT_SYSTEM_EXT)/etc/init/init.lineage-updater.rc
++    LineageSettingsProvider
+ 
+ # Config
+ PRODUCT_PACKAGES += \

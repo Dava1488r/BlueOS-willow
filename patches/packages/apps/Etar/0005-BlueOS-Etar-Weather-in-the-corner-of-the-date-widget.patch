@@ -1,0 +1,105 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 27 Oct 2026 03:49:42 +0100
+Subject: [PATCH 5/5] BlueOS: Etar: Weather in the corner of the date widget
+
+From Settings.Secure blueos_weather (SystemUI BlueOSWeather), switch blueos_weather_date.
+
+Change-Id: I552860e728e4c0ff9f00e8e4292d1b8423202f18
+---
+ .../widget/BlueOSDateWidgetProvider.java      | 34 +++++++++++++++++++
+ .../main/res/layout/blueos_date_widget.xml    | 30 ++++++++++++++++
+ 2 files changed, 64 insertions(+)
+
+diff --git a/app/src/main/java/com/android/calendar/widget/BlueOSDateWidgetProvider.java b/app/src/main/java/com/android/calendar/widget/BlueOSDateWidgetProvider.java
+index 520f4b4f..67fe05f2 100644
+--- a/app/src/main/java/com/android/calendar/widget/BlueOSDateWidgetProvider.java
++++ b/app/src/main/java/com/android/calendar/widget/BlueOSDateWidgetProvider.java
+@@ -165,6 +165,7 @@ public class BlueOSDateWidgetProvider extends AppWidgetProvider {
+         rv.setTextViewText(R.id.blueos_no_events, context.getString(canRead
+                 ? R.string.blueos_date_widget_no_events
+                 : R.string.blueos_date_widget_no_access));
++        setWeather(context, rv);
+ 
+         // Tapping opens the calendar at today
+         final Intent open = new Intent(Intent.ACTION_VIEW)
+@@ -176,6 +177,39 @@ public class BlueOSDateWidgetProvider extends AppWidgetProvider {
+         return rv;
+     }
+ 
++    /**
++     * BlueOS 0.7: weather in the top-right corner — from SystemUI's BlueOSWeather (Settings.Secure
++     * "blueos_weather", Open-Meteo), icons are SystemUI's Material Symbols. Hidden when switched
++     * off (Обои и стиль → Погода → «В виджете Дата») or older than 3 hours.
++     */
++    private static void setWeather(Context context, RemoteViews rv) {
++        rv.setViewVisibility(R.id.blueos_weather_box, View.GONE);
++        final android.content.ContentResolver cr = context.getContentResolver();
++        if (android.provider.Settings.Secure.getInt(cr, "blueos_weather_date", 1) == 0) return;
++        final String json = android.provider.Settings.Secure.getString(cr, "blueos_weather");
++        if (json == null) return;
++        try {
++            final org.json.JSONObject w = new org.json.JSONObject(json);
++            if (System.currentTimeMillis() - w.optLong("ts", 0) > 3 * DateUtils.HOUR_IN_MILLIS) return;
++            double t = w.getDouble("t");
++            if (android.provider.Settings.Secure.getInt(cr, "blueos_weather_f", 0) == 1) {
++                t = t * 9 / 5 + 32;
++            }
++            // SystemUI puts its own resource id of the icon into the data ("iconRes"): this app
++            // can't see the SystemUI package, the launcher (which loads the icon) can
++            final int res = w.optInt("iconRes", 0);
++            if (res != 0) {
++                rv.setImageViewIcon(R.id.blueos_weather_icon,
++                        android.graphics.drawable.Icon.createWithResource("com.android.systemui", res));
++            }
++            rv.setViewVisibility(R.id.blueos_weather_icon, res != 0 ? View.VISIBLE : View.GONE);
++            rv.setTextViewText(R.id.blueos_weather, Math.round(t) + "°");
++            rv.setViewVisibility(R.id.blueos_weather_box, View.VISIBLE);
++        } catch (Exception e) {
++            // no weather yet
++        }
++    }
++
+     private static void setClockFormat(RemoteViews rv, int viewId, String format) {
+         rv.setCharSequence(viewId, "setFormat12Hour", format);
+         rv.setCharSequence(viewId, "setFormat24Hour", format);
+diff --git a/app/src/main/res/layout/blueos_date_widget.xml b/app/src/main/res/layout/blueos_date_widget.xml
+index 589256e2..db7f8b23 100644
+--- a/app/src/main/res/layout/blueos_date_widget.xml
++++ b/app/src/main/res/layout/blueos_date_widget.xml
+@@ -173,5 +173,35 @@
+                 android:textColor="@color/blueos_widget_on_surface_variant"
+                 android:textSize="12sp" />
+         </LinearLayout>
++
++        <!-- BlueOS 0.7: weather in the top-right corner (Обои и стиль → Погода → «В виджете Дата») -->
++        <LinearLayout
++            android:id="@+id/blueos_weather_box"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_gravity="top|end"
++            android:layout_marginTop="12dp"
++            android:layout_marginEnd="14dp"
++            android:gravity="center_vertical"
++            android:orientation="horizontal"
++            android:visibility="gone">
++
++            <ImageView
++                android:id="@+id/blueos_weather_icon"
++                android:layout_width="16dp"
++                android:layout_height="16dp"
++                android:layout_marginEnd="3dp"
++                android:contentDescription="@null"
++                android:tint="@color/blueos_widget_on_surface" />
++
++            <TextView
++                android:id="@+id/blueos_weather"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:fontFamily="google-sans-text"
++                android:singleLine="true"
++                android:textColor="@color/blueos_widget_on_surface"
++                android:textSize="13sp" />
++        </LinearLayout>
+     </FrameLayout>
+ </FrameLayout>

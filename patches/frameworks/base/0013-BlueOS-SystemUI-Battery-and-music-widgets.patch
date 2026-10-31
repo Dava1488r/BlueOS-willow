@@ -1,0 +1,1021 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sun, 25 Oct 2026 00:14:05 +0200
+Subject: [PATCH 13/30] BlueOS: SystemUI: Battery and music widgets
+
+Two home screen widgets in the system palette colors (accent, dark theme):
+- Battery (2x2): phone charge ring, charging bolt, connected Bluetooth
+  headphones' charge. Follows ACTION_BATTERY_CHANGED, pushing only when the
+  level or the plug state changes.
+- Music (3x2): the playing (else most recent) media session of any app: art,
+  title, artist, progress (ticks every 5 s while playing and the screen is
+  on), previous / play-pause / next; tap opens the player.
+SystemUI hosts them because it always runs and may read and control all media
+sessions (MEDIA_CONTENT_CONTROL).
+
+Change-Id: I3c60fd19639734d7e22fe0b3b8a6e706d8440d2e
+---
+ packages/SystemUI/AndroidManifest.xml         |  23 ++
+ .../res/color/blueos_widget_card_bg.xml       |   5 +
+ .../res/drawable/blueos_battery_ring.xml      |  28 ++
+ .../SystemUI/res/drawable/blueos_ic_bolt.xml  |  11 +
+ .../res/drawable/blueos_ic_headphones.xml     |  11 +
+ .../res/drawable/blueos_ic_music_note.xml     |  14 +
+ .../SystemUI/res/drawable/blueos_ic_pause.xml |  11 +
+ .../SystemUI/res/drawable/blueos_ic_play.xml  |  11 +
+ .../res/drawable/blueos_ic_skip_next.xml      |  11 +
+ .../res/drawable/blueos_ic_skip_previous.xml  |  11 +
+ .../res/drawable/blueos_media_art_bg.xml      |   7 +
+ .../res/drawable/blueos_media_play_bg.xml     |   6 +
+ .../res/drawable/blueos_media_progress.xml    |  18 ++
+ .../res/drawable/blueos_widget_card.xml       |   7 +
+ .../res/layout/blueos_battery_widget.xml      |  78 ++++++
+ .../res/layout/blueos_media_widget.xml        | 100 +++++++
+ .../res/values-night/blueos_widget_colors.xml |  10 +
+ .../res/values-ru/blueos_widget_strings.xml   |  14 +
+ .../res/values/blueos_widget_colors.xml       |  10 +
+ .../res/values/blueos_widget_strings.xml      |  15 ++
+ .../res/xml/blueos_battery_widget_info.xml    |  13 +
+ .../res/xml/blueos_media_widget_info.xml      |  15 ++
+ .../widgets/BlueOSBatteryWidgetProvider.kt    | 134 ++++++++++
+ .../widgets/BlueOSMediaWidgetProvider.kt      | 243 ++++++++++++++++++
+ 24 files changed, 806 insertions(+)
+ create mode 100644 packages/SystemUI/res/color/blueos_widget_card_bg.xml
+ create mode 100644 packages/SystemUI/res/drawable/blueos_battery_ring.xml
+ create mode 100644 packages/SystemUI/res/drawable/blueos_ic_bolt.xml
+ create mode 100644 packages/SystemUI/res/drawable/blueos_ic_headphones.xml
+ create mode 100644 packages/SystemUI/res/drawable/blueos_ic_music_note.xml
+ create mode 100644 packages/SystemUI/res/drawable/blueos_ic_pause.xml
+ create mode 100644 packages/SystemUI/res/drawable/blueos_ic_play.xml
+ create mode 100644 packages/SystemUI/res/drawable/blueos_ic_skip_next.xml
+ create mode 100644 packages/SystemUI/res/drawable/blueos_ic_skip_previous.xml
+ create mode 100644 packages/SystemUI/res/drawable/blueos_media_art_bg.xml
+ create mode 100644 packages/SystemUI/res/drawable/blueos_media_play_bg.xml
+ create mode 100644 packages/SystemUI/res/drawable/blueos_media_progress.xml
+ create mode 100644 packages/SystemUI/res/drawable/blueos_widget_card.xml
+ create mode 100644 packages/SystemUI/res/layout/blueos_battery_widget.xml
+ create mode 100644 packages/SystemUI/res/layout/blueos_media_widget.xml
+ create mode 100644 packages/SystemUI/res/values-night/blueos_widget_colors.xml
+ create mode 100644 packages/SystemUI/res/values-ru/blueos_widget_strings.xml
+ create mode 100644 packages/SystemUI/res/values/blueos_widget_colors.xml
+ create mode 100644 packages/SystemUI/res/values/blueos_widget_strings.xml
+ create mode 100644 packages/SystemUI/res/xml/blueos_battery_widget_info.xml
+ create mode 100644 packages/SystemUI/res/xml/blueos_media_widget_info.xml
+ create mode 100644 packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSBatteryWidgetProvider.kt
+ create mode 100644 packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSMediaWidgetProvider.kt
+
+diff --git a/packages/SystemUI/AndroidManifest.xml b/packages/SystemUI/AndroidManifest.xml
+index a83e306e053c..5fd3d1e20ce5 100644
+--- a/packages/SystemUI/AndroidManifest.xml
++++ b/packages/SystemUI/AndroidManifest.xml
+@@ -886,6 +886,29 @@
+         <receiver android:name=".people.widget.PeopleSpaceWidgetPinnedReceiver"
+             android:enabled="true"/>
+ 
++        <!-- BlueOS battery and music widgets -->
++        <receiver
++            android:name=".blueos.widgets.BlueOSBatteryWidgetProvider"
++            android:label="@string/blueos_battery_widget"
++            android:exported="true">
++            <intent-filter>
++                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
++            </intent-filter>
++            <meta-data android:name="android.appwidget.provider"
++                android:resource="@xml/blueos_battery_widget_info" />
++        </receiver>
++
++        <receiver
++            android:name=".blueos.widgets.BlueOSMediaWidgetProvider"
++            android:label="@string/blueos_media_widget"
++            android:exported="true">
++            <intent-filter>
++                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
++            </intent-filter>
++            <meta-data android:name="android.appwidget.provider"
++                android:resource="@xml/blueos_media_widget_info" />
++        </receiver>
++
+         <!-- ContentProvider that returns a People Tile preview for a given shortcut -->
+         <provider
+             android:name="com.android.systemui.people.PeopleProvider"
+diff --git a/packages/SystemUI/res/color/blueos_widget_card_bg.xml b/packages/SystemUI/res/color/blueos_widget_card_bg.xml
+new file mode 100644
+index 000000000000..7252c4139133
+--- /dev/null
++++ b/packages/SystemUI/res/color/blueos_widget_card_bg.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS: slightly translucent card, the wallpaper shows through a little -->
++<selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:alpha="0.9" android:color="@color/blueos_widget_card" />
++</selector>
+diff --git a/packages/SystemUI/res/drawable/blueos_battery_ring.xml b/packages/SystemUI/res/drawable/blueos_battery_ring.xml
+new file mode 100644
+index 000000000000..c6ef6cd2cbf8
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/blueos_battery_ring.xml
+@@ -0,0 +1,28 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS battery widget: charge ring (progress drawable), starting at the top -->
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:id="@android:id/background">
++        <shape
++            android:innerRadiusRatio="2.6"
++            android:shape="ring"
++            android:thicknessRatio="9"
++            android:useLevel="false">
++            <solid android:color="@color/blueos_widget_primary_container" />
++        </shape>
++    </item>
++    <item android:id="@android:id/progress">
++        <rotate
++            android:fromDegrees="270"
++            android:pivotX="50%"
++            android:pivotY="50%"
++            android:toDegrees="270">
++            <shape
++                android:innerRadiusRatio="2.6"
++                android:shape="ring"
++                android:thicknessRatio="9"
++                android:useLevel="true">
++                <solid android:color="@color/blueos_widget_primary" />
++            </shape>
++        </rotate>
++    </item>
++</layer-list>
+diff --git a/packages/SystemUI/res/drawable/blueos_ic_bolt.xml b/packages/SystemUI/res/drawable/blueos_ic_bolt.xml
+new file mode 100644
+index 000000000000..27b8400122ac
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/blueos_ic_bolt.xml
+@@ -0,0 +1,11 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS battery widget: charging (Material icon, Apache 2.0) -->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:viewportWidth="24"
++    android:viewportHeight="24">
++    <path
++        android:fillColor="@color/blueos_widget_primary"
++        android:pathData="M7,2v11h3v9l7,-12h-4l4,-8z" />
++</vector>
+diff --git a/packages/SystemUI/res/drawable/blueos_ic_headphones.xml b/packages/SystemUI/res/drawable/blueos_ic_headphones.xml
+new file mode 100644
+index 000000000000..88962c4d469d
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/blueos_ic_headphones.xml
+@@ -0,0 +1,11 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS battery widget (Material icon, Apache 2.0) -->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:viewportWidth="24"
++    android:viewportHeight="24">
++    <path
++        android:fillColor="@color/blueos_widget_on_surface_variant"
++        android:pathData="M12,1c-4.97,0 -9,4.03 -9,9v7c0,1.66 1.34,3 3,3h3v-8H5v-2c0,-3.87 3.13,-7 7,-7s7,3.13 7,7v2h-4v8h3c1.66,0 3,-1.34 3,-3v-7c0,-4.97 -4.03,-9 -9,-9z" />
++</vector>
+diff --git a/packages/SystemUI/res/drawable/blueos_ic_music_note.xml b/packages/SystemUI/res/drawable/blueos_ic_music_note.xml
+new file mode 100644
+index 000000000000..f81574febdcc
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/blueos_ic_music_note.xml
+@@ -0,0 +1,14 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS music widget: no album art (Material icon, Apache 2.0) -->
++<inset xmlns:android="http://schemas.android.com/apk/res/android"
++    android:inset="12dp">
++    <vector
++        android:width="24dp"
++        android:height="24dp"
++        android:viewportWidth="24"
++        android:viewportHeight="24">
++        <path
++            android:fillColor="@color/blueos_widget_primary"
++            android:pathData="M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z" />
++    </vector>
++</inset>
+diff --git a/packages/SystemUI/res/drawable/blueos_ic_pause.xml b/packages/SystemUI/res/drawable/blueos_ic_pause.xml
+new file mode 100644
+index 000000000000..ead57ab0c827
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/blueos_ic_pause.xml
+@@ -0,0 +1,11 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS music widget (Material icon, Apache 2.0) -->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:viewportWidth="24"
++    android:viewportHeight="24">
++    <path
++        android:fillColor="@color/blueos_widget_on_primary"
++        android:pathData="M6,19h4V5H6v14zM14,5v14h4V5h-4z" />
++</vector>
+diff --git a/packages/SystemUI/res/drawable/blueos_ic_play.xml b/packages/SystemUI/res/drawable/blueos_ic_play.xml
+new file mode 100644
+index 000000000000..cdecd57fde6c
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/blueos_ic_play.xml
+@@ -0,0 +1,11 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS music widget (Material icon, Apache 2.0) -->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:viewportWidth="24"
++    android:viewportHeight="24">
++    <path
++        android:fillColor="@color/blueos_widget_on_primary"
++        android:pathData="M8,5v14l11,-7z" />
++</vector>
+diff --git a/packages/SystemUI/res/drawable/blueos_ic_skip_next.xml b/packages/SystemUI/res/drawable/blueos_ic_skip_next.xml
+new file mode 100644
+index 000000000000..159e9e84c77f
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/blueos_ic_skip_next.xml
+@@ -0,0 +1,11 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS music widget (Material icon, Apache 2.0) -->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:viewportWidth="24"
++    android:viewportHeight="24">
++    <path
++        android:fillColor="@color/blueos_widget_on_surface"
++        android:pathData="M6,18l8.5,-6L6,6v12zM16,6v12h2V6h-2z" />
++</vector>
+diff --git a/packages/SystemUI/res/drawable/blueos_ic_skip_previous.xml b/packages/SystemUI/res/drawable/blueos_ic_skip_previous.xml
+new file mode 100644
+index 000000000000..44fa860c284e
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/blueos_ic_skip_previous.xml
+@@ -0,0 +1,11 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS music widget (Material icon, Apache 2.0) -->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:viewportWidth="24"
++    android:viewportHeight="24">
++    <path
++        android:fillColor="@color/blueos_widget_on_surface"
++        android:pathData="M6,6h2v12H6zM9.5,12l8.5,6V6z" />
++</vector>
+diff --git a/packages/SystemUI/res/drawable/blueos_media_art_bg.xml b/packages/SystemUI/res/drawable/blueos_media_art_bg.xml
+new file mode 100644
+index 000000000000..200eb6b31108
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/blueos_media_art_bg.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS music widget: rounded album art (clipped to this outline) -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android"
++    android:shape="rectangle">
++    <solid android:color="@color/blueos_widget_primary_container" />
++    <corners android:radius="12dp" />
++</shape>
+diff --git a/packages/SystemUI/res/drawable/blueos_media_play_bg.xml b/packages/SystemUI/res/drawable/blueos_media_play_bg.xml
+new file mode 100644
+index 000000000000..0ae4d98b55ff
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/blueos_media_play_bg.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS music widget: play / pause button circle -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android"
++    android:shape="oval">
++    <solid android:color="@color/blueos_widget_primary" />
++</shape>
+diff --git a/packages/SystemUI/res/drawable/blueos_media_progress.xml b/packages/SystemUI/res/drawable/blueos_media_progress.xml
+new file mode 100644
+index 000000000000..50d100a49523
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/blueos_media_progress.xml
+@@ -0,0 +1,18 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS music widget: rounded progress bar -->
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++    <item android:id="@android:id/background">
++        <shape android:shape="rectangle">
++            <solid android:color="@color/blueos_widget_primary_container" />
++            <corners android:radius="2dp" />
++        </shape>
++    </item>
++    <item android:id="@android:id/progress">
++        <clip>
++            <shape android:shape="rectangle">
++                <solid android:color="@color/blueos_widget_primary" />
++                <corners android:radius="2dp" />
++            </shape>
++        </clip>
++    </item>
++</layer-list>
+diff --git a/packages/SystemUI/res/drawable/blueos_widget_card.xml b/packages/SystemUI/res/drawable/blueos_widget_card.xml
+new file mode 100644
+index 000000000000..74c57898564b
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/blueos_widget_card.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS widgets: card background -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android"
++    android:shape="rectangle">
++    <solid android:color="@color/blueos_widget_card_bg" />
++    <corners android:radius="@android:dimen/system_app_widget_background_radius" />
++</shape>
+diff --git a/packages/SystemUI/res/layout/blueos_battery_widget.xml b/packages/SystemUI/res/layout/blueos_battery_widget.xml
+new file mode 100644
+index 000000000000..48c06949d300
+--- /dev/null
++++ b/packages/SystemUI/res/layout/blueos_battery_widget.xml
+@@ -0,0 +1,78 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS battery widget: phone charge ring, charging bolt, Bluetooth headphones -->
++<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
++    android:id="@android:id/background"
++    android:layout_width="match_parent"
++    android:layout_height="match_parent"
++    android:background="@drawable/blueos_widget_card"
++    android:gravity="center"
++    android:orientation="vertical"
++    android:padding="10dp">
++
++    <FrameLayout
++        android:layout_width="72dp"
++        android:layout_height="72dp">
++
++        <ProgressBar
++            android:id="@+id/blueos_battery_ring"
++            style="?android:attr/progressBarStyleHorizontal"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:indeterminate="false"
++            android:max="100"
++            android:progressDrawable="@drawable/blueos_battery_ring" />
++
++        <TextView
++            android:id="@+id/blueos_battery_level"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_gravity="center"
++            android:fontFamily="blueos-clock"
++            android:fontVariationSettings="'wght' 600"
++            android:includeFontPadding="false"
++            android:singleLine="true"
++            android:textColor="@color/blueos_widget_on_surface"
++            android:textSize="16sp" />
++    </FrameLayout>
++
++    <LinearLayout
++        android:layout_width="wrap_content"
++        android:layout_height="wrap_content"
++        android:layout_marginTop="6dp"
++        android:gravity="center_vertical"
++        android:orientation="horizontal">
++
++        <ImageView
++            android:id="@+id/blueos_battery_charging"
++            android:layout_width="14dp"
++            android:layout_height="14dp"
++            android:contentDescription="@string/blueos_battery_widget_charging"
++            android:src="@drawable/blueos_ic_bolt"
++            android:visibility="gone" />
++
++        <LinearLayout
++            android:id="@+id/blueos_headset"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_marginStart="6dp"
++            android:gravity="center_vertical"
++            android:orientation="horizontal"
++            android:visibility="gone">
++
++            <ImageView
++                android:layout_width="14dp"
++                android:layout_height="14dp"
++                android:contentDescription="@string/blueos_battery_widget_headphones"
++                android:src="@drawable/blueos_ic_headphones" />
++
++            <TextView
++                android:id="@+id/blueos_headset_level"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_marginStart="3dp"
++                android:singleLine="true"
++                android:textColor="@color/blueos_widget_on_surface_variant"
++                android:textSize="12sp" />
++        </LinearLayout>
++    </LinearLayout>
++</LinearLayout>
+diff --git a/packages/SystemUI/res/layout/blueos_media_widget.xml b/packages/SystemUI/res/layout/blueos_media_widget.xml
+new file mode 100644
+index 000000000000..c3eadd692136
+--- /dev/null
++++ b/packages/SystemUI/res/layout/blueos_media_widget.xml
+@@ -0,0 +1,100 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS music widget: art, title, artist, progress, previous / play-pause / next -->
++<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
++    android:id="@android:id/background"
++    android:layout_width="match_parent"
++    android:layout_height="match_parent"
++    android:background="@drawable/blueos_widget_card"
++    android:gravity="center_vertical"
++    android:orientation="vertical"
++    android:padding="14dp">
++
++    <LinearLayout
++        android:layout_width="match_parent"
++        android:layout_height="wrap_content"
++        android:gravity="center_vertical"
++        android:orientation="horizontal">
++
++        <ImageView
++            android:id="@+id/blueos_media_art"
++            android:layout_width="48dp"
++            android:layout_height="48dp"
++            android:background="@drawable/blueos_media_art_bg"
++            android:clipToOutline="true"
++            android:contentDescription="@null"
++            android:scaleType="centerCrop"
++            android:src="@drawable/blueos_ic_music_note" />
++
++        <LinearLayout
++            android:layout_width="match_parent"
++            android:layout_height="wrap_content"
++            android:layout_marginStart="12dp"
++            android:orientation="vertical">
++
++            <TextView
++                android:id="@+id/blueos_media_title"
++                android:layout_width="match_parent"
++                android:layout_height="wrap_content"
++                android:ellipsize="end"
++                android:singleLine="true"
++                android:text="@string/blueos_media_widget_idle"
++                android:textColor="@color/blueos_widget_on_surface"
++                android:textSize="14sp" />
++
++            <TextView
++                android:id="@+id/blueos_media_artist"
++                android:layout_width="match_parent"
++                android:layout_height="wrap_content"
++                android:ellipsize="end"
++                android:singleLine="true"
++                android:textColor="@color/blueos_widget_on_surface_variant"
++                android:textSize="12sp" />
++        </LinearLayout>
++    </LinearLayout>
++
++    <ProgressBar
++        android:id="@+id/blueos_media_progress"
++        style="?android:attr/progressBarStyleHorizontal"
++        android:layout_width="match_parent"
++        android:layout_height="4dp"
++        android:layout_marginTop="12dp"
++        android:indeterminate="false"
++        android:max="1000"
++        android:progressDrawable="@drawable/blueos_media_progress" />
++
++    <LinearLayout
++        android:layout_width="match_parent"
++        android:layout_height="wrap_content"
++        android:layout_marginTop="8dp"
++        android:gravity="center"
++        android:orientation="horizontal">
++
++        <ImageView
++            android:id="@+id/blueos_media_previous"
++            android:layout_width="40dp"
++            android:layout_height="40dp"
++            android:background="?android:attr/selectableItemBackgroundBorderless"
++            android:contentDescription="@string/blueos_media_widget_previous"
++            android:padding="8dp"
++            android:src="@drawable/blueos_ic_skip_previous" />
++
++        <ImageView
++            android:id="@+id/blueos_media_play_pause"
++            android:layout_width="44dp"
++            android:layout_height="44dp"
++            android:layout_marginHorizontal="24dp"
++            android:background="@drawable/blueos_media_play_bg"
++            android:contentDescription="@string/blueos_media_widget_play"
++            android:padding="10dp"
++            android:src="@drawable/blueos_ic_play" />
++
++        <ImageView
++            android:id="@+id/blueos_media_next"
++            android:layout_width="40dp"
++            android:layout_height="40dp"
++            android:background="?android:attr/selectableItemBackgroundBorderless"
++            android:contentDescription="@string/blueos_media_widget_next"
++            android:padding="8dp"
++            android:src="@drawable/blueos_ic_skip_next" />
++    </LinearLayout>
++</LinearLayout>
+diff --git a/packages/SystemUI/res/values-night/blueos_widget_colors.xml b/packages/SystemUI/res/values-night/blueos_widget_colors.xml
+new file mode 100644
+index 000000000000..410d02b54265
+--- /dev/null
++++ b/packages/SystemUI/res/values-night/blueos_widget_colors.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS battery / music widgets: dark theme -->
++<resources>
++    <color name="blueos_widget_card">@android:color/system_surface_container_dark</color>
++    <color name="blueos_widget_on_surface">@android:color/system_on_surface_dark</color>
++    <color name="blueos_widget_on_surface_variant">@android:color/system_on_surface_variant_dark</color>
++    <color name="blueos_widget_primary">@android:color/system_primary_dark</color>
++    <color name="blueos_widget_on_primary">@android:color/system_on_primary_dark</color>
++    <color name="blueos_widget_primary_container">@android:color/system_primary_container_dark</color>
++</resources>
+diff --git a/packages/SystemUI/res/values-ru/blueos_widget_strings.xml b/packages/SystemUI/res/values-ru/blueos_widget_strings.xml
+new file mode 100644
+index 000000000000..17866afcc4a1
+--- /dev/null
++++ b/packages/SystemUI/res/values-ru/blueos_widget_strings.xml
+@@ -0,0 +1,14 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <string name="blueos_battery_widget">Батарея</string>
++    <string name="blueos_battery_widget_description">Заряд телефона и наушников</string>
++    <string name="blueos_battery_widget_charging">Заряжается</string>
++    <string name="blueos_battery_widget_headphones">Наушники</string>
++    <string name="blueos_media_widget">Музыка</string>
++    <string name="blueos_media_widget_description">Что играет в любом приложении, с управлением</string>
++    <string name="blueos_media_widget_idle">Сейчас ничего не играет</string>
++    <string name="blueos_media_widget_play">Воспроизвести</string>
++    <string name="blueos_media_widget_pause">Пауза</string>
++    <string name="blueos_media_widget_previous">Предыдущий трек</string>
++    <string name="blueos_media_widget_next">Следующий трек</string>
++</resources>
+diff --git a/packages/SystemUI/res/values/blueos_widget_colors.xml b/packages/SystemUI/res/values/blueos_widget_colors.xml
+new file mode 100644
+index 000000000000..a9ce9ddd2fae
+--- /dev/null
++++ b/packages/SystemUI/res/values/blueos_widget_colors.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS battery / music widgets: system palette colors, so they follow the accent color -->
++<resources>
++    <color name="blueos_widget_card">@android:color/system_surface_container_light</color>
++    <color name="blueos_widget_on_surface">@android:color/system_on_surface_light</color>
++    <color name="blueos_widget_on_surface_variant">@android:color/system_on_surface_variant_light</color>
++    <color name="blueos_widget_primary">@android:color/system_primary_light</color>
++    <color name="blueos_widget_on_primary">@android:color/system_on_primary_light</color>
++    <color name="blueos_widget_primary_container">@android:color/system_primary_container_light</color>
++</resources>
+diff --git a/packages/SystemUI/res/values/blueos_widget_strings.xml b/packages/SystemUI/res/values/blueos_widget_strings.xml
+new file mode 100644
+index 000000000000..e5641c2acde9
+--- /dev/null
++++ b/packages/SystemUI/res/values/blueos_widget_strings.xml
+@@ -0,0 +1,15 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS battery / music widgets -->
++<resources>
++    <string name="blueos_battery_widget">Battery</string>
++    <string name="blueos_battery_widget_description">Phone and headphones charge</string>
++    <string name="blueos_battery_widget_charging">Charging</string>
++    <string name="blueos_battery_widget_headphones">Headphones</string>
++    <string name="blueos_media_widget">Music</string>
++    <string name="blueos_media_widget_description">What\'s playing in any app, with controls</string>
++    <string name="blueos_media_widget_idle">Nothing is playing</string>
++    <string name="blueos_media_widget_play">Play</string>
++    <string name="blueos_media_widget_pause">Pause</string>
++    <string name="blueos_media_widget_previous">Previous</string>
++    <string name="blueos_media_widget_next">Next</string>
++</resources>
+diff --git a/packages/SystemUI/res/xml/blueos_battery_widget_info.xml b/packages/SystemUI/res/xml/blueos_battery_widget_info.xml
+new file mode 100644
+index 000000000000..2267c19bae5c
+--- /dev/null
++++ b/packages/SystemUI/res/xml/blueos_battery_widget_info.xml
+@@ -0,0 +1,13 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS battery widget -->
++<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
++    android:description="@string/blueos_battery_widget_description"
++    android:initialLayout="@layout/blueos_battery_widget"
++    android:minWidth="110dp"
++    android:minHeight="110dp"
++    android:previewLayout="@layout/blueos_battery_widget"
++    android:resizeMode="none"
++    android:targetCellWidth="2"
++    android:targetCellHeight="2"
++    android:updatePeriodMillis="0"
++    android:widgetCategory="home_screen" />
+diff --git a/packages/SystemUI/res/xml/blueos_media_widget_info.xml b/packages/SystemUI/res/xml/blueos_media_widget_info.xml
+new file mode 100644
+index 000000000000..3267aa4bc51e
+--- /dev/null
++++ b/packages/SystemUI/res/xml/blueos_media_widget_info.xml
+@@ -0,0 +1,15 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS music widget -->
++<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
++    android:description="@string/blueos_media_widget_description"
++    android:initialLayout="@layout/blueos_media_widget"
++    android:minWidth="180dp"
++    android:minHeight="110dp"
++    android:minResizeWidth="150dp"
++    android:minResizeHeight="110dp"
++    android:previewLayout="@layout/blueos_media_widget"
++    android:resizeMode="horizontal"
++    android:targetCellWidth="3"
++    android:targetCellHeight="2"
++    android:updatePeriodMillis="0"
++    android:widgetCategory="home_screen" />
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSBatteryWidgetProvider.kt b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSBatteryWidgetProvider.kt
+new file mode 100644
+index 000000000000..d4a7ecd92cc8
+--- /dev/null
++++ b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSBatteryWidgetProvider.kt
+@@ -0,0 +1,134 @@
++/*
++ * Copyright (C) 2026 BlueOS
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.systemui.blueos.widgets
++
++import android.annotation.SuppressLint
++import android.app.PendingIntent
++import android.appwidget.AppWidgetManager
++import android.appwidget.AppWidgetProvider
++import android.bluetooth.BluetoothClass
++import android.bluetooth.BluetoothDevice
++import android.bluetooth.BluetoothManager
++import android.content.BroadcastReceiver
++import android.content.ComponentName
++import android.content.Context
++import android.content.Intent
++import android.content.IntentFilter
++import android.os.BatteryManager
++import android.view.View
++import android.widget.RemoteViews
++import com.android.systemui.res.R
++import java.text.NumberFormat
++
++/**
++ * BlueOS battery widget: the phone's charge as a ring, plus connected Bluetooth headphones. It
++ * lives in SystemUI because SystemUI always runs and can follow the battery without waking an app.
++ */
++class BlueOSBatteryWidgetProvider : AppWidgetProvider() {
++    override fun onUpdate(context: Context, wm: AppWidgetManager, widgetIds: IntArray) {
++        BlueOSBatteryWidget.start(context)
++        BlueOSBatteryWidget.push(context)
++    }
++}
++
++internal object BlueOSBatteryWidget {
++    private const val ACTION_BT_BATTERY_LEVEL_CHANGED =
++        "android.bluetooth.device.action.BATTERY_LEVEL_CHANGED"
++
++    private var started = false
++    private var level = -1
++    private var plugged = false
++
++    private val receiver =
++        object : BroadcastReceiver() {
++            override fun onReceive(context: Context, intent: Intent) {
++                if (intent.action == Intent.ACTION_BATTERY_CHANGED) {
++                    val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, 100)
++                    val newLevel =
++                        intent.getIntExtra(BatteryManager.EXTRA_LEVEL, 0) * 100 /
++                            scale.coerceAtLeast(1)
++                    val newPlugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
++                    // The battery broadcast also fires for voltage and temperature changes
++                    if (newLevel == level && newPlugged == plugged) return
++                    level = newLevel
++                    plugged = newPlugged
++                }
++                push(context)
++            }
++        }
++
++    fun start(context: Context) {
++        if (started) return
++        started = true
++        val filter =
++            IntentFilter().apply {
++                addAction(Intent.ACTION_BATTERY_CHANGED)
++                addAction(ACTION_BT_BATTERY_LEVEL_CHANGED)
++                addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
++                addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
++            }
++        // Exported: the headset battery broadcasts come from the Bluetooth app, not the system
++        val app = context.applicationContext
++        app.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)?.let {
++            receiver.onReceive(app, it)
++        }
++    }
++
++    fun push(context: Context) {
++        val app = context.applicationContext
++        val wm = AppWidgetManager.getInstance(app)
++        val provider = ComponentName(app, BlueOSBatteryWidgetProvider::class.java)
++        if (wm.getAppWidgetIds(provider).isEmpty() || level < 0) return
++
++        val rv = RemoteViews(app.packageName, R.layout.blueos_battery_widget)
++        rv.setProgressBar(R.id.blueos_battery_ring, 100, level, false)
++        rv.setTextViewText(R.id.blueos_battery_level, percent(level))
++        rv.setViewVisibility(R.id.blueos_battery_charging, if (plugged) View.VISIBLE else View.GONE)
++
++        val headset = headsetBatteryLevel(app)
++        rv.setViewVisibility(R.id.blueos_headset, if (headset >= 0) View.VISIBLE else View.GONE)
++        if (headset >= 0) rv.setTextViewText(R.id.blueos_headset_level, percent(headset))
++
++        val usage = Intent(Intent.ACTION_POWER_USAGE_SUMMARY)
++        rv.setOnClickPendingIntent(
++            android.R.id.background,
++            PendingIntent.getActivity(app, 0, usage, PendingIntent.FLAG_IMMUTABLE),
++        )
++        wm.updateAppWidget(provider, rv)
++    }
++
++    private fun percent(value: Int): String =
++        NumberFormat.getPercentInstance().format(value / 100.0)
++
++    /** Charge of the first connected audio device that reports one, or -1. */
++    @SuppressLint("MissingPermission")
++    private fun headsetBatteryLevel(context: Context): Int =
++        runCatching {
++                context
++                    .getSystemService(BluetoothManager::class.java)
++                    ?.adapter
++                    ?.bondedDevices
++                    ?.filter {
++                        it.isConnected &&
++                            it.bluetoothClass?.majorDeviceClass ==
++                                BluetoothClass.Device.Major.AUDIO_VIDEO
++                    }
++                    ?.map { it.batteryLevel }
++                    ?.firstOrNull { it >= 0 }
++            }
++            .getOrNull() ?: -1
++}
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSMediaWidgetProvider.kt b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSMediaWidgetProvider.kt
+new file mode 100644
+index 000000000000..a0225a35389c
+--- /dev/null
++++ b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSMediaWidgetProvider.kt
+@@ -0,0 +1,243 @@
++/*
++ * Copyright (C) 2026 BlueOS
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.systemui.blueos.widgets
++
++import android.app.PendingIntent
++import android.appwidget.AppWidgetManager
++import android.appwidget.AppWidgetProvider
++import android.content.BroadcastReceiver
++import android.content.ComponentName
++import android.content.Context
++import android.content.Intent
++import android.content.IntentFilter
++import android.graphics.Bitmap
++import android.media.MediaMetadata
++import android.media.session.MediaController
++import android.media.session.MediaSessionManager
++import android.media.session.PlaybackState
++import android.os.Handler
++import android.os.Looper
++import android.os.PowerManager
++import android.os.SystemClock
++import android.widget.RemoteViews
++import com.android.systemui.res.R
++
++/**
++ * BlueOS music widget for any player: the active media session's art, title and artist, a
++ * progress bar and previous / play-pause / next. In SystemUI, which may read and control all
++ * media sessions (MEDIA_CONTENT_CONTROL) and always runs.
++ */
++class BlueOSMediaWidgetProvider : AppWidgetProvider() {
++    override fun onReceive(context: Context, intent: Intent) {
++        super.onReceive(context, intent)
++        BlueOSMediaWidget.start(context)
++        BlueOSMediaWidget.onAction(intent.action)
++    }
++
++    override fun onUpdate(context: Context, wm: AppWidgetManager, widgetIds: IntArray) {
++        BlueOSMediaWidget.start(context)
++        BlueOSMediaWidget.push(context)
++    }
++}
++
++internal object BlueOSMediaWidget {
++    private const val ACTION_PLAY_PAUSE = "org.blueos.systemui.media.PLAY_PAUSE"
++    private const val ACTION_PREVIOUS = "org.blueos.systemui.media.PREVIOUS"
++    private const val ACTION_NEXT = "org.blueos.systemui.media.NEXT"
++    private const val PROGRESS_MAX = 1000
++    private const val PROGRESS_TICK_MILLIS = 5_000L
++    private const val ART_SIZE_PX = 192
++
++    private val handler = Handler(Looper.getMainLooper())
++    private var appContext: Context? = null
++    private var controller: MediaController? = null
++
++    private val controllerCallback =
++        object : MediaController.Callback() {
++            override fun onPlaybackStateChanged(state: PlaybackState?) {
++                appContext?.let { push(it) }
++            }
++
++            override fun onMetadataChanged(metadata: MediaMetadata?) {
++                appContext?.let { push(it) }
++            }
++
++            override fun onSessionDestroyed() {
++                appContext?.let { pickController(it) }
++            }
++        }
++
++    private val sessionsListener =
++        MediaSessionManager.OnActiveSessionsChangedListener {
++            appContext?.let { pickController(it) }
++        }
++
++    private val progressTick = Runnable { appContext?.let { push(it) } }
++
++    // The progress bar only ticks while the screen is on
++    private val screenOnReceiver =
++        object : BroadcastReceiver() {
++            override fun onReceive(context: Context, intent: Intent) {
++                push(context)
++            }
++        }
++
++    fun start(context: Context) {
++        if (appContext != null) return
++        val app = context.applicationContext
++        appContext = app
++        app.getSystemService(MediaSessionManager::class.java)
++            ?.addOnActiveSessionsChangedListener(sessionsListener, null, handler)
++        app.registerReceiver(
++            screenOnReceiver,
++            IntentFilter(Intent.ACTION_SCREEN_ON),
++            Context.RECEIVER_NOT_EXPORTED,
++        )
++        pickController(app)
++    }
++
++    /** The playing session, or else the most recent one. */
++    private fun pickController(context: Context) {
++        val sessions =
++            runCatching {
++                    context
++                        .getSystemService(MediaSessionManager::class.java)
++                        ?.getActiveSessions(null)
++                }
++                .getOrNull()
++                .orEmpty()
++        val next =
++            sessions.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
++                ?: sessions.firstOrNull()
++        if (next?.sessionToken != controller?.sessionToken) {
++            controller?.unregisterCallback(controllerCallback)
++            controller = next
++            next?.registerCallback(controllerCallback, handler)
++        }
++        push(context)
++    }
++
++    fun onAction(action: String?) {
++        val current = controller ?: return
++        val controls = current.transportControls
++        when (action) {
++            ACTION_PLAY_PAUSE ->
++                if (current.playbackState?.state == PlaybackState.STATE_PLAYING) controls.pause()
++                else controls.play()
++            ACTION_PREVIOUS -> controls.skipToPrevious()
++            ACTION_NEXT -> controls.skipToNext()
++        }
++    }
++
++    fun push(context: Context) {
++        handler.removeCallbacks(progressTick)
++        val app = context.applicationContext
++        val wm = AppWidgetManager.getInstance(app)
++        val provider = ComponentName(app, BlueOSMediaWidgetProvider::class.java)
++        if (wm.getAppWidgetIds(provider).isEmpty()) return
++
++        val current = controller
++        val metadata = current?.metadata
++        val state = current?.playbackState
++        val playing = state?.state == PlaybackState.STATE_PLAYING
++        val title =
++            metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
++                ?: metadata?.description?.title?.toString()
++
++        val rv = RemoteViews(app.packageName, R.layout.blueos_media_widget)
++        if (title.isNullOrEmpty()) {
++            rv.setTextViewText(R.id.blueos_media_title, app.getString(R.string.blueos_media_widget_idle))
++            rv.setTextViewText(R.id.blueos_media_artist, "")
++        } else {
++            rv.setTextViewText(R.id.blueos_media_title, title)
++            rv.setTextViewText(
++                R.id.blueos_media_artist,
++                metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST)
++                    ?: metadata?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
++                    ?: metadata?.description?.subtitle
++                    ?: "",
++            )
++        }
++
++        val art = metadata?.let { albumArt(it) }
++        if (art != null) {
++            rv.setImageViewBitmap(R.id.blueos_media_art, art)
++        } else {
++            rv.setImageViewResource(R.id.blueos_media_art, R.drawable.blueos_ic_music_note)
++        }
++
++        val duration = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
++        val position = state?.let { currentPosition(it) } ?: 0L
++        val progress =
++            if (duration > 0) (position.coerceIn(0, duration) * PROGRESS_MAX / duration).toInt()
++            else 0
++        rv.setProgressBar(R.id.blueos_media_progress, PROGRESS_MAX, progress, false)
++
++        rv.setImageViewResource(
++            R.id.blueos_media_play_pause,
++            if (playing) R.drawable.blueos_ic_pause else R.drawable.blueos_ic_play,
++        )
++        rv.setContentDescription(
++            R.id.blueos_media_play_pause,
++            app.getString(
++                if (playing) R.string.blueos_media_widget_pause else R.string.blueos_media_widget_play
++            ),
++        )
++        rv.setOnClickPendingIntent(R.id.blueos_media_play_pause, action(app, ACTION_PLAY_PAUSE, 1))
++        rv.setOnClickPendingIntent(R.id.blueos_media_previous, action(app, ACTION_PREVIOUS, 2))
++        rv.setOnClickPendingIntent(R.id.blueos_media_next, action(app, ACTION_NEXT, 3))
++        current?.sessionActivity?.let { rv.setOnClickPendingIntent(android.R.id.background, it) }
++
++        wm.updateAppWidget(provider, rv)
++
++        val interactive = app.getSystemService(PowerManager::class.java)?.isInteractive == true
++        if (playing && duration > 0 && interactive) {
++            handler.postDelayed(progressTick, PROGRESS_TICK_MILLIS)
++        }
++    }
++
++    private fun currentPosition(state: PlaybackState): Long {
++        if (state.state != PlaybackState.STATE_PLAYING) return state.position
++        val elapsed = SystemClock.elapsedRealtime() - state.lastPositionUpdateTime
++        return state.position + (elapsed * state.playbackSpeed).toLong()
++    }
++
++    /** The album art, scaled down: widget views travel to the launcher through binder. */
++    private fun albumArt(metadata: MediaMetadata): Bitmap? {
++        val art =
++            metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
++                ?: metadata.getBitmap(MediaMetadata.METADATA_KEY_ART)
++                ?: metadata.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
++                ?: return null
++        if (art.width <= ART_SIZE_PX && art.height <= ART_SIZE_PX) return art
++        val scale = ART_SIZE_PX.toFloat() / maxOf(art.width, art.height)
++        return Bitmap.createScaledBitmap(
++            art,
++            (art.width * scale).toInt().coerceAtLeast(1),
++            (art.height * scale).toInt().coerceAtLeast(1),
++            true,
++        )
++    }
++
++    private fun action(context: Context, action: String, requestCode: Int): PendingIntent =
++        PendingIntent.getBroadcast(
++            context,
++            requestCode,
++            Intent(action).setClass(context, BlueOSMediaWidgetProvider::class.java),
++            PendingIntent.FLAG_IMMUTABLE,
++        )
++}

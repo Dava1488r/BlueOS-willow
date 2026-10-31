@@ -1,0 +1,479 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BlueOS <blueos@localhost>
+Date: Sat, 24 Oct 2026 03:52:57 +0200
+Subject: [PATCH 1/7] BlueOS: Settings: Boot animation, lock and touch sound
+ choices
+
+Display > Boot animation (follow theme / light / dark); Sound > Screen lock sound, Touch sound.
+
+Change-Id: I359ff70fecaf2f93df9c56b75a704c6f13f40d6f
+---
+ res/values-ru/blueos_strings.xml              | 27 ++++++
+ res/values/blueos_arrays.xml                  | 29 +++++++
+ res/values/blueos_strings.xml                 | 30 +++++++
+ res/xml/display_settings.xml                  | 10 +++
+ res/xml/sound_settings.xml                    | 22 +++++
+ ...ueOSBootAnimationPreferenceController.java | 61 ++++++++++++++
+ .../BlueOSLockSoundPreferenceController.java  | 84 +++++++++++++++++++
+ .../notification/BlueOSSoundPreview.java      | 44 ++++++++++
+ .../BlueOSTouchSoundPreferenceController.java | 73 ++++++++++++++++
+ 9 files changed, 380 insertions(+)
+ create mode 100644 res/values-ru/blueos_strings.xml
+ create mode 100644 res/values/blueos_arrays.xml
+ create mode 100644 res/values/blueos_strings.xml
+ create mode 100644 src/com/android/settings/display/BlueOSBootAnimationPreferenceController.java
+ create mode 100644 src/com/android/settings/notification/BlueOSLockSoundPreferenceController.java
+ create mode 100644 src/com/android/settings/notification/BlueOSSoundPreview.java
+ create mode 100644 src/com/android/settings/notification/BlueOSTouchSoundPreferenceController.java
+
+diff --git a/res/values-ru/blueos_strings.xml b/res/values-ru/blueos_strings.xml
+new file mode 100644
+index 00000000000..2c0df8b9353
+--- /dev/null
++++ b/res/values-ru/blueos_strings.xml
+@@ -0,0 +1,27 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS settings -->
++<resources>
++    <string name="blueos_boot_animation_title">Анимация загрузки</string>
++    <string-array name="blueos_boot_animation_entries">
++        <item>Как в теме системы</item>
++        <item>Светлая</item>
++        <item>Тёмная</item>
++    </string-array>
++
++    <string name="blueos_lock_sound_title">Звук блокировки экрана</string>
++    <string-array name="blueos_lock_sound_entries">
++        <item>Затухание</item>
++        <item>Дверь</item>
++        <item>Щелчок</item>
++        <item>Огонь</item>
++        <item>Старт</item>
++        <item>Android</item>
++    </string-array>
++
++    <string name="blueos_touch_sound_title">Звук касания</string>
++    <string-array name="blueos_touch_sound_entries">
++        <item>BlueOS</item>
++        <item>Шахматы</item>
++        <item>Android</item>
++    </string-array>
++</resources>
+diff --git a/res/values/blueos_arrays.xml b/res/values/blueos_arrays.xml
+new file mode 100644
+index 00000000000..39bd40eccc8
+--- /dev/null
++++ b/res/values/blueos_arrays.xml
+@@ -0,0 +1,29 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS settings: list values (order matches the entries in blueos_strings.xml) -->
++<resources>
++    <!-- persist.sys.blueos.bootanim, read by bootanimation -->
++    <string-array name="blueos_boot_animation_values" translatable="false">
++        <item>auto</item>
++        <item>light</item>
++        <item>dark</item>
++        <item>classic_light</item>
++        <item>classic_dark</item>
++    </string-array>
++
++    <!-- /product/media/audio/ui/BlueOS_{Lock,Unlock}_<value>.ogg, "android" = stock -->
++    <string-array name="blueos_lock_sound_values" translatable="false">
++        <item>Fade</item>
++        <item>Door</item>
++        <item>Flick</item>
++        <item>Fire</item>
++        <item>Start</item>
++        <item>android</item>
++    </string-array>
++
++    <!-- Settings.Global blueos_touch_sound, read by SoundEffectsHelper -->
++    <string-array name="blueos_touch_sound_values" translatable="false">
++        <item>/product/media/audio/ui/BlueOS_Touch.ogg</item>
++        <item>/product/media/audio/ui/BlueOS_Touch_Chess.ogg</item>
++        <item>android</item>
++    </string-array>
++</resources>
+diff --git a/res/values/blueos_strings.xml b/res/values/blueos_strings.xml
+new file mode 100644
+index 00000000000..e6e1a24a631
+--- /dev/null
++++ b/res/values/blueos_strings.xml
+@@ -0,0 +1,30 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS settings -->
++<resources>
++    <!-- Display > Boot animation -->
++    <string name="blueos_boot_animation_title">Boot animation</string>
++    <string-array name="blueos_boot_animation_entries">
++        <item>Follow system theme</item>
++        <item>Light</item>
++        <item>Dark</item>
++    </string-array>
++
++    <!-- Sound > Screen lock sound -->
++    <string name="blueos_lock_sound_title">Screen lock sound</string>
++    <string-array name="blueos_lock_sound_entries">
++        <item>Fade</item>
++        <item>Door</item>
++        <item>Flick</item>
++        <item>Fire</item>
++        <item>Start</item>
++        <item>Android</item>
++    </string-array>
++
++    <!-- Sound > Touch sound -->
++    <string name="blueos_touch_sound_title">Touch sound</string>
++    <string-array name="blueos_touch_sound_entries">
++        <item>BlueOS</item>
++        <item>Chess</item>
++        <item>Android</item>
++    </string-array>
++</resources>
+diff --git a/res/xml/display_settings.xml b/res/xml/display_settings.xml
+index 65fddf3ae9f..cea1fe202a1 100644
+--- a/res/xml/display_settings.xml
++++ b/res/xml/display_settings.xml
+@@ -110,6 +110,16 @@
+             settings:controller="com.android.settings.display.DarkUIPreferenceController"
+             settings:keywords="@string/keywords_dark_ui_mode"/>
+ 
++        <!-- BlueOS: boot animation style -->
++        <ListPreference
++            android:key="blueos_boot_animation"
++            android:title="@string/blueos_boot_animation_title"
++            android:dialogTitle="@string/blueos_boot_animation_title"
++            android:entries="@array/blueos_boot_animation_entries"
++            android:entryValues="@array/blueos_boot_animation_values"
++            android:persistent="false"
++            settings:controller="com.android.settings.display.BlueOSBootAnimationPreferenceController"/>
++
+         <Preference
+             android:fragment="com.android.settings.accessibility.TextReadingPreferenceFragment"
+             android:key="text_reading_options"
+diff --git a/res/xml/sound_settings.xml b/res/xml/sound_settings.xml
+index 2ddbd52e259..378d70ac943 100644
+--- a/res/xml/sound_settings.xml
++++ b/res/xml/sound_settings.xml
+@@ -205,6 +205,17 @@
+             android:title="@string/screen_locking_sounds_title"
+             android:order="-45"/>
+ 
++        <!-- BlueOS: screen lock / unlock sound -->
++        <ListPreference
++            android:key="blueos_lock_sound"
++            android:title="@string/blueos_lock_sound_title"
++            android:dialogTitle="@string/blueos_lock_sound_title"
++            android:entries="@array/blueos_lock_sound_entries"
++            android:entryValues="@array/blueos_lock_sound_values"
++            android:persistent="false"
++            android:order="-44"
++            settings:controller="com.android.settings.notification.BlueOSLockSoundPreferenceController"/>
++
+         <!-- Charging sounds -->
+         <SwitchPreferenceCompat
+             android:key="charging_sounds_enabled"
+@@ -230,6 +241,17 @@
+             android:title="@string/touch_sounds_title"
+             android:order="-30"/>
+ 
++        <!-- BlueOS: touch sound -->
++        <ListPreference
++            android:key="blueos_touch_sound"
++            android:title="@string/blueos_touch_sound_title"
++            android:dialogTitle="@string/blueos_touch_sound_title"
++            android:entries="@array/blueos_touch_sound_entries"
++            android:entryValues="@array/blueos_touch_sound_values"
++            android:persistent="false"
++            android:order="-29"
++            settings:controller="com.android.settings.notification.BlueOSTouchSoundPreferenceController"/>
++
+         <!-- Show vibrate icon in status bar -->
+         <SwitchPreferenceCompat
+             android:key="vibrate_icon"
+diff --git a/src/com/android/settings/display/BlueOSBootAnimationPreferenceController.java b/src/com/android/settings/display/BlueOSBootAnimationPreferenceController.java
+new file mode 100644
+index 00000000000..ed6613262f5
+--- /dev/null
++++ b/src/com/android/settings/display/BlueOSBootAnimationPreferenceController.java
+@@ -0,0 +1,61 @@
++/*
++ * SPDX-FileCopyrightText: BlueOS
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.settings.display;
++
++import android.content.Context;
++import android.os.SystemProperties;
++
++import androidx.preference.ListPreference;
++import androidx.preference.Preference;
++import androidx.preference.PreferenceScreen;
++
++import com.android.settings.core.BasePreferenceController;
++
++/**
++ * BlueOS: light / dark / theme-following boot animation.
++ * Stored in persist.sys.blueos.bootanim and read by bootanimation at the next boot.
++ */
++public class BlueOSBootAnimationPreferenceController extends BasePreferenceController
++        implements Preference.OnPreferenceChangeListener {
++
++    private static final String PROP_BOOTANIM = "persist.sys.blueos.bootanim";
++    private static final String DEFAULT_VALUE = "auto";
++
++    public BlueOSBootAnimationPreferenceController(Context context, String key) {
++        super(context, key);
++    }
++
++    @Override
++    public int getAvailabilityStatus() {
++        return AVAILABLE;
++    }
++
++    @Override
++    public void displayPreference(PreferenceScreen screen) {
++        super.displayPreference(screen);
++        final Preference preference = screen.findPreference(getPreferenceKey());
++        if (preference != null) {
++            preference.setOnPreferenceChangeListener(this);
++        }
++    }
++
++    @Override
++    public void updateState(Preference preference) {
++        final ListPreference list = (ListPreference) preference;
++        list.setValue(SystemProperties.get(PROP_BOOTANIM, DEFAULT_VALUE));
++        list.setSummary(list.getEntry());
++    }
++
++    @Override
++    public boolean onPreferenceChange(Preference preference, Object newValue) {
++        final String value = (String) newValue;
++        SystemProperties.set(PROP_BOOTANIM, value);
++        final ListPreference list = (ListPreference) preference;
++        final int index = list.findIndexOfValue(value);
++        list.setSummary(index >= 0 ? list.getEntries()[index] : null);
++        return true;
++    }
++}
+diff --git a/src/com/android/settings/notification/BlueOSLockSoundPreferenceController.java b/src/com/android/settings/notification/BlueOSLockSoundPreferenceController.java
+new file mode 100644
+index 00000000000..1394b8158c6
+--- /dev/null
++++ b/src/com/android/settings/notification/BlueOSLockSoundPreferenceController.java
+@@ -0,0 +1,84 @@
++/*
++ * SPDX-FileCopyrightText: BlueOS
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.settings.notification;
++
++import android.content.ContentResolver;
++import android.content.Context;
++import android.provider.Settings;
++
++import androidx.preference.ListPreference;
++import androidx.preference.Preference;
++import androidx.preference.PreferenceScreen;
++
++import com.android.settings.core.BasePreferenceController;
++
++/**
++ * BlueOS: screen lock / unlock sound pack.
++ * Writes Settings.Global LOCK_SOUND and UNLOCK_SOUND; SystemUI reloads them on change.
++ */
++public class BlueOSLockSoundPreferenceController extends BasePreferenceController
++        implements Preference.OnPreferenceChangeListener {
++
++    private static final String UI_DIR = "/product/media/audio/ui/";
++    private static final String LOCK_PREFIX = UI_DIR + "BlueOS_Lock_";
++    private static final String UNLOCK_PREFIX = UI_DIR + "BlueOS_Unlock_";
++    private static final String STOCK = "android";
++
++    public BlueOSLockSoundPreferenceController(Context context, String key) {
++        super(context, key);
++    }
++
++    @Override
++    public int getAvailabilityStatus() {
++        return AVAILABLE;
++    }
++
++    @Override
++    public void displayPreference(PreferenceScreen screen) {
++        super.displayPreference(screen);
++        final Preference preference = screen.findPreference(getPreferenceKey());
++        if (preference != null) {
++            preference.setOnPreferenceChangeListener(this);
++        }
++    }
++
++    @Override
++    public void updateState(Preference preference) {
++        final ListPreference list = (ListPreference) preference;
++        list.setValue(getCurrentPack());
++        list.setSummary(list.getEntry());
++    }
++
++    @Override
++    public boolean onPreferenceChange(Preference preference, Object newValue) {
++        final String pack = (String) newValue;
++        final ContentResolver cr = mContext.getContentResolver();
++        Settings.Global.putString(cr, Settings.Global.LOCK_SOUND, getLockPath(pack));
++        Settings.Global.putString(cr, Settings.Global.UNLOCK_SOUND, getUnlockPath(pack));
++        final ListPreference list = (ListPreference) preference;
++        final int index = list.findIndexOfValue(pack);
++        list.setSummary(index >= 0 ? list.getEntries()[index] : null);
++        BlueOSSoundPreview.play(getUnlockPath(pack));
++        return true;
++    }
++
++    private String getCurrentPack() {
++        final String lock = Settings.Global.getString(mContext.getContentResolver(),
++                Settings.Global.LOCK_SOUND);
++        if (lock != null && lock.startsWith(LOCK_PREFIX) && lock.endsWith(".ogg")) {
++            return lock.substring(LOCK_PREFIX.length(), lock.length() - ".ogg".length());
++        }
++        return STOCK;
++    }
++
++    private static String getLockPath(String pack) {
++        return STOCK.equals(pack) ? UI_DIR + "Lock.ogg" : LOCK_PREFIX + pack + ".ogg";
++    }
++
++    private static String getUnlockPath(String pack) {
++        return STOCK.equals(pack) ? UI_DIR + "Unlock.ogg" : UNLOCK_PREFIX + pack + ".ogg";
++    }
++}
+diff --git a/src/com/android/settings/notification/BlueOSSoundPreview.java b/src/com/android/settings/notification/BlueOSSoundPreview.java
+new file mode 100644
+index 00000000000..a36323b5af0
+--- /dev/null
++++ b/src/com/android/settings/notification/BlueOSSoundPreview.java
+@@ -0,0 +1,44 @@
++/*
++ * SPDX-FileCopyrightText: BlueOS
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.settings.notification;
++
++import android.media.AudioAttributes;
++import android.media.MediaPlayer;
++import android.util.Log;
++
++import java.io.File;
++import java.io.IOException;
++
++/** BlueOS: plays a short system sound file once, so a choice in Settings can be heard. */
++final class BlueOSSoundPreview {
++    private static final String TAG = "BlueOSSoundPreview";
++
++    private BlueOSSoundPreview() {}
++
++    static void play(String path) {
++        if (path == null || !new File(path).isFile()) {
++            return;
++        }
++        final MediaPlayer player = new MediaPlayer();
++        try {
++            player.setAudioAttributes(new AudioAttributes.Builder()
++                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
++                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
++                    .build());
++            player.setDataSource(path);
++            player.setOnPreparedListener(MediaPlayer::start);
++            player.setOnCompletionListener(MediaPlayer::release);
++            player.setOnErrorListener((mp, what, extra) -> {
++                mp.release();
++                return true;
++            });
++            player.prepareAsync();
++        } catch (IOException | IllegalStateException e) {
++            Log.w(TAG, "Can't play " + path, e);
++            player.release();
++        }
++    }
++}
+diff --git a/src/com/android/settings/notification/BlueOSTouchSoundPreferenceController.java b/src/com/android/settings/notification/BlueOSTouchSoundPreferenceController.java
+new file mode 100644
+index 00000000000..2ec31fcd422
+--- /dev/null
++++ b/src/com/android/settings/notification/BlueOSTouchSoundPreferenceController.java
+@@ -0,0 +1,73 @@
++/*
++ * SPDX-FileCopyrightText: BlueOS
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.settings.notification;
++
++import android.content.Context;
++import android.media.AudioManager;
++import android.provider.Settings;
++
++import androidx.preference.ListPreference;
++import androidx.preference.Preference;
++import androidx.preference.PreferenceScreen;
++
++import com.android.settings.core.BasePreferenceController;
++import com.android.settingslib.utils.ThreadUtils;
++
++/**
++ * BlueOS: touch sound. Writes Settings.Global blueos_touch_sound (a file path, or "android"
++ * for the stock tick), read by the audio service when it loads the sound effects.
++ */
++public class BlueOSTouchSoundPreferenceController extends BasePreferenceController
++        implements Preference.OnPreferenceChangeListener {
++
++    private static final String SETTING = "blueos_touch_sound";
++    private static final String DEFAULT_SOUND = "/product/media/audio/ui/BlueOS_Touch.ogg";
++    private static final String STOCK = "android";
++    private static final String STOCK_SOUND = "/product/media/audio/ui/Effect_Tick.ogg";
++
++    public BlueOSTouchSoundPreferenceController(Context context, String key) {
++        super(context, key);
++    }
++
++    @Override
++    public int getAvailabilityStatus() {
++        return AVAILABLE;
++    }
++
++    @Override
++    public void displayPreference(PreferenceScreen screen) {
++        super.displayPreference(screen);
++        final Preference preference = screen.findPreference(getPreferenceKey());
++        if (preference != null) {
++            preference.setOnPreferenceChangeListener(this);
++        }
++    }
++
++    @Override
++    public void updateState(Preference preference) {
++        final ListPreference list = (ListPreference) preference;
++        final String value = Settings.Global.getString(mContext.getContentResolver(), SETTING);
++        list.setValue(value != null ? value : DEFAULT_SOUND);
++        list.setSummary(list.getEntry());
++    }
++
++    @Override
++    public boolean onPreferenceChange(Preference preference, Object newValue) {
++        final String value = (String) newValue;
++        Settings.Global.putString(mContext.getContentResolver(), SETTING, value);
++        final ListPreference list = (ListPreference) preference;
++        final int index = list.findIndexOfValue(value);
++        list.setSummary(index >= 0 ? list.getEntries()[index] : null);
++        BlueOSSoundPreview.play(STOCK.equals(value) ? STOCK_SOUND : value);
++        // The audio service picks the file when loading effects, so reload them.
++        final AudioManager audioManager = mContext.getSystemService(AudioManager.class);
++        ThreadUtils.postOnBackgroundThread(() -> {
++            audioManager.unloadSoundEffects();
++            audioManager.loadSoundEffects();
++        });
++        return true;
++    }
++}

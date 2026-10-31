@@ -1,0 +1,301 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sun, 25 Oct 2026 12:33:40 +0100
+Subject: [PATCH 1/9] BlueOS: Launcher3: BlueOS home screen by default
+
+- The 4x5 grid until the user picks one: near-square cells where
+  two-column widgets fill a row symmetrically.
+- Themed ("Minimalism") icons until the user picks a style.
+- Default 4x5 home screen: summary + Arona sticker (photo widget, asked
+  for through the default-workspace extra), clock card + music, date +
+  equalizer, quick toggles, then Play Store, Files, Music, Settings; the
+  dock with Phone, Messages, Contacts, Camera.
+
+Change-Id: Id9b0f6a3dc18a4dfd8f13d8f1e529b1a595df274
+---
+ res/xml/default_workspace_4x5.xml             | 183 +++++++++---------
+ .../launcher3/InvariantDeviceProfile.java     |   6 +
+ .../graphics/theme/ThemePreference.kt         |   3 +-
+ 3 files changed, 96 insertions(+), 96 deletions(-)
+
+diff --git a/res/xml/default_workspace_4x5.xml b/res/xml/default_workspace_4x5.xml
+index 40c0344009..26d9ccb636 100644
+--- a/res/xml/default_workspace_4x5.xml
++++ b/res/xml/default_workspace_4x5.xml
+@@ -14,150 +14,143 @@
+      limitations under the License.
+ -->
+ 
++<!-- BlueOS: the default home screen (4x5): summary + Arona sticker, clock card + music,
++     date + equalizer, quick toggles, then Play Store, Files, Music, Settings; the dock with
++     Phone, Messages, Contacts, Camera -->
+ <favorites xmlns:launcher="http://schemas.android.com/apk/res-auto/com.android.launcher3">
+ 
+     <!-- Hotseat (We use the screen as the position of the item in the hotseat) -->
+-    <!-- Dialer, Messaging, Browser, Camera -->
+-    <resolve
++    <favorite
+         launcher:container="-101"
+         launcher:screen="0"
+         launcher:x="0"
+-        launcher:y="0" >
+-        <favorite launcher:uri="#Intent;action=android.intent.action.DIAL;end" />
+-        <favorite launcher:uri="tel:123" />
+-        <favorite launcher:uri="#Intent;action=android.intent.action.CALL_BUTTON;end" />
+-    </resolve>
++        launcher:y="0"
++        launcher:packageName="com.android.dialer"
++        launcher:className="com.android.dialer.main.impl.MainActivity" />
+ 
+-    <resolve
++    <favorite
+         launcher:container="-101"
+         launcher:screen="1"
+         launcher:x="1"
+-        launcher:y="0" >
+-        <favorite launcher:uri="#Intent;action=android.intent.action.MAIN;category=android.intent.category.APP_MESSAGING;end" />
+-        <favorite launcher:uri="sms:" />
+-        <favorite launcher:uri="smsto:" />
+-        <favorite launcher:uri="mms:" />
+-        <favorite launcher:uri="mmsto:" />
+-    </resolve>
+-
+-    <resolve
+-         launcher:container="-101"
+-         launcher:screen="2"
+-         launcher:x="2"
+-         launcher:y="0" >
+-        <favorite launcher:uri="#Intent;action=android.intent.action.MAIN;category=android.intent.category.APP_BROWSER;end" />
+-        <favorite launcher:uri="http://www.example.com/" />
+-    </resolve>
+-
+-    <resolve
++        launcher:y="0"
++        launcher:packageName="com.android.messaging"
++        launcher:className="com.android.messaging.ui.conversationlist.ConversationListActivity" />
++
++    <favorite
++        launcher:container="-101"
++        launcher:screen="2"
++        launcher:x="2"
++        launcher:y="0"
++        launcher:packageName="com.android.contacts"
++        launcher:className="com.android.contacts.activities.PeopleActivity" />
++
++    <favorite
+         launcher:container="-101"
+         launcher:screen="3"
+         launcher:x="3"
+-        launcher:y="0" >
+-        <favorite launcher:uri="#Intent;action=android.media.action.STILL_IMAGE_CAMERA;end" />
+-        <favorite launcher:uri="#Intent;action=android.intent.action.CAMERA_BUTTON;end" />
+-    </resolve>
++        launcher:y="0"
++        launcher:packageName="org.lineageos.aperture"
++        launcher:className="org.lineageos.aperture.CameraLauncher" />
+ 
+-    <!-- Screen 0 -->
++    <!-- Row 1: summary (greeting to Sensei) and the Arona sticker (photo widget) -->
+     <appwidget
+-        launcher:packageName="com.google.android.googlequicksearchbox"
+-        launcher:className="com.google.android.googlequicksearchbox.SearchWidgetProvider"
++        launcher:packageName="com.android.systemui"
++        launcher:className="com.android.systemui.blueos.widgets.BlueOSSummaryWidgetProvider"
+         launcher:screen="0"
+         launcher:x="0"
+         launcher:y="0"
+-        launcher:spanX="4"
++        launcher:spanX="2"
+         launcher:spanY="1" />
+ 
++    <appwidget
++        launcher:packageName="org.lineageos.glimpse"
++        launcher:className="org.lineageos.glimpse.widgets.BlueOSPhotoWidgetProvider$Small"
++        launcher:screen="0"
++        launcher:x="2"
++        launcher:y="0"
++        launcher:spanX="2"
++        launcher:spanY="1">
++        <!-- The gallery puts its built-in Arona sticker in this widget -->
++        <extra
++            launcher:key="blueos_default_sticker"
++            launcher:value="arona" />
++    </appwidget>
++
++    <!-- Row 2: clock card and music -->
+     <appwidget
+         launcher:packageName="com.android.deskclock"
+-        launcher:className="com.android.alarmclock.DigitalAppWidgetProvider"
++        launcher:className="com.android.alarmclock.BlueOSClockWidgetProvider$Card"
+         launcher:screen="0"
+         launcher:x="0"
+         launcher:y="1"
+-        launcher:spanX="4"
++        launcher:spanX="2"
++        launcher:spanY="1" />
++
++    <appwidget
++        launcher:packageName="com.android.systemui"
++        launcher:className="com.android.systemui.blueos.widgets.BlueOSMediaWidgetProvider"
++        launcher:screen="0"
++        launcher:x="2"
++        launcher:y="1"
++        launcher:spanX="2"
+         launcher:spanY="1" />
+ 
+-    <!-- Google folder -->
+-    <!-- Google, Gmail, Maps, YouTube, Drive, YouTube Music, Play Movies, Duo, Photos -->
+-    <folder
+-        launcher:title="@string/google_folder_title"
++    <!-- Row 3: date and the equalizer -->
++    <appwidget
++        launcher:packageName="org.lineageos.etar"
++        launcher:className="com.android.calendar.widget.BlueOSDateWidgetProvider"
+         launcher:screen="0"
+         launcher:x="0"
+-        launcher:y="3">
+-        <favorite
+-            launcher:packageName="com.google.android.googlequicksearchbox"
+-            launcher:className="com.google.android.googlequicksearchbox.SearchActivity"/>
+-        <favorite
+-            launcher:packageName="com.google.android.gm"
+-            launcher:className="com.google.android.gm.ConversationListActivityGmail"/>
+-        <favorite
+-            launcher:packageName="com.google.android.apps.maps"
+-            launcher:className="com.google.android.maps.MapsActivity"/>
+-        <favorite
+-            launcher:packageName="com.google.android.youtube"
+-            launcher:className="com.google.android.youtube.app.honeycomb.Shell$HomeActivity"/>
+-        <favorite
+-            launcher:packageName="com.google.android.apps.docs"
+-            launcher:className="com.google.android.apps.docs.app.NewMainProxyActivity"/>
+-        <favorite
+-            launcher:packageName="com.google.android.apps.youtube.music"
+-            launcher:className="com.google.android.apps.youtube.music.activities.MusicActivity"/>
+-        <favorite
+-            launcher:packageName="com.google.android.videos"
+-            launcher:className="com.google.android.youtube.videos.EntryPoint"/>
+-        <favorite
+-            launcher:packageName="com.google.android.apps.tachyon"
+-            launcher:className="com.google.android.apps.tachyon.MainActivity"/>
+-        <favorite
+-            launcher:packageName="com.google.android.apps.photos"
+-            launcher:className="com.google.android.apps.photos.home.HomeActivity"/>
+-    </folder>
++        launcher:y="2"
++        launcher:spanX="2"
++        launcher:spanY="1" />
+ 
+-    <favorite
++    <appwidget
++        launcher:packageName="com.android.systemui"
++        launcher:className="com.android.systemui.blueos.widgets.BlueOSEqBarsWidgetProvider"
+         launcher:screen="0"
+-        launcher:x="3"
+-        launcher:y="3"
+-        launcher:packageName="com.android.vending"
+-        launcher:className="com.android.vending.AssetBrowserActivity"/>
++        launcher:x="2"
++        launcher:y="2"
++        launcher:spanX="2"
++        launcher:spanY="1" />
+ 
+-    <!-- Screen 1 -->
++    <!-- Row 4: quick toggles -->
+     <appwidget
+-        launcher:packageName="org.lineageos.twelve"
+-        launcher:className="org.lineageos.twelve.ui.widgets.NowPlayingAppWidgetProvider"
+-        launcher:screen="1"
++        launcher:packageName="com.android.systemui"
++        launcher:className="com.android.systemui.blueos.widgets.BlueOSTogglesWidgetProvider"
++        launcher:screen="0"
+         launcher:x="0"
+-        launcher:y="0"
++        launcher:y="3"
+         launcher:spanX="4"
+         launcher:spanY="1" />
+ 
+-    <resolve
+-        launcher:screen="1"
++    <!-- Row 5: apps -->
++    <favorite
++        launcher:packageName="com.android.vending"
++        launcher:className="com.android.vending.AssetBrowserActivity"
++        launcher:screen="0"
+         launcher:x="0"
+-        launcher:y="-1" >
+-        <favorite launcher:uri="#Intent;action=android.intent.action.MAIN;category=android.intent.category.APP_EMAIL;end" />
+-        <favorite launcher:uri="mailto:" />
+-    </resolve>
++        launcher:y="4" />
+ 
+-    <resolve
+-        launcher:screen="1"
++    <favorite
++        launcher:packageName="com.android.documentsui"
++        launcher:className="com.android.documentsui.LauncherActivity"
++        launcher:screen="0"
+         launcher:x="1"
+-        launcher:y="-1" >
+-        <favorite launcher:uri="#Intent;action=android.intent.action.MAIN;category=android.intent.category.APP_GALLERY;end" />
+-        <favorite launcher:uri="#Intent;type=images/*;end" />
+-    </resolve>
++        launcher:y="4" />
+ 
+     <favorite
+         launcher:packageName="org.lineageos.twelve"
+         launcher:className="org.lineageos.twelve.MainActivity"
+-        launcher:screen="1"
++        launcher:screen="0"
+         launcher:x="2"
+-        launcher:y="-1" />
++        launcher:y="4" />
+ 
+     <favorite
+         launcher:packageName="com.android.settings"
+         launcher:className="com.android.settings.Settings"
+-        launcher:screen="1"
++        launcher:screen="0"
+         launcher:x="3"
+-        launcher:y="-1" />
++        launcher:y="4" />
+ 
+ </favorites>
+diff --git a/src/com/android/launcher3/InvariantDeviceProfile.java b/src/com/android/launcher3/InvariantDeviceProfile.java
+index 92528c022f..837eafe6c0 100644
+--- a/src/com/android/launcher3/InvariantDeviceProfile.java
++++ b/src/com/android/launcher3/InvariantDeviceProfile.java
+@@ -100,6 +100,7 @@ public class InvariantDeviceProfile {
+             new DaggerSingletonObject<>(LauncherAppComponent::getIDP);
+ 
+     public static final String GRID_NAME_PREFS_KEY = "idp_grid_name";
++    private static final String BLUEOS_DEFAULT_GRID_NAME = "4_by_5";
+     public static final String NON_FIXED_LANDSCAPE_GRID_NAME_PREFS_KEY =
+             "idp_non_fixed_landscape_grid_name";
+ 
+@@ -342,6 +343,11 @@ public class InvariantDeviceProfile {
+ 
+     private void initGrid(String gridName) {
+         LauncherDisplayInfo displayInfo = mDisplayController.getInfo();
++        // BlueOS: until the user picks a grid, 4x5: near-square cells where two-column widgets
++        // fill a row symmetrically (the default home screen is laid out for it)
++        if (TextUtils.isEmpty(gridName)) {
++            gridName = BLUEOS_DEFAULT_GRID_NAME;
++        }
+         List<DisplayOption> allOptions = getPredefinedDeviceProfiles(
+                 displayInfo,
+                 gridName,
+diff --git a/src/com/android/launcher3/graphics/theme/ThemePreference.kt b/src/com/android/launcher3/graphics/theme/ThemePreference.kt
+index 3f8f102fda..688aeb4919 100644
+--- a/src/com/android/launcher3/graphics/theme/ThemePreference.kt
++++ b/src/com/android/launcher3/graphics/theme/ThemePreference.kt
+@@ -99,7 +99,8 @@ private constructor(
+         @JvmField val MONO_THEME_VALUE = ThemeValue(MONO_FACTORY_ID, MONO_THEME_CONTROLLER.themeID)
+ 
+         private const val KEY_ICON_THEME = "icon_theme_id"
+-        private val THEME_ID = backedUpItem(KEY_ICON_THEME, "")
++        // BlueOS: themed ("Minimalism") icons until the user picks a style
++        private val THEME_ID = backedUpItem(KEY_ICON_THEME, "mono-icons:with-theme")
+ 
+         @VisibleForTesting val LEGACY_MONO_THEME_ICON = backedUpItem("themed_icons", false)
+ 

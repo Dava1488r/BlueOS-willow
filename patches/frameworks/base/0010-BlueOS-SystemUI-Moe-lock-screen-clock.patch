@@ -1,0 +1,989 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sat, 24 Oct 2026 21:03:45 +0200
+Subject: [PATCH 10/30] BlueOS: SystemUI: Moe lock screen clock
+
+A clock face where Blue Archive pixel-art girls hold the digits (Moe Counter moebooru theme with halos, vendor/blueos/tools/make-moe-ba.py). Built on the bitmap clock views: real digit pictures, size from the clock text size, sharp pixels, grey and dim on AOD, and a one-row small clock.
+
+Change-Id: I49e14819599ca06c9bf95cbc500ed04f6bf8d915
+---
+ .../res/drawable-nodpi/blueos_moe_0.png       | Bin 0 -> 2222 bytes
+ .../res/drawable-nodpi/blueos_moe_1.png       | Bin 0 -> 2011 bytes
+ .../res/drawable-nodpi/blueos_moe_2.png       | Bin 0 -> 2319 bytes
+ .../res/drawable-nodpi/blueos_moe_3.png       | Bin 0 -> 1882 bytes
+ .../res/drawable-nodpi/blueos_moe_4.png       | Bin 0 -> 2281 bytes
+ .../res/drawable-nodpi/blueos_moe_5.png       | Bin 0 -> 3046 bytes
+ .../res/drawable-nodpi/blueos_moe_6.png       | Bin 0 -> 2870 bytes
+ .../res/drawable-nodpi/blueos_moe_7.png       | Bin 0 -> 2590 bytes
+ .../res/drawable-nodpi/blueos_moe_8.png       | Bin 0 -> 2403 bytes
+ .../res/drawable-nodpi/blueos_moe_9.png       | Bin 0 -> 2281 bytes
+ .../res/values-ru/blueos_strings.xml          |   2 +
+ .../res/values/blueos_strings.xml             |   4 +-
+ .../shared/clocks/DefaultClockProvider.kt     |  14 +++
+ .../shared/clocks/FlexClockContext.kt         |   3 +
+ .../controller/BitmapClockViewController.kt   |   2 +-
+ .../controller/FlexClockFaceController.kt     |   3 +
+ .../FlexClockViewGroupController.kt           |  16 ++--
+ .../shared/clocks/view/BitmapClockView.kt     |  85 ++++++++++++++++--
+ .../clocks/view/BitmapClockViewGroup.kt       |  78 +++++++++++++++-
+ 19 files changed, 190 insertions(+), 17 deletions(-)
+ create mode 100644 packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_0.png
+ create mode 100644 packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_1.png
+ create mode 100644 packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_2.png
+ create mode 100644 packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_3.png
+ create mode 100644 packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_4.png
+ create mode 100644 packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_5.png
+ create mode 100644 packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_6.png
+ create mode 100644 packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_7.png
+ create mode 100644 packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_8.png
+ create mode 100644 packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_9.png
+
+diff --git a/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_0.png b/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_0.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..d7f116c00bce85fc1add33fc63582ac000791025
+GIT binary patch
+literal 2222
+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
+
+literal 0
+HcmV?d00001
+
+diff --git a/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_1.png b/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_1.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..e83c6cb672fbe25d570028925062e61fe485f4b0
+GIT binary patch
+literal 2011
+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
+
+literal 0
+HcmV?d00001
+
+diff --git a/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_2.png b/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_2.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..4b2e5ff28c2cf8cac642797f4c460610ca0ea8c7
+GIT binary patch
+literal 2319
+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
+
+literal 0
+HcmV?d00001
+
+diff --git a/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_3.png b/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_3.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..4cda32f44da51f3e1732e2cca77b5453b093aebd
+GIT binary patch
+literal 1882
+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
+Uel9jTH~;_u07*qoM6N<$f|!zw3;+NC
+
+literal 0
+HcmV?d00001
+
+diff --git a/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_4.png b/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_4.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..2ad81307e45d38da18700661ed1246372668f365
+GIT binary patch
+literal 2281
+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
+DjV@~#
+
+literal 0
+HcmV?d00001
+
+diff --git a/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_5.png b/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_5.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..27d35b5ac438df879676065c162d17a2202c0263
+GIT binary patch
+literal 3046
+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
+
+literal 0
+HcmV?d00001
+
+diff --git a/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_6.png b/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_6.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..6d889587d540a9a8c6238484ca89f5c4bbf1941f
+GIT binary patch
+literal 2870
+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
+U4r>{DQ2+n{07*qoM6N<$f_$n|WB>pF
+
+literal 0
+HcmV?d00001
+
+diff --git a/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_7.png b/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_7.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..6435ac08404060214ecaf559cfe1e7424f3c2d22
+GIT binary patch
+literal 2590
+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
+AaR2}S
+
+literal 0
+HcmV?d00001
+
+diff --git a/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_8.png b/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_8.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..8fba071fc14132b7ce65ef2c0d504e444746e552
+GIT binary patch
+literal 2403
+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
+V@*B~EQvCn`002ovPDHLkV1oE>i;(~T
+
+literal 0
+HcmV?d00001
+
+diff --git a/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_9.png b/packages/SystemUI/customization/res/drawable-nodpi/blueos_moe_9.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..65802427da7d1fa4281ad0f0ca2c8f39785c2374
+GIT binary patch
+literal 2281
+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
+Dj}U2c
+
+literal 0
+HcmV?d00001
+
+diff --git a/packages/SystemUI/customization/res/values-ru/blueos_strings.xml b/packages/SystemUI/customization/res/values-ru/blueos_strings.xml
+index 0b7846392341..57751d0fba63 100644
+--- a/packages/SystemUI/customization/res/values-ru/blueos_strings.xml
++++ b/packages/SystemUI/customization/res/values-ru/blueos_strings.xml
+@@ -2,4 +2,6 @@
+ <resources>
+     <string name="clock_blueos_halo_name">Ореол</string>
+     <string name="clock_blueos_halo_description">Часы BlueOS с ореолом</string>
++    <string name="clock_blueos_moe_name">Moe</string>
++    <string name="clock_blueos_moe_description">Ученицы Кивотоса держат цифры</string>
+ </resources>
+diff --git a/packages/SystemUI/customization/res/values/blueos_strings.xml b/packages/SystemUI/customization/res/values/blueos_strings.xml
+index 48ca6c689f14..c5d2dfac4b69 100644
+--- a/packages/SystemUI/customization/res/values/blueos_strings.xml
++++ b/packages/SystemUI/customization/res/values/blueos_strings.xml
+@@ -1,6 +1,8 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS lock screen clock -->
++<!-- BlueOS lock screen clocks -->
+ <resources>
+     <string name="clock_blueos_halo_name">Halo</string>
+     <string name="clock_blueos_halo_description">BlueOS clock with a halo</string>
++    <string name="clock_blueos_moe_name">Moe</string>
++    <string name="clock_blueos_moe_description">Kivotos students holding the digits</string>
+ </resources>
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/DefaultClockProvider.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/DefaultClockProvider.kt
+index 313350684032..382bb6f8755f 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/DefaultClockProvider.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/DefaultClockProvider.kt
+@@ -43,6 +43,8 @@ const val FLEX_CLOCK_ID = "DIGITAL_CLOCK_FLEX"
+ // BlueOS "Halo" clock: the default clock with Outfit digits (the BlueOS logo font),
+ // minutes in the accent color and a halo over the hours
+ const val BLUEOS_HALO_CLOCK_ID = "BLUEOS_HALO"
++// BlueOS "Moe" clock: pixel-art girls with halos holding the digits (Moe Counter style)
++const val BLUEOS_MOE_CLOCK_ID = "BLUEOS_MOE"
+ 
+ /** Provides the default system clock */
+ class DefaultClockProvider
+@@ -64,6 +66,7 @@ constructor(
+             ClockMetadata(DEFAULT_CLOCK_ID),
+             ClockMetadata(FLEX_CLOCK_ID, isDeprecated = true, replacementTarget = DEFAULT_CLOCK_ID),
+             ClockMetadata(BLUEOS_HALO_CLOCK_ID),
++            ClockMetadata(BLUEOS_MOE_CLOCK_ID),
+         )
+     }
+ 
+@@ -93,6 +96,7 @@ constructor(
+                     isAnimationEnabled = true,
+                 ),
+                 isBlueOSHalo = isHalo,
++                isBlueOSMoe = settings.clockId == BLUEOS_MOE_CLOCK_ID,
+             ),
+             buffers,
+         )
+@@ -113,6 +117,16 @@ constructor(
+                 isReactiveToTone = true,
+             )
+         }
++        if (settings.clockId == BLUEOS_MOE_CLOCK_ID) {
++            // pictures with their own colors: no color or font controls
++            return ClockPickerConfig(
++                BLUEOS_MOE_CLOCK_ID,
++                resources.getString(R.string.clock_blueos_moe_name),
++                resources.getString(R.string.clock_blueos_moe_description),
++                resources.getDrawable(R.drawable.blueos_moe_7, null),
++                isReactiveToTone = false,
++            )
++        }
+ 
+         val fontAxes = getDefaultAxes(settings).merge(settings.axes)
+         return ClockPickerConfig(
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/FlexClockContext.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/FlexClockContext.kt
+index 2d19a6420140..4ca8e93bccec 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/FlexClockContext.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/FlexClockContext.kt
+@@ -23,12 +23,15 @@ class FlexClockContext(
+     private val innerCtx: ClockContextImpl,
+     /** BlueOS "Halo" clock: Outfit digits, minutes in the accent color, a halo on top */
+     val isBlueOSHalo: Boolean = false,
++    /** BlueOS "Moe" clock: Blue Archive pixel-art girls holding the digits */
++    val isBlueOSMoe: Boolean = false,
+ ) : ClockContext by innerCtx {
+     fun copy(messageBuffer: MessageBuffer): FlexClockContext {
+         return FlexClockContext(
+             typefaceCache,
+             innerCtx.copy(messageBuffer = messageBuffer),
+             isBlueOSHalo,
++            isBlueOSMoe,
+         )
+     }
+ }
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/BitmapClockViewController.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/BitmapClockViewController.kt
+index c5a77df17525..7c0f567c5071 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/BitmapClockViewController.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/BitmapClockViewController.kt
+@@ -43,7 +43,7 @@ class BitmapClockViewController(
+     layerConfig: LayerConfig, // contains time spec
+     isLargeClock: Boolean,
+ ) : FlexClockViewController {
+-    override val view = BitmapClockView(clockCtx.context, null)
++    override val view = BitmapClockView(clockCtx.context, null, clockCtx.isBlueOSMoe)
+ 
+     override var onViewBoundsChanged by view::onViewBoundsChanged
+     override var onViewMaxSizeChanged by view::onViewMaxSizeChanged
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockFaceController.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockFaceController.kt
+index 4e33b90a724c..024308c32e4d 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockFaceController.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockFaceController.kt
+@@ -97,6 +97,9 @@ class FlexClockFaceController(
+     val layerController: FlexClockViewController =
+         if (isLargeClock) {
+             FlexClockViewGroupController(clockCtx)
++        } else if (clockCtx.isBlueOSMoe) {
++            // BlueOS Moe: the small clock shows the pictures too, in one row
++            FlexClockViewGroupController(clockCtx, isSmall = true)
+         } else {
+             val cfg = SMALL_LAYER_CONFIG.copy(timeFormatter = timeFormatter)
+             FlexClockTextViewController(clockCtx, cfg, isLargeClock)
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockViewGroupController.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockViewGroupController.kt
+index 7601e1d513b9..bb849a9c4c01 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockViewGroupController.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockViewGroupController.kt
+@@ -44,13 +44,19 @@ import com.android.systemui.shared.clocks.view.BitmapClockViewGroup
+ import com.android.systemui.shared.clocks.view.FlexClockViewGroup
+ import java.util.Locale
+ 
+-class FlexClockViewGroupController(private val clockCtx: FlexClockContext) :
+-    FlexClockViewController {
++class FlexClockViewGroupController
++@JvmOverloads
++constructor(
++    private val clockCtx: FlexClockContext,
++    /** BlueOS Moe: the small clock is a row of digit pictures too */
++    isSmall: Boolean = false,
++) : FlexClockViewController {
+     val layerControllers = mutableListOf<FlexClockViewController>()
+     val dozeState = AnimationState(1F)
++    private val useBitmaps = enableAiClocks() || clockCtx.isBlueOSMoe
+     override val view =
+-        if (enableAiClocks()) {
+-            BitmapClockViewGroup(clockCtx)
++        if (useBitmaps) {
++            BitmapClockViewGroup(clockCtx, isSmall)
+         } else {
+             FlexClockViewGroup(clockCtx)
+         }
+@@ -59,7 +65,7 @@ class FlexClockViewGroupController(private val clockCtx: FlexClockContext) :
+ 
+     init {
+         fun createController(cfg: LayerConfig) {
+-            if (enableAiClocks()) {
++            if (useBitmaps) {
+                 val controller = BitmapClockViewController(clockCtx, cfg, isLargeClock = true)
+                 view.addView(controller.view)
+                 layerControllers.add(controller)
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BitmapClockView.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BitmapClockView.kt
+index 5c797664e748..52cca4b233ea 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BitmapClockView.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BitmapClockView.kt
+@@ -17,26 +17,59 @@
+ package com.android.systemui.shared.clocks.view
+ 
+ import android.content.Context
++import android.graphics.ColorMatrix
++import android.graphics.ColorMatrixColorFilter
+ import android.util.AttributeSet
+ import android.widget.ImageView
+ import com.android.systemui.customization.R
+ import com.android.systemui.customization.clocks.view.IDigitalClockTextView
+ import com.android.systemui.plugins.keyguard.VPointF
+ import com.android.systemui.plugins.keyguard.VRectF
++import kotlin.math.roundToInt
+ 
+-class BitmapClockView(context: Context, attrs: AttributeSet?) :
+-    ImageView(context, attrs), IDigitalClockTextView {
++class BitmapClockView
++@JvmOverloads
++constructor(
++    context: Context,
++    attrs: AttributeSet?,
++    /** BlueOS "Moe" clock: pixel-art digits (vendor/blueos/tools/make-moe-ba.py) */
++    private val isBlueOSMoe: Boolean = false,
++) : ImageView(context, attrs), IDigitalClockTextView {
+ 
+     init {
+-        // make it have a minimum to occupy space no matter what
+-        minimumWidth = 400
+-        minimumHeight = 400
++        if (isBlueOSMoe) {
++            scaleType = ScaleType.FIT_XY
++            importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
++        } else {
++            // make it have a minimum to occupy space no matter what
++            minimumWidth = 400
++            minimumHeight = 400
++        }
+     }
+ 
++    /** BlueOS Moe: height of one digit picture in px, set by the view group */
++    var digitHeight: Float = 0f
++        set(value) {
++            if (field == value) return
++            field = value
++            requestLayout()
++        }
++
+     override var dozeFraction: Float = 0f
+         set(value) {
+             field = value
+-            alpha = 1f - (value * 0.5f)
++            if (isBlueOSMoe) {
++                // AOD: dim and grey, easier on the battery and the screen
++                alpha = 1f - value * 0.55f
++                colorFilter =
++                    if (value > 0.5f) {
++                        ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
++                    } else {
++                        null
++                    }
++            } else {
++                alpha = 1f - (value * 0.5f)
++            }
+         }
+ 
+     override var text: String = ""
+@@ -49,7 +82,26 @@ class BitmapClockView(context: Context, attrs: AttributeSet?) :
+         }
+ 
+     private fun updateDigitImage(digitPath: String) {
+-        setImageResource(R.drawable.eight)
++        if (!isBlueOSMoe) {
++            setImageResource(R.drawable.eight)
++            return
++        }
++        val res = MOE_DIGITS.getOrNull(digitPath.trim().firstOrNull()?.digitToIntOrNull() ?: -1)
++        if (res == null) {
++            setImageDrawable(null)
++        } else {
++            setImageResource(res)
++            drawable?.isFilterBitmap = false // keep the pixels sharp when scaled up
++        }
++    }
++
++    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
++        if (!isBlueOSMoe || digitHeight <= 0f) {
++            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
++            return
++        }
++        // every digit has the same size, also an empty one (12 h clock, single digit hour)
++        setMeasuredDimension((digitHeight * MOE_ASPECT).roundToInt(), digitHeight.roundToInt())
+     }
+ 
+     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+@@ -73,4 +125,23 @@ class BitmapClockView(context: Context, attrs: AttributeSet?) :
+     }
+ 
+     override fun animateCharge() {}
++
++    companion object {
++        private val MOE_DIGITS =
++            listOf(
++                R.drawable.blueos_moe_0,
++                R.drawable.blueos_moe_1,
++                R.drawable.blueos_moe_2,
++                R.drawable.blueos_moe_3,
++                R.drawable.blueos_moe_4,
++                R.drawable.blueos_moe_5,
++                R.drawable.blueos_moe_6,
++                R.drawable.blueos_moe_7,
++                R.drawable.blueos_moe_8,
++                R.drawable.blueos_moe_9,
++            )
++
++        /** width / height of the digit pictures (45 x 109 px) */
++        const val MOE_ASPECT = 45f / 109f
++    }
+ }
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BitmapClockViewGroup.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BitmapClockViewGroup.kt
+index f2abd5e108aa..37aa6763d122 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BitmapClockViewGroup.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BitmapClockViewGroup.kt
+@@ -17,6 +17,7 @@
+ package com.android.systemui.shared.clocks.view
+ 
+ import android.annotation.SuppressLint
++import android.view.View
+ import android.view.ViewGroup
+ import androidx.core.view.children
+ import com.android.systemui.customization.clocks.R
+@@ -31,13 +32,52 @@ import com.android.systemui.shared.clocks.FlexClockContext
+ import java.util.Locale
+ 
+ @SuppressLint("ViewConstructor")
+-class BitmapClockViewGroup(clockCtx: FlexClockContext) :
+-    DigitalClockViewGroup<BitmapClockView>(clockCtx) {
++class BitmapClockViewGroup
++@JvmOverloads
++constructor(
++    clockCtx: FlexClockContext,
++    /** BlueOS Moe small clock (notifications, AOD): HH MM in one row instead of a 2x2 grid */
++    private val isSmall: Boolean = false,
++) : DigitalClockViewGroup<BitmapClockView>(clockCtx) {
++
++    private val isBlueOSMoe = clockCtx.isBlueOSMoe
+ 
+     override val children: Sequence<BitmapClockView>
+         get() = (this as ViewGroup).children.filterIsInstance<BitmapClockView>()
+ 
++    // BlueOS Moe: digit size follows the clock text size
++    private var moeDigitHeight =
++        if (!isBlueOSMoe) 0f
++        else if (isSmall) {
++            context.resources.getDimension(R.dimen.small_clock_text_size) * MOE_SMALL_SCALE
++        } else {
++            context.resources.getDimension(R.dimen.large_clock_text_size) * MOE_LARGE_SCALE
++        }
++
++    private val moeColonGap: Float
++        get() = moeDigitHeight * BitmapClockView.MOE_ASPECT * 0.35f
++
++    override fun onViewAdded(child: View?) {
++        super.onViewAdded(child)
++        if (isBlueOSMoe) (child as? BitmapClockView)?.digitHeight = moeDigitHeight
++    }
++
++    override fun onAttachedToWindow() {
++        super.onAttachedToWindow()
++        if (isBlueOSMoe) updateMoeMaxSize()
++    }
++
++    private fun updateMoeMaxSize() {
++        val digit = VPointF(moeDigitHeight * BitmapClockView.MOE_ASPECT, moeDigitHeight)
++        val yBuffer = context.resources.getDimensionPixelSize(R.dimen.clock_vertical_digit_buffer)
++        maxSize =
++            if (isSmall) VPointF(digit.x * 4 + moeColonGap, digit.y)
++            else digit * 2f + VPointF(0f, yBuffer.toFloat())
++        onViewMaxSizeChanged?.let { it(maxSize) }
++    }
++
+     override fun calculateSize(measureSpec: VMeasurePoint): VPointF {
++        if (isSmall) return VPointF(maxChildSize.x * 4 + moeColonGap, maxChildSize.y)
+         // This is where the parent decides how big the whole clock is.
+         // We assume 2 digits wide, 2 digits tall for the large clock
+         val yBuffer = context.resources.getDimensionPixelSize(R.dimen.clock_vertical_digit_buffer)
+@@ -47,6 +87,25 @@ class BitmapClockViewGroup(clockCtx: FlexClockContext) :
+     override fun getChildFrame(child: BitmapClockView): VRectF {
+         val yBuffer = context.resources.getDimensionPixelSize(R.dimen.clock_vertical_digit_buffer)
+ 
++        if (isSmall) {
++            val x =
++                maxChildSize.x *
++                    when (child.id) {
++                        ClockViewIds.HOUR_FIRST_DIGIT -> 0f
++                        ClockViewIds.HOUR_SECOND_DIGIT -> 1f
++                        ClockViewIds.MINUTE_FIRST_DIGIT -> 2f
++                        else -> 3f
++                    } +
++                    if (child.id == ClockViewIds.MINUTE_FIRST_DIGIT ||
++                        child.id == ClockViewIds.MINUTE_SECOND_DIGIT
++                    ) {
++                        moeColonGap
++                    } else {
++                        0f
++                    }
++            return VRectF.fromTopLeft(VPointF(x, 0f), child.measuredSize)
++        }
++
+         // This math places the 4 bitmaps in a 2x2 grid
+         var offset =
+             maxChildSize.run {
+@@ -76,7 +135,20 @@ class BitmapClockViewGroup(clockCtx: FlexClockContext) :
+ 
+     override fun animateCharge() {}
+ 
+-    override fun onFontSettingChanged(fontSizePx: Float) {}
++    override fun onFontSettingChanged(fontSizePx: Float) {
++        if (!isBlueOSMoe || fontSizePx <= 0f) return
++        moeDigitHeight = fontSizePx * if (isSmall) MOE_SMALL_SCALE else MOE_LARGE_SCALE
++        children.forEach { it.digitHeight = moeDigitHeight }
++        updateMoeMaxSize()
++        requestLayout()
++    }
+ 
++    // The pictures keep their own colors
+     override fun updateColor(lockscreenColor: Int, aodColor: Int) {}
++
++    companion object {
++        // digit picture height / clock text size
++        private const val MOE_LARGE_SCALE = 0.8f
++        private const val MOE_SMALL_SCALE = 0.9f
++    }
+ }

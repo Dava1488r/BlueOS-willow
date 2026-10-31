@@ -1,0 +1,29 @@
+//
+// Spine runtime for the live Arona (BlueOS 0.7), from Maven Central:
+//   com.esotericsoftware.spine:spine-android:4.2.12 (Canvas renderer)
+//   com.esotericsoftware.spine:spine-libgdx:4.2.12
+//   com.badlogicgames.gdx:gdx:1.14.0 (only its plain Java classes are used)
+// The models are Spine 4.2.33 — the runtime's major.minor must match.
+//
+
+java_import {
+    name: "blueos-gdx",
+    jars: ["gdx-1.14.0.jar"],
+    sdk_version: "current",
+}
+
+java_import {
+    name: "blueos-spine-libgdx",
+    jars: ["spine-libgdx-4.2.12.jar"],
+    sdk_version: "current",
+}
+
+android_library_import {
+    name: "blueos-spine-android",
+    aars: ["spine-android-4.2.12.aar"],
+    static_libs: [
+        "blueos-spine-libgdx",
+        "blueos-gdx",
+    ],
+    sdk_version: "current",
+}

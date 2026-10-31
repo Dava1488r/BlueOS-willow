@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- BlueOS defaults, applied when the settings database is created (first boot after a wipe).
+     Lock sounds can be changed in Settings > Sound > Screen lock sound. Charging sounds stay
+     LineageOS' own (the user, 2026-10-30); the game's sounds are in the pickers. -->
+<resources>
+    <string name="def_lock_sound" translatable="false">/product/media/audio/ui/BlueOS_Lock_Start.ogg</string>
+    <string name="def_unlock_sound" translatable="false">/product/media/audio/ui/BlueOS_Unlock_Start.ogg</string>
+</resources>

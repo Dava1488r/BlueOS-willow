@@ -1,0 +1,243 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sun, 25 Oct 2026 10:26:41 +0100
+Subject: [PATCH 19/30] BlueOS: SystemUI: Widget layouts fit one row with the
+ margin
+
+Size thresholds include the 8 dp margin (one row is 122.7 dp on the 5x6
+grid, 145.5 dp on 4x5): music's big layout needs two rows and the strip
+four columns (bigger art in the strip), the big battery ring two rows, the
+1x1 ring 56 dp; the player equalizer starts at 4x2. The summary puts
+"Sensei" on its own line when the greeting doesn't fit, keeping 24 sp.
+
+Change-Id: I1f354d77337ba9ce068162bc3ef8f132533f206e
+---
+ .../res/layout/blueos_battery_widget_small.xml |  4 ++--
+ .../res/layout/blueos_media_widget_wide.xml    | 12 ++++++------
+ .../layout/blueos_summary_widget_dark_text.xml | 15 +++++++++++++++
+ .../blueos_summary_widget_light_text.xml       | 15 +++++++++++++++
+ .../SystemUI/res/xml/blueos_eq_full_info.xml   |  2 +-
+ .../widgets/BlueOSBatteryWidgetProvider.kt     |  3 ++-
+ .../widgets/BlueOSMediaWidgetProvider.kt       |  6 ++++--
+ .../widgets/BlueOSSummaryWidgetProvider.kt     | 18 +++++++++++++++---
+ 8 files changed, 60 insertions(+), 15 deletions(-)
+
+diff --git a/packages/SystemUI/res/layout/blueos_battery_widget_small.xml b/packages/SystemUI/res/layout/blueos_battery_widget_small.xml
+index f32bc9aa7d5a..b31444d570d9 100644
+--- a/packages/SystemUI/res/layout/blueos_battery_widget_small.xml
++++ b/packages/SystemUI/res/layout/blueos_battery_widget_small.xml
+@@ -25,8 +25,8 @@
+         <ProgressBar
+             android:id="@+id/blueos_battery_ring"
+             style="?android:attr/progressBarStyleHorizontal"
+-            android:layout_width="64dp"
+-            android:layout_height="64dp"
++            android:layout_width="56dp"
++            android:layout_height="56dp"
+             android:layout_gravity="center"
+             android:indeterminate="false"
+             android:max="100"
+diff --git a/packages/SystemUI/res/layout/blueos_media_widget_wide.xml b/packages/SystemUI/res/layout/blueos_media_widget_wide.xml
+index 86ff82933071..fb5635bc317b 100644
+--- a/packages/SystemUI/res/layout/blueos_media_widget_wide.xml
++++ b/packages/SystemUI/res/layout/blueos_media_widget_wide.xml
+@@ -27,11 +27,11 @@
+             android:layout_height="match_parent"
+             android:gravity="center_vertical"
+             android:orientation="horizontal"
+-            android:paddingHorizontal="10dp">
++            android:paddingHorizontal="16dp">
+ 
+             <FrameLayout
+-                android:layout_width="48dp"
+-                android:layout_height="48dp"
++                android:layout_width="72dp"
++                android:layout_height="72dp"
+                 android:background="@drawable/blueos_media_art_bg"
+                 android:clipToOutline="true">
+ 
+@@ -40,7 +40,7 @@
+                     android:layout_width="match_parent"
+                     android:layout_height="match_parent"
+                     android:contentDescription="@null"
+-                    android:padding="4dp"
++                    android:padding="12dp"
+                     android:src="@drawable/blueos_ic_music_note" />
+ 
+                 <ImageView
+@@ -68,7 +68,7 @@
+                     android:singleLine="true"
+                     android:text="@string/blueos_media_widget_idle"
+                     android:textColor="@color/blueos_widget_on_surface"
+-                    android:textSize="14sp" />
++                    android:textSize="16sp" />
+ 
+                 <TextView
+                     android:id="@+id/blueos_media_artist"
+@@ -79,7 +79,7 @@
+                     android:fontFamily="google-sans-text"
+                     android:singleLine="true"
+                     android:textColor="@color/blueos_widget_on_surface"
+-                    android:textSize="12sp" />
++                    android:textSize="13sp" />
+             </LinearLayout>
+ 
+             <ImageView
+diff --git a/packages/SystemUI/res/layout/blueos_summary_widget_dark_text.xml b/packages/SystemUI/res/layout/blueos_summary_widget_dark_text.xml
+index e4cdcff76859..d951c90b86f3 100644
+--- a/packages/SystemUI/res/layout/blueos_summary_widget_dark_text.xml
++++ b/packages/SystemUI/res/layout/blueos_summary_widget_dark_text.xml
+@@ -25,6 +25,7 @@
+             android:textSize="24sp" />
+ 
+         <TextView
++            android:id="@+id/blueos_summary_sensei"
+             android:layout_width="wrap_content"
+             android:layout_height="wrap_content"
+             android:fontFamily="blueos-clock"
+@@ -36,6 +37,20 @@
+             android:textSize="24sp" />
+     </LinearLayout>
+ 
++    <!-- Narrow widgets: "Sensei" on its own line, the greeting keeps its size -->
++    <TextView
++        android:id="@+id/blueos_summary_sensei_below"
++        android:layout_width="wrap_content"
++        android:layout_height="wrap_content"
++        android:fontFamily="blueos-clock"
++        android:fontVariationSettings="'wght' 600"
++        android:includeFontPadding="false"
++        android:singleLine="true"
++        android:text="@string/blueos_summary_sensei"
++        android:textColor="@android:color/system_primary_light"
++        android:textSize="24sp"
++        android:visibility="gone" />
++
+     <LinearLayout
+         android:layout_width="wrap_content"
+         android:layout_height="wrap_content"
+diff --git a/packages/SystemUI/res/layout/blueos_summary_widget_light_text.xml b/packages/SystemUI/res/layout/blueos_summary_widget_light_text.xml
+index a66d7454799e..df6f35b602ee 100644
+--- a/packages/SystemUI/res/layout/blueos_summary_widget_light_text.xml
++++ b/packages/SystemUI/res/layout/blueos_summary_widget_light_text.xml
+@@ -25,6 +25,7 @@
+             android:textSize="24sp" />
+ 
+         <TextView
++            android:id="@+id/blueos_summary_sensei"
+             android:layout_width="wrap_content"
+             android:layout_height="wrap_content"
+             android:fontFamily="blueos-clock"
+@@ -36,6 +37,20 @@
+             android:textSize="24sp" />
+     </LinearLayout>
+ 
++    <!-- Narrow widgets: "Sensei" on its own line, the greeting keeps its size -->
++    <TextView
++        android:id="@+id/blueos_summary_sensei_below"
++        android:layout_width="wrap_content"
++        android:layout_height="wrap_content"
++        android:fontFamily="blueos-clock"
++        android:fontVariationSettings="'wght' 600"
++        android:includeFontPadding="false"
++        android:singleLine="true"
++        android:text="@string/blueos_summary_sensei"
++        android:textColor="@android:color/system_primary_dark"
++        android:textSize="24sp"
++        android:visibility="gone" />
++
+     <LinearLayout
+         android:layout_width="wrap_content"
+         android:layout_height="wrap_content"
+diff --git a/packages/SystemUI/res/xml/blueos_eq_full_info.xml b/packages/SystemUI/res/xml/blueos_eq_full_info.xml
+index 62b76ccf8008..7db576bc0232 100644
+--- a/packages/SystemUI/res/xml/blueos_eq_full_info.xml
++++ b/packages/SystemUI/res/xml/blueos_eq_full_info.xml
+@@ -10,6 +10,6 @@
+     android:previewLayout="@layout/blueos_eq_widget_full"
+     android:resizeMode="horizontal|vertical"
+     android:targetCellWidth="4"
+-    android:targetCellHeight="1"
++    android:targetCellHeight="2"
+     android:updatePeriodMillis="0"
+     android:widgetCategory="home_screen" />
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSBatteryWidgetProvider.kt b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSBatteryWidgetProvider.kt
+index 626d525c003f..42d2f974d5c3 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSBatteryWidgetProvider.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSBatteryWidgetProvider.kt
+@@ -55,7 +55,8 @@ internal object BlueOSBatteryWidget {
+         listOf(
+             SizeF(40f, 40f) to R.layout.blueos_battery_widget_small,
+             SizeF(110f, 40f) to R.layout.blueos_battery_widget_medium,
+-            SizeF(110f, 120f) to R.layout.blueos_battery_widget_large,
++            // Sizes include the 8 dp margin; the big ring needs two rows
++            SizeF(110f, 160f) to R.layout.blueos_battery_widget_large,
+         )
+ 
+     private var started = false
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSMediaWidgetProvider.kt b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSMediaWidgetProvider.kt
+index f1b01af9d9e8..21bbf8ce93c7 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSMediaWidgetProvider.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSMediaWidgetProvider.kt
+@@ -93,10 +93,12 @@ internal object BlueOSMediaWidget {
+             Kind(
+                 BlueOSMediaWidgetProvider::class.java,
+                 listOf(
++                    // Sizes include the 8 dp margin (one row: 122.7 dp on 5x6, 145.5 on 4x5);
++                    // the big layout needs two rows, the strip four columns
+                     SizeF(110f, 40f) to R.layout.blueos_media_widget_small,
+                     SizeF(110f, 110f) to R.layout.blueos_media_widget_square,
+-                    SizeF(220f, 40f) to R.layout.blueos_media_widget_wide,
+-                    SizeF(220f, 110f) to R.layout.blueos_media_widget_large,
++                    SizeF(300f, 40f) to R.layout.blueos_media_widget_wide,
++                    SizeF(300f, 160f) to R.layout.blueos_media_widget_large,
+                 ),
+             ),
+             Kind(
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSSummaryWidgetProvider.kt b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSSummaryWidgetProvider.kt
+index 17cdb1662a8c..bf2cd1f5f6bf 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSSummaryWidgetProvider.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSSummaryWidgetProvider.kt
+@@ -35,6 +35,7 @@ import android.provider.CalendarContract
+ import android.provider.CalendarContract.Instances
+ import android.text.format.DateFormat
+ import android.text.format.DateUtils
++import android.util.SizeF
+ import android.view.View
+ import android.widget.RemoteViews
+ import com.android.systemui.res.R
+@@ -90,13 +91,19 @@ internal object BlueOSSummaryWidget {
+         // The calendar query stays off the main thread
+         executor.execute {
+             val event = nextEvent(app)
+-            val rv = build(app, event)
+-            wm.updateAppWidget(provider, rv)
++            // "Доброе утро, Сэнсэй" at 24 sp is ~265 dp: narrower widgets (sizes include the
++            // margin) put "Сэнсэй" on its own line instead of shrinking the text
++            val sized =
++                mapOf(
++                    SizeF(180f, 40f) to build(app, event, twoLines = true),
++                    SizeF(330f, 40f) to build(app, event, twoLines = false),
++                )
++            wm.updateAppWidget(provider, RemoteViews(sized))
+             scheduleRefresh(app, event)
+         }
+     }
+ 
+-    private fun build(context: Context, event: Event?): RemoteViews {
++    private fun build(context: Context, event: Event?, twoLines: Boolean): RemoteViews {
+         val darkText = BlueOSWidgetStyle.wallpaperWantsDarkText(context)
+         val rv =
+             RemoteViews(
+@@ -105,6 +112,11 @@ internal object BlueOSSummaryWidget {
+                 else R.layout.blueos_summary_widget_light_text,
+             )
+         rv.setTextViewText(R.id.blueos_summary_greeting, context.getString(greeting()))
++        rv.setViewVisibility(R.id.blueos_summary_sensei, if (twoLines) View.GONE else View.VISIBLE)
++        rv.setViewVisibility(
++            R.id.blueos_summary_sensei_below,
++            if (twoLines) View.VISIBLE else View.GONE,
++        )
+         val date = DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEMMMd")
+         rv.setCharSequence(R.id.blueos_summary_date, "setFormat12Hour", date)
+         rv.setCharSequence(R.id.blueos_summary_date, "setFormat24Hour", date)

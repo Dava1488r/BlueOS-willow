@@ -1,0 +1,126 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 27 Oct 2026 12:31:22 +0100
+Subject: [PATCH 07/12] =?UTF-8?q?BlueOS:=20ThemePicker:=200.7.2=20settings?=
+ =?UTF-8?q?=20=E2=80=94=20character,=20desk,=20transparency=20sliders,=20l?=
+ =?UTF-8?q?ines=20under=20the=20clock?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Арона: «Персонаж» (Арона / Плана), «Садится на парту». Виджеты и значки: «Прозрачность карточек» (all
+materials but solid), «Прозрачность подложки значков». Живые часы: «Под часами» — greeting and date / weather
+«Как в Android» or «Как в «Сводке»».
+
+Change-Id: If96eb8c128b8119fec42eda6324387dbec129f33
+---
+ res/values-ru/blueos_07_strings.xml            | 15 +++++++++++++++
+ res/values/blueos_07_strings.xml               | 15 +++++++++++++++
+ .../blueos/BlueOSSettingsActivity.kt           | 18 ++++++++++++++++++
+ 3 files changed, 48 insertions(+)
+
+diff --git a/res/values-ru/blueos_07_strings.xml b/res/values-ru/blueos_07_strings.xml
+index e578c683..4fe82bf0 100644
+--- a/res/values-ru/blueos_07_strings.xml
++++ b/res/values-ru/blueos_07_strings.xml
+@@ -225,4 +225,19 @@
+     <string name="blueos_s_clk_halo_t">Ореол на часах-карточке</string>
+     <string name="blueos_s_halo_more">Ещё про ореол</string>
+     <string name="blueos_s_halo_more_d">Наклон и реакция на падение — в «Движение телефона»</string>
++    <!-- BlueOS 0.7.2 -->
++    <string name="blueos_s_transp">Прозрачность карточек</string>
++    <string name="blueos_s_transp_off">Непрозрачные</string>
++    <string name="blueos_s_transp_d">Прозрачность: %1$d %%</string>
++    <string name="blueos_s_itransp">Прозрачность подложки значков</string>
++    <string name="blueos_s_c_char">Персонаж</string>
++    <string name="blueos_s_char_arona">Арона</string>
++    <string name="blueos_s_char_plana">Плана</string>
++    <string name="blueos_s_desk">Садится на парту</string>
++    <string name="blueos_s_desk_d">Если долго не трогать, Арона в виджете садится на парту и болтает ногами (ночью спит за ней). Нажмёшь — встанет</string>
++    <string name="blueos_s_h_under">Под часами</string>
++    <string name="blueos_s_c_greet">Приветствие</string>
++    <string name="blueos_s_c_date">Дата и погода</string>
++    <string name="blueos_s_style_android">Как в Android</string>
++    <string name="blueos_s_style_summary">Как в «Сводке»</string>
+ </resources>
+diff --git a/res/values/blueos_07_strings.xml b/res/values/blueos_07_strings.xml
+index 13ae7664..97796501 100644
+--- a/res/values/blueos_07_strings.xml
++++ b/res/values/blueos_07_strings.xml
+@@ -225,4 +225,19 @@
+     <string name="blueos_s_clk_halo_t">Halo on the clock card</string>
+     <string name="blueos_s_halo_more">More about the halo</string>
+     <string name="blueos_s_halo_more_d">Tilt and the reaction to a fall are in «Phone motion»</string>
++    <!-- BlueOS 0.7.2 -->
++    <string name="blueos_s_transp">Card transparency</string>
++    <string name="blueos_s_transp_off">Opaque</string>
++    <string name="blueos_s_transp_d">See-through: %1$d %%</string>
++    <string name="blueos_s_itransp">Icon plate transparency</string>
++    <string name="blueos_s_c_char">Character</string>
++    <string name="blueos_s_char_arona">Arona</string>
++    <string name="blueos_s_char_plana">Plana</string>
++    <string name="blueos_s_desk">Sits on her desk</string>
++    <string name="blueos_s_desk_d">Left alone for a while, Arona sits on a desk in the widget and swings her legs (asleep at it at night). A tap and she is back</string>
++    <string name="blueos_s_h_under">Under the clock</string>
++    <string name="blueos_s_c_greet">Greeting</string>
++    <string name="blueos_s_c_date">Date and weather</string>
++    <string name="blueos_s_style_android">As in Android</string>
++    <string name="blueos_s_style_summary">Like the Summary widget</string>
+ </resources>
+diff --git a/src/com/android/customization/blueos/BlueOSSettingsActivity.kt b/src/com/android/customization/blueos/BlueOSSettingsActivity.kt
+index d6b64175..e9aefedd 100644
+--- a/src/com/android/customization/blueos/BlueOSSettingsActivity.kt
++++ b/src/com/android/customization/blueos/BlueOSSettingsActivity.kt
+@@ -96,6 +96,9 @@ class BlueOSSettingsActivity : Activity() {
+         val sfxOnly = { int(K.ARONA_VOICE) == 1 && on(K.ARONA_EMO_ONLY) }
+         val text = { on(K.ARONA_TEXT) && !sfxOnly() }
+         return listOf(
++            // 0.7.2: who it is — on the lock screen and in the widget alike
++            Item.Choice(K.CHARACTER, R.string.blueos_s_c_char, listOf(
++                R.string.blueos_s_char_arona to 0, R.string.blueos_s_char_plana to 1)),
+             Item.Header(R.string.blueos_s_h_arona),
+             Item.Sw(K.ARONA_SHOW, R.string.blueos_s_arona_show, R.string.blueos_s_arona_show_d),
+             Item.Choice(K.ARONA_MODE, R.string.blueos_s_h_where, listOf(
+@@ -127,6 +130,8 @@ class BlueOSSettingsActivity : Activity() {
+             Item.Sw(K.ARONA_WIDGET_PHRASES, R.string.blueos_s_aw_phrases, R.string.blueos_s_aw_phrases_d, sub = true,
+                 dep = { int(K.ARONA_WIDGET_TEXT) != 2 }),
+             Item.Sw(K.ARONA_MUSIC, R.string.blueos_s_aw_music, R.string.blueos_s_aw_music_d, dep = { on(K.LIVE_WIDGETS) }),
++            Item.Sw(K.ARONA_DESK, R.string.blueos_s_desk, R.string.blueos_s_desk_d,
++                dep = { on(K.LIVE_WIDGETS) && int(K.CHARACTER) == 0 }),
+         )
+     }
+ 
+@@ -141,6 +146,12 @@ class BlueOSSettingsActivity : Activity() {
+             Item.Sw(K.HALO_CHARGE, R.string.blueos_s_halo_charge, sub = true, dep = halo),
+             Item.Sw(K.HALO_TOUCH, R.string.blueos_s_halo_touch, R.string.blueos_s_halo_touch_d, sub = true, dep = halo),
+             Item.Info(R.string.blueos_s_halo_more, R.string.blueos_s_halo_more_d),
++            // 0.7.2: the lines under the clock — Android's look or like the Summary widget
++            Item.Header(R.string.blueos_s_h_under),
++            Item.Choice(K.LOCK_GREETING_STYLE, R.string.blueos_s_c_greet, listOf(
++                R.string.blueos_s_style_android to 0, R.string.blueos_s_style_summary to 1)),
++            Item.Choice(K.LOCK_DATE_STYLE, R.string.blueos_s_c_date, listOf(
++                R.string.blueos_s_style_android to 0, R.string.blueos_s_style_summary to 1)),
+         )
+     }
+ 
+@@ -151,6 +162,10 @@ class BlueOSSettingsActivity : Activity() {
+             Item.Choice(K.WIDGET_MATERIAL, R.string.blueos_s_c_mat, listOf(
+                 R.string.blueos_s_mat_matte to 0, R.string.blueos_s_mat_glass to 1, R.string.blueos_s_mat_solid to 2,
+                 R.string.blueos_s_mat_outline to 3, R.string.blueos_s_mat_accent to 4)),
++            // 0.7.2: the transparency slider of the palette page, here too — and it now works for every material
++            Item.Slider(K.WIDGET_TRANSPARENCY, R.string.blueos_s_transp, dep = { int(K.WIDGET_MATERIAL) != 2 }) { v ->
++                if (v == 0) getString(R.string.blueos_s_transp_off) else getString(R.string.blueos_s_transp_d, v)
++            },
+             Item.Slider(K.WIDGET_BLUR, R.string.blueos_s_blur, dep = { int(K.WIDGET_MATERIAL) != 2 }) { v ->
+                 if (v == 0) getString(R.string.blueos_s_blur_off) else getString(R.string.blueos_s_blur_d, v)
+             },
+@@ -163,6 +178,9 @@ class BlueOSSettingsActivity : Activity() {
+             Item.Choice(K.ICON_MATERIAL, R.string.blueos_s_c_imat, listOf(
+                 R.string.blueos_s_imat_like to -1, R.string.blueos_s_mat_solid to 0, R.string.blueos_s_mat_glass to 1,
+                 R.string.blueos_s_mat_outline to 3, R.string.blueos_s_mat_accent to 4)),
++            Item.Slider(K.ICON_TRANSPARENCY, R.string.blueos_s_itransp) { v ->
++                if (v == 0) getString(R.string.blueos_s_transp_off) else getString(R.string.blueos_s_transp_d, v)
++            },
+             Item.Header(R.string.blueos_s_h_live),
+             Item.Sw(K.LIVE_WIDGETS, R.string.blueos_s_live, R.string.blueos_s_live_d),
+             Item.Sw(K.LIVE_SAVER, R.string.blueos_s_saver, R.string.blueos_s_saver_d, sub = true, dep = live),

@@ -1,0 +1,1378 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sun, 25 Oct 2026 04:49:34 +0100
+Subject: [PATCH 2/4] BlueOS: DeskClock: Widgets 0.6
+
+- Clock card: the halo over the minutes too; narrow and wide layouts.
+- Halo clock: dark or light text layouts with theme colors resolved by the
+  launcher (the baked colors lagged behind the theme).
+- Tile: resizable, one row by default.
+- New "Next alarm" widget.
+- Card transparency from Wallpaper & style; refreshed on SystemUI's
+  WIDGET_STYLE_CHANGED.
+
+Change-Id: I8255b3cf7ee46ece91a9a464ae0c3846532692d0
+---
+ AndroidManifest.xml                           |  30 ++-
+ res/color/blueos_widget_card_bg.xml           |   5 -
+ res/drawable/blueos_widget_card.xml           |   4 +-
+ res/drawable/blueos_widget_card_accent.xml    |   7 +
+ res/drawable/blueos_widget_outline.xml        |   7 +
+ res/layout/blueos_clock_widget_alarm.xml      |  63 ++++++
+ res/layout/blueos_clock_widget_card.xml       | 186 ++++++++++--------
+ res/layout/blueos_clock_widget_card_wide.xml  | 130 ++++++++++++
+ res/layout/blueos_clock_widget_halo.xml       |  98 ---------
+ .../blueos_clock_widget_halo_dark_text.xml    | 105 ++++++++++
+ .../blueos_clock_widget_halo_light_text.xml   | 105 ++++++++++
+ res/layout/blueos_clock_widget_tile.xml       |  82 ++++----
+ res/values-night/blueos_widget_colors.xml     |   2 +
+ res/values-ru/blueos_strings.xml              |   7 +-
+ res/values/blueos_strings.xml                 |   7 +-
+ res/values/blueos_widget_colors.xml           |   2 +
+ res/xml/blueos_clock_widget_alarm.xml         |  15 ++
+ res/xml/blueos_clock_widget_card.xml          |  16 +-
+ res/xml/blueos_clock_widget_halo.xml          |   8 +-
+ res/xml/blueos_clock_widget_tile.xml          |  10 +-
+ .../alarmclock/BlueOSClockWidgetProvider.java | 157 ++++++++-------
+ 21 files changed, 740 insertions(+), 306 deletions(-)
+ delete mode 100644 res/color/blueos_widget_card_bg.xml
+ create mode 100644 res/drawable/blueos_widget_card_accent.xml
+ create mode 100644 res/drawable/blueos_widget_outline.xml
+ create mode 100644 res/layout/blueos_clock_widget_alarm.xml
+ create mode 100644 res/layout/blueos_clock_widget_card_wide.xml
+ delete mode 100644 res/layout/blueos_clock_widget_halo.xml
+ create mode 100644 res/layout/blueos_clock_widget_halo_dark_text.xml
+ create mode 100644 res/layout/blueos_clock_widget_halo_light_text.xml
+ create mode 100644 res/xml/blueos_clock_widget_alarm.xml
+
+diff --git a/AndroidManifest.xml b/AndroidManifest.xml
+index 5e378f1bd..c0cb77c8d 100644
+--- a/AndroidManifest.xml
++++ b/AndroidManifest.xml
+@@ -316,6 +316,8 @@
+                 <action android:name="android.intent.action.LOCALE_CHANGED" />
+                 <action android:name="android.intent.action.TIME_SET" />
+                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
++                <!-- Sent by SystemUI: widget transparency or wallpaper colors changed -->
++                <action android:name="org.blueos.intent.action.WIDGET_STYLE_CHANGED" />
+             </intent-filter>
+             <meta-data
+                 android:name="android.appwidget.provider"
+@@ -332,8 +334,8 @@
+                 <action android:name="android.intent.action.LOCALE_CHANGED" />
+                 <action android:name="android.intent.action.TIME_SET" />
+                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+-                <!-- Sent by SystemUI when the home wallpaper colors change -->
+-                <action android:name="org.blueos.intent.action.WALLPAPER_COLORS_CHANGED" />
++                <!-- Sent by SystemUI: widget transparency or wallpaper colors changed -->
++                <action android:name="org.blueos.intent.action.WIDGET_STYLE_CHANGED" />
+             </intent-filter>
+             <meta-data
+                 android:name="android.appwidget.provider"
+@@ -346,12 +348,36 @@
+             android:label="@string/blueos_clock_widget_tile">
+             <intent-filter>
+                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
++                <action android:name="android.app.action.NEXT_ALARM_CLOCK_CHANGED" />
++                <action android:name="android.intent.action.LOCALE_CHANGED" />
++                <action android:name="android.intent.action.TIME_SET" />
++                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
++                <!-- Sent by SystemUI: widget transparency or wallpaper colors changed -->
++                <action android:name="org.blueos.intent.action.WIDGET_STYLE_CHANGED" />
+             </intent-filter>
+             <meta-data
+                 android:name="android.appwidget.provider"
+                 android:resource="@xml/blueos_clock_widget_tile" />
+         </receiver>
+ 
++        <receiver
++            android:name="com.android.alarmclock.BlueOSClockWidgetProvider$Alarm"
++            android:exported="true"
++            android:label="@string/blueos_clock_widget_alarm">
++            <intent-filter>
++                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
++                <action android:name="android.app.action.NEXT_ALARM_CLOCK_CHANGED" />
++                <action android:name="android.intent.action.LOCALE_CHANGED" />
++                <action android:name="android.intent.action.TIME_SET" />
++                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
++                <!-- Sent by SystemUI: widget transparency or wallpaper colors changed -->
++                <action android:name="org.blueos.intent.action.WIDGET_STYLE_CHANGED" />
++            </intent-filter>
++            <meta-data
++                android:name="android.appwidget.provider"
++                android:resource="@xml/blueos_clock_widget_alarm" />
++        </receiver>
++
+         <service
+             android:name="com.android.alarmclock.DigitalAppWidgetCityService"
+             android:permission="android.permission.BIND_REMOTEVIEWS" />
+diff --git a/res/color/blueos_widget_card_bg.xml b/res/color/blueos_widget_card_bg.xml
+deleted file mode 100644
+index 7252c4139..000000000
+--- a/res/color/blueos_widget_card_bg.xml
++++ /dev/null
+@@ -1,5 +0,0 @@
+-<?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS: slightly translucent card, the wallpaper shows through a little -->
+-<selector xmlns:android="http://schemas.android.com/apk/res/android">
+-    <item android:alpha="0.9" android:color="@color/blueos_widget_card" />
+-</selector>
+diff --git a/res/drawable/blueos_widget_card.xml b/res/drawable/blueos_widget_card.xml
+index 473231246..48802722f 100644
+--- a/res/drawable/blueos_widget_card.xml
++++ b/res/drawable/blueos_widget_card.xml
+@@ -1,7 +1,7 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS clock widgets: card background -->
++<!-- BlueOS clock widgets: card. Its transparency (Wallpaper & style) is the ImageView alpha. -->
+ <shape xmlns:android="http://schemas.android.com/apk/res/android"
+     android:shape="rectangle">
+-    <solid android:color="@color/blueos_widget_card_bg" />
++    <solid android:color="@color/blueos_widget_card" />
+     <corners android:radius="@android:dimen/system_app_widget_background_radius" />
+ </shape>
+diff --git a/res/drawable/blueos_widget_card_accent.xml b/res/drawable/blueos_widget_card_accent.xml
+new file mode 100644
+index 000000000..d0992fdd1
+--- /dev/null
++++ b/res/drawable/blueos_widget_card_accent.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS clock widgets: card in the accent container color (next alarm) -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android"
++    android:shape="rectangle">
++    <solid android:color="@color/blueos_widget_primary_container" />
++    <corners android:radius="@android:dimen/system_app_widget_background_radius" />
++</shape>
+diff --git a/res/drawable/blueos_widget_outline.xml b/res/drawable/blueos_widget_outline.xml
+new file mode 100644
+index 000000000..e485c3f78
+--- /dev/null
++++ b/res/drawable/blueos_widget_outline.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS clock widgets: the rounded outline the whole widget is clipped to -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android"
++    android:shape="rectangle">
++    <solid android:color="@android:color/transparent" />
++    <corners android:radius="@android:dimen/system_app_widget_background_radius" />
++</shape>
+diff --git a/res/layout/blueos_clock_widget_alarm.xml b/res/layout/blueos_clock_widget_alarm.xml
+new file mode 100644
+index 000000000..59765cbb5
+--- /dev/null
++++ b/res/layout/blueos_clock_widget_alarm.xml
+@@ -0,0 +1,63 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS next alarm widget: icon, time, day; tap opens the alarms -->
++<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
++    android:id="@android:id/background"
++    android:layout_width="match_parent"
++    android:layout_height="match_parent"
++    android:background="@drawable/blueos_widget_outline"
++    android:clipToOutline="true">
++
++    <ImageView
++        android:id="@+id/blueos_widget_bg"
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:contentDescription="@null"
++        android:scaleType="fitXY"
++        android:src="@drawable/blueos_widget_card_accent" />
++
++    <LinearLayout
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:gravity="center_vertical"
++        android:orientation="horizontal"
++        android:paddingHorizontal="16dp">
++
++        <ImageView
++            android:layout_width="26dp"
++            android:layout_height="26dp"
++            android:contentDescription="@null"
++            android:src="@drawable/ic_alarm"
++            android:tint="@color/blueos_widget_on_primary_container" />
++
++        <LinearLayout
++            android:layout_width="0dp"
++            android:layout_height="wrap_content"
++            android:layout_marginStart="12dp"
++            android:layout_weight="1"
++            android:orientation="vertical">
++
++            <TextView
++                android:id="@+id/blueos_alarm_time"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:fontFamily="blueos-clock"
++                android:fontVariationSettings="'wght' 600"
++                android:includeFontPadding="false"
++                android:singleLine="true"
++                android:textColor="@color/blueos_widget_on_primary_container"
++                android:textSize="26sp" />
++
++            <TextView
++                android:id="@+id/blueos_alarm_day"
++                android:layout_width="match_parent"
++                android:layout_height="wrap_content"
++                android:layout_marginTop="2dp"
++                android:alpha="0.8"
++                android:ellipsize="end"
++                android:fontFamily="google-sans-text"
++                android:singleLine="true"
++                android:textColor="@color/blueos_widget_on_primary_container"
++                android:textSize="13sp" />
++        </LinearLayout>
++    </LinearLayout>
++</FrameLayout>
+diff --git a/res/layout/blueos_clock_widget_card.xml b/res/layout/blueos_clock_widget_card.xml
+index af96b32d0..1b92b4386 100644
+--- a/res/layout/blueos_clock_widget_card.xml
++++ b/res/layout/blueos_clock_widget_card.xml
+@@ -1,89 +1,121 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS clock widget A: time (minutes in the accent color), date and next alarm on a card -->
+-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
++<!-- BlueOS clock card, narrow: time (halo over the accent minutes), date and next alarm -->
++<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+     android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@drawable/blueos_widget_card"
+-    android:gravity="center_vertical"
+-    android:orientation="vertical"
+-    android:paddingHorizontal="20dp"
+-    android:paddingVertical="10dp">
++    android:background="@drawable/blueos_widget_outline"
++    android:clipToOutline="true">
+ 
+-    <LinearLayout
+-        android:layout_width="wrap_content"
+-        android:layout_height="wrap_content"
+-        android:orientation="horizontal">
+-
+-        <TextClock
+-            android:id="@+id/blueos_hours"
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:fontFamily="blueos-clock"
+-            android:fontVariationSettings="'wght' 600"
+-            android:format12Hour="h"
+-            android:format24Hour="HH"
+-            android:includeFontPadding="false"
+-            android:singleLine="true"
+-            android:textColor="@color/blueos_widget_on_surface"
+-            android:textSize="40sp" />
+-
+-        <TextView
+-            android:id="@+id/blueos_colon"
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:fontFamily="blueos-clock"
+-            android:fontVariationSettings="'wght' 600"
+-            android:includeFontPadding="false"
+-            android:text=":"
+-            android:textColor="@color/blueos_widget_on_surface"
+-            android:textSize="40sp" />
+-
+-        <TextClock
+-            android:id="@+id/blueos_minutes"
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:fontFamily="blueos-clock"
+-            android:fontVariationSettings="'wght' 600"
+-            android:format12Hour="mm"
+-            android:format24Hour="mm"
+-            android:includeFontPadding="false"
+-            android:singleLine="true"
+-            android:textColor="@color/blueos_widget_primary"
+-            android:textSize="40sp" />
+-    </LinearLayout>
++    <ImageView
++        android:id="@+id/blueos_widget_bg"
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:contentDescription="@null"
++        android:scaleType="fitXY"
++        android:src="@drawable/blueos_widget_card" />
+ 
+     <LinearLayout
+-        android:layout_width="wrap_content"
+-        android:layout_height="wrap_content"
+-        android:layout_marginTop="4dp"
+-        android:gravity="center_vertical"
+-        android:orientation="horizontal">
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:gravity="center"
++        android:orientation="vertical"
++        android:paddingHorizontal="12dp"
++        android:paddingBottom="8dp">
+ 
+-        <TextClock
+-            android:id="@+id/blueos_date"
++        <!-- The halo over the minutes, like over "OS" in the logo; the top margin leaves it room -->
++        <RelativeLayout
+             android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:singleLine="true"
+-            android:textColor="@color/blueos_widget_on_surface_variant"
+-            android:textSize="13sp" />
+-
+-        <ImageView
+-            android:id="@+id/blueos_alarm_icon"
+-            android:layout_width="14dp"
+-            android:layout_height="14dp"
+-            android:layout_marginStart="10dp"
+-            android:contentDescription="@null"
+-            android:src="@drawable/ic_alarm"
+-            android:tint="@color/blueos_widget_on_surface_variant" />
+-
+-        <TextView
+-            android:id="@+id/blueos_next_alarm"
++            android:layout_height="wrap_content">
++    
++            <TextClock
++                android:id="@+id/blueos_hours"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_marginTop="14dp"
++                android:fontFamily="blueos-clock"
++                android:fontVariationSettings="'wght' 600"
++                android:format12Hour="h"
++                android:format24Hour="HH"
++                android:includeFontPadding="false"
++                android:singleLine="true"
++                android:textColor="@color/blueos_widget_on_surface"
++                android:textSize="40sp" />
++    
++            <TextView
++                android:id="@+id/blueos_colon"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_alignBaseline="@id/blueos_hours"
++                android:layout_toEndOf="@id/blueos_hours"
++                android:fontFamily="blueos-clock"
++                android:fontVariationSettings="'wght' 600"
++                android:includeFontPadding="false"
++                android:text=":"
++                android:textColor="@color/blueos_widget_on_surface"
++                android:textSize="40sp" />
++    
++            <TextClock
++                android:id="@+id/blueos_minutes"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_alignBaseline="@id/blueos_hours"
++                android:layout_toEndOf="@id/blueos_colon"
++                android:fontFamily="blueos-clock"
++                android:fontVariationSettings="'wght' 600"
++                android:format12Hour="mm"
++                android:format24Hour="mm"
++                android:includeFontPadding="false"
++                android:singleLine="true"
++                android:textColor="@color/blueos_widget_primary"
++                android:textSize="40sp" />
++    
++            <ImageView
++                android:id="@+id/blueos_halo"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_above="@id/blueos_minutes"
++                android:layout_alignStart="@id/blueos_minutes"
++                android:layout_alignEnd="@id/blueos_minutes"
++                android:layout_marginBottom="-3dp"
++                android:contentDescription="@null"
++                android:src="@drawable/blueos_widget_halo"
++                android:tint="@color/blueos_widget_primary" />
++        </RelativeLayout>
++        <LinearLayout
+             android:layout_width="wrap_content"
+             android:layout_height="wrap_content"
+-            android:layout_marginStart="3dp"
+-            android:singleLine="true"
+-            android:textColor="@color/blueos_widget_on_surface_variant"
+-            android:textSize="13sp" />
++            android:layout_marginTop="4dp"
++            android:gravity="center_vertical"
++            android:orientation="horizontal">
++    
++            <TextClock
++                android:id="@+id/blueos_date"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:fontFamily="google-sans-text"
++                android:singleLine="true"
++                android:textColor="@color/blueos_widget_on_surface_variant"
++                android:textSize="13sp" />
++    
++            <ImageView
++                android:id="@+id/blueos_alarm_icon"
++                android:layout_width="14dp"
++                android:layout_height="14dp"
++                android:layout_marginStart="10dp"
++                android:contentDescription="@null"
++                android:src="@drawable/ic_alarm"
++                android:tint="@color/blueos_widget_on_surface_variant" />
++    
++            <TextView
++                android:id="@+id/blueos_next_alarm"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_marginStart="3dp"
++                android:fontFamily="google-sans-text"
++                android:singleLine="true"
++                android:textColor="@color/blueos_widget_on_surface_variant"
++                android:textSize="13sp" />
++        </LinearLayout>
+     </LinearLayout>
+-</LinearLayout>
++</FrameLayout>
+diff --git a/res/layout/blueos_clock_widget_card_wide.xml b/res/layout/blueos_clock_widget_card_wide.xml
+new file mode 100644
+index 000000000..19bd3aef6
+--- /dev/null
++++ b/res/layout/blueos_clock_widget_card_wide.xml
+@@ -0,0 +1,130 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS clock card, wide: time (halo over the accent minutes) left, date and alarm right -->
++<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
++    android:id="@android:id/background"
++    android:layout_width="match_parent"
++    android:layout_height="match_parent"
++    android:background="@drawable/blueos_widget_outline"
++    android:clipToOutline="true">
++
++    <ImageView
++        android:id="@+id/blueos_widget_bg"
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:contentDescription="@null"
++        android:scaleType="fitXY"
++        android:src="@drawable/blueos_widget_card" />
++
++    <LinearLayout
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:gravity="center_vertical"
++        android:orientation="horizontal"
++        android:paddingHorizontal="20dp"
++        android:paddingBottom="8dp">
++
++        <!-- The halo over the minutes, like over "OS" in the logo; the top margin leaves it room -->
++        <RelativeLayout
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content">
++    
++            <TextClock
++                android:id="@+id/blueos_hours"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_marginTop="14dp"
++                android:fontFamily="blueos-clock"
++                android:fontVariationSettings="'wght' 600"
++                android:format12Hour="h"
++                android:format24Hour="HH"
++                android:includeFontPadding="false"
++                android:singleLine="true"
++                android:textColor="@color/blueos_widget_on_surface"
++                android:textSize="48sp" />
++    
++            <TextView
++                android:id="@+id/blueos_colon"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_alignBaseline="@id/blueos_hours"
++                android:layout_toEndOf="@id/blueos_hours"
++                android:fontFamily="blueos-clock"
++                android:fontVariationSettings="'wght' 600"
++                android:includeFontPadding="false"
++                android:text=":"
++                android:textColor="@color/blueos_widget_on_surface"
++                android:textSize="48sp" />
++    
++            <TextClock
++                android:id="@+id/blueos_minutes"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_alignBaseline="@id/blueos_hours"
++                android:layout_toEndOf="@id/blueos_colon"
++                android:fontFamily="blueos-clock"
++                android:fontVariationSettings="'wght' 600"
++                android:format12Hour="mm"
++                android:format24Hour="mm"
++                android:includeFontPadding="false"
++                android:singleLine="true"
++                android:textColor="@color/blueos_widget_primary"
++                android:textSize="48sp" />
++    
++            <ImageView
++                android:id="@+id/blueos_halo"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_above="@id/blueos_minutes"
++                android:layout_alignStart="@id/blueos_minutes"
++                android:layout_alignEnd="@id/blueos_minutes"
++                android:layout_marginBottom="-3dp"
++                android:contentDescription="@null"
++                android:src="@drawable/blueos_widget_halo"
++                android:tint="@color/blueos_widget_primary" />
++        </RelativeLayout>
++
++        <LinearLayout
++            android:layout_width="0dp"
++            android:layout_height="wrap_content"
++            android:layout_marginTop="8dp"
++            android:layout_weight="1"
++            android:gravity="end"
++            android:orientation="vertical">
++
++            <TextClock
++                android:id="@+id/blueos_date"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:fontFamily="google-sans-text"
++                android:singleLine="true"
++                android:textColor="@color/blueos_widget_on_surface"
++                android:textSize="15sp" />
++
++            <LinearLayout
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_marginTop="2dp"
++                android:gravity="center_vertical"
++                android:orientation="horizontal">
++
++                <ImageView
++                    android:id="@+id/blueos_alarm_icon"
++                    android:layout_width="14dp"
++                    android:layout_height="14dp"
++                    android:contentDescription="@null"
++                    android:src="@drawable/ic_alarm"
++                    android:tint="@color/blueos_widget_on_surface_variant" />
++
++                <TextView
++                    android:id="@+id/blueos_next_alarm"
++                    android:layout_width="wrap_content"
++                    android:layout_height="wrap_content"
++                    android:layout_marginStart="3dp"
++                    android:fontFamily="google-sans-text"
++                    android:singleLine="true"
++                    android:textColor="@color/blueos_widget_on_surface_variant"
++                    android:textSize="13sp" />
++            </LinearLayout>
++        </LinearLayout>
++    </LinearLayout>
++</FrameLayout>
+diff --git a/res/layout/blueos_clock_widget_halo.xml b/res/layout/blueos_clock_widget_halo.xml
+deleted file mode 100644
+index ea26c32c8..000000000
+--- a/res/layout/blueos_clock_widget_halo.xml
++++ /dev/null
+@@ -1,98 +0,0 @@
+-<?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS clock widget B: no card, the halo over the minutes (like over "OS" in the logo).
+-     Text colors are set by BlueOSClockWidgetProvider.Halo from the wallpaper colors. -->
+-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@android:id/background"
+-    android:layout_width="match_parent"
+-    android:layout_height="match_parent"
+-    android:gravity="center_vertical"
+-    android:paddingHorizontal="8dp">
+-
+-    <!-- The top margin leaves room for the halo above the minutes -->
+-    <TextClock
+-        android:id="@+id/blueos_hours"
+-        android:layout_width="wrap_content"
+-        android:layout_height="wrap_content"
+-        android:layout_marginTop="12dp"
+-        android:fontFamily="blueos-clock"
+-        android:fontVariationSettings="'wght' 600"
+-        android:format12Hour="h"
+-        android:format24Hour="HH"
+-        android:includeFontPadding="false"
+-        android:singleLine="true"
+-        android:textColor="@color/blueos_widget_on_surface"
+-        android:textSize="44sp" />
+-
+-    <TextView
+-        android:id="@+id/blueos_colon"
+-        android:layout_width="wrap_content"
+-        android:layout_height="wrap_content"
+-        android:layout_alignBaseline="@id/blueos_hours"
+-        android:layout_toEndOf="@id/blueos_hours"
+-        android:fontFamily="blueos-clock"
+-        android:fontVariationSettings="'wght' 600"
+-        android:includeFontPadding="false"
+-        android:text=":"
+-        android:textColor="@color/blueos_widget_on_surface"
+-        android:textSize="44sp" />
+-
+-    <TextClock
+-        android:id="@+id/blueos_minutes"
+-        android:layout_width="wrap_content"
+-        android:layout_height="wrap_content"
+-        android:layout_alignBaseline="@id/blueos_hours"
+-        android:layout_toEndOf="@id/blueos_colon"
+-        android:fontFamily="blueos-clock"
+-        android:fontVariationSettings="'wght' 600"
+-        android:format12Hour="mm"
+-        android:format24Hour="mm"
+-        android:includeFontPadding="false"
+-        android:singleLine="true"
+-        android:textColor="@color/blueos_widget_primary"
+-        android:textSize="44sp" />
+-
+-    <ImageView
+-        android:id="@+id/blueos_halo"
+-        android:layout_width="wrap_content"
+-        android:layout_height="wrap_content"
+-        android:layout_above="@id/blueos_minutes"
+-        android:layout_alignStart="@id/blueos_minutes"
+-        android:layout_alignEnd="@id/blueos_minutes"
+-        android:layout_marginBottom="-3dp"
+-        android:contentDescription="@null"
+-        android:src="@drawable/blueos_widget_halo" />
+-
+-    <LinearLayout
+-        android:layout_width="wrap_content"
+-        android:layout_height="wrap_content"
+-        android:layout_below="@id/blueos_hours"
+-        android:layout_marginTop="2dp"
+-        android:gravity="center_vertical"
+-        android:orientation="horizontal">
+-
+-        <TextClock
+-            android:id="@+id/blueos_date"
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:singleLine="true"
+-            android:textColor="@color/blueos_widget_on_surface_variant"
+-            android:textSize="13sp" />
+-
+-        <ImageView
+-            android:id="@+id/blueos_alarm_icon"
+-            android:layout_width="14dp"
+-            android:layout_height="14dp"
+-            android:layout_marginStart="10dp"
+-            android:contentDescription="@null"
+-            android:src="@drawable/ic_alarm" />
+-
+-        <TextView
+-            android:id="@+id/blueos_next_alarm"
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:layout_marginStart="3dp"
+-            android:singleLine="true"
+-            android:textColor="@color/blueos_widget_on_surface_variant"
+-            android:textSize="13sp" />
+-    </LinearLayout>
+-</RelativeLayout>
+diff --git a/res/layout/blueos_clock_widget_halo_dark_text.xml b/res/layout/blueos_clock_widget_halo_dark_text.xml
+new file mode 100644
+index 000000000..4dcdda1af
+--- /dev/null
++++ b/res/layout/blueos_clock_widget_halo_dark_text.xml
+@@ -0,0 +1,105 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS halo clock, no card: dark text for light wallpapers. The provider picks it from the wallpaper colors. -->
++<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
++    android:id="@android:id/background"
++    android:layout_width="match_parent"
++    android:layout_height="match_parent"
++    android:gravity="center_vertical"
++    android:orientation="vertical"
++    android:paddingHorizontal="8dp">
++
++    <!-- The halo over the minutes, like over "OS" in the logo; the top margin leaves it room -->
++    <RelativeLayout
++        android:layout_width="wrap_content"
++        android:layout_height="wrap_content">
++
++        <TextClock
++            android:id="@+id/blueos_hours"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_marginTop="14dp"
++            android:fontFamily="blueos-clock"
++            android:fontVariationSettings="'wght' 600"
++            android:format12Hour="h"
++            android:format24Hour="HH"
++            android:includeFontPadding="false"
++            android:singleLine="true"
++            android:textColor="@android:color/system_on_surface_light"
++            android:textSize="48sp" />
++
++        <TextView
++            android:id="@+id/blueos_colon"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_alignBaseline="@id/blueos_hours"
++            android:layout_toEndOf="@id/blueos_hours"
++            android:fontFamily="blueos-clock"
++            android:fontVariationSettings="'wght' 600"
++            android:includeFontPadding="false"
++            android:text=":"
++            android:textColor="@android:color/system_on_surface_light"
++            android:textSize="48sp" />
++
++        <TextClock
++            android:id="@+id/blueos_minutes"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_alignBaseline="@id/blueos_hours"
++            android:layout_toEndOf="@id/blueos_colon"
++            android:fontFamily="blueos-clock"
++            android:fontVariationSettings="'wght' 600"
++            android:format12Hour="mm"
++            android:format24Hour="mm"
++            android:includeFontPadding="false"
++            android:singleLine="true"
++            android:textColor="@android:color/system_primary_light"
++            android:textSize="48sp" />
++
++        <ImageView
++            android:id="@+id/blueos_halo"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_above="@id/blueos_minutes"
++            android:layout_alignStart="@id/blueos_minutes"
++            android:layout_alignEnd="@id/blueos_minutes"
++            android:layout_marginBottom="-3dp"
++            android:contentDescription="@null"
++            android:src="@drawable/blueos_widget_halo"
++            android:tint="@android:color/system_primary_light" />
++    </RelativeLayout>
++    <LinearLayout
++        android:layout_width="wrap_content"
++        android:layout_height="wrap_content"
++        android:layout_marginTop="4dp"
++        android:gravity="center_vertical"
++        android:orientation="horizontal">
++
++        <TextClock
++            android:id="@+id/blueos_date"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:fontFamily="google-sans-text"
++            android:singleLine="true"
++            android:textColor="@android:color/system_on_surface_variant_light"
++            android:textSize="13sp" />
++
++        <ImageView
++            android:id="@+id/blueos_alarm_icon"
++            android:layout_width="14dp"
++            android:layout_height="14dp"
++            android:layout_marginStart="10dp"
++            android:contentDescription="@null"
++            android:src="@drawable/ic_alarm"
++            android:tint="@android:color/system_on_surface_variant_light" />
++
++        <TextView
++            android:id="@+id/blueos_next_alarm"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_marginStart="3dp"
++            android:fontFamily="google-sans-text"
++            android:singleLine="true"
++            android:textColor="@android:color/system_on_surface_variant_light"
++            android:textSize="13sp" />
++    </LinearLayout>
++</LinearLayout>
+diff --git a/res/layout/blueos_clock_widget_halo_light_text.xml b/res/layout/blueos_clock_widget_halo_light_text.xml
+new file mode 100644
+index 000000000..fa403276f
+--- /dev/null
++++ b/res/layout/blueos_clock_widget_halo_light_text.xml
+@@ -0,0 +1,105 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS halo clock, no card: light text for dark wallpapers. The provider picks it from the wallpaper colors. -->
++<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
++    android:id="@android:id/background"
++    android:layout_width="match_parent"
++    android:layout_height="match_parent"
++    android:gravity="center_vertical"
++    android:orientation="vertical"
++    android:paddingHorizontal="8dp">
++
++    <!-- The halo over the minutes, like over "OS" in the logo; the top margin leaves it room -->
++    <RelativeLayout
++        android:layout_width="wrap_content"
++        android:layout_height="wrap_content">
++
++        <TextClock
++            android:id="@+id/blueos_hours"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_marginTop="14dp"
++            android:fontFamily="blueos-clock"
++            android:fontVariationSettings="'wght' 600"
++            android:format12Hour="h"
++            android:format24Hour="HH"
++            android:includeFontPadding="false"
++            android:singleLine="true"
++            android:textColor="@android:color/system_on_surface_dark"
++            android:textSize="48sp" />
++
++        <TextView
++            android:id="@+id/blueos_colon"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_alignBaseline="@id/blueos_hours"
++            android:layout_toEndOf="@id/blueos_hours"
++            android:fontFamily="blueos-clock"
++            android:fontVariationSettings="'wght' 600"
++            android:includeFontPadding="false"
++            android:text=":"
++            android:textColor="@android:color/system_on_surface_dark"
++            android:textSize="48sp" />
++
++        <TextClock
++            android:id="@+id/blueos_minutes"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_alignBaseline="@id/blueos_hours"
++            android:layout_toEndOf="@id/blueos_colon"
++            android:fontFamily="blueos-clock"
++            android:fontVariationSettings="'wght' 600"
++            android:format12Hour="mm"
++            android:format24Hour="mm"
++            android:includeFontPadding="false"
++            android:singleLine="true"
++            android:textColor="@android:color/system_primary_dark"
++            android:textSize="48sp" />
++
++        <ImageView
++            android:id="@+id/blueos_halo"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_above="@id/blueos_minutes"
++            android:layout_alignStart="@id/blueos_minutes"
++            android:layout_alignEnd="@id/blueos_minutes"
++            android:layout_marginBottom="-3dp"
++            android:contentDescription="@null"
++            android:src="@drawable/blueos_widget_halo"
++            android:tint="@android:color/system_primary_dark" />
++    </RelativeLayout>
++    <LinearLayout
++        android:layout_width="wrap_content"
++        android:layout_height="wrap_content"
++        android:layout_marginTop="4dp"
++        android:gravity="center_vertical"
++        android:orientation="horizontal">
++
++        <TextClock
++            android:id="@+id/blueos_date"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:fontFamily="google-sans-text"
++            android:singleLine="true"
++            android:textColor="@android:color/system_on_surface_variant_dark"
++            android:textSize="13sp" />
++
++        <ImageView
++            android:id="@+id/blueos_alarm_icon"
++            android:layout_width="14dp"
++            android:layout_height="14dp"
++            android:layout_marginStart="10dp"
++            android:contentDescription="@null"
++            android:src="@drawable/ic_alarm"
++            android:tint="@android:color/system_on_surface_variant_dark" />
++
++        <TextView
++            android:id="@+id/blueos_next_alarm"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_marginStart="3dp"
++            android:fontFamily="google-sans-text"
++            android:singleLine="true"
++            android:textColor="@android:color/system_on_surface_variant_dark"
++            android:textSize="13sp" />
++    </LinearLayout>
++</LinearLayout>
+diff --git a/res/layout/blueos_clock_widget_tile.xml b/res/layout/blueos_clock_widget_tile.xml
+index d6adeb577..e33d17f71 100644
+--- a/res/layout/blueos_clock_widget_tile.xml
++++ b/res/layout/blueos_clock_widget_tile.xml
+@@ -1,43 +1,57 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS clock widget C: 2x2 tile, the halo on top, hours over minutes -->
+-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
++<!-- BlueOS clock tile: the halo on top, hours over minutes; resizable -->
++<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+     android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@drawable/blueos_widget_card"
+-    android:gravity="center"
+-    android:orientation="vertical"
+-    android:padding="8dp">
++    android:background="@drawable/blueos_widget_outline"
++    android:clipToOutline="true">
+ 
+     <ImageView
+-        android:layout_width="wrap_content"
+-        android:layout_height="wrap_content"
++        android:id="@+id/blueos_widget_bg"
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
+         android:contentDescription="@null"
+-        android:src="@drawable/blueos_widget_halo" />
++        android:scaleType="fitXY"
++        android:src="@drawable/blueos_widget_card" />
+ 
+-    <TextClock
+-        android:id="@+id/blueos_hours"
+-        android:layout_width="wrap_content"
+-        android:layout_height="wrap_content"
+-        android:fontFamily="blueos-clock"
+-        android:fontVariationSettings="'wght' 600"
+-        android:format12Hour="hh"
+-        android:format24Hour="HH"
+-        android:includeFontPadding="false"
+-        android:singleLine="true"
+-        android:textColor="@color/blueos_widget_on_surface"
+-        android:textSize="40sp" />
++    <LinearLayout
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:gravity="center"
++        android:orientation="vertical"
++        android:padding="6dp">
+ 
+-    <TextClock
+-        android:id="@+id/blueos_minutes"
+-        android:layout_width="wrap_content"
+-        android:layout_height="wrap_content"
+-        android:fontFamily="blueos-clock"
+-        android:fontVariationSettings="'wght' 600"
+-        android:format12Hour="mm"
+-        android:format24Hour="mm"
+-        android:includeFontPadding="false"
+-        android:singleLine="true"
+-        android:textColor="@color/blueos_widget_primary"
+-        android:textSize="40sp" />
+-</LinearLayout>
++        <ImageView
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:contentDescription="@null"
++            android:src="@drawable/blueos_widget_halo" />
++
++        <TextClock
++            android:id="@+id/blueos_hours"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:fontFamily="blueos-clock"
++            android:fontVariationSettings="'wght' 600"
++            android:format12Hour="hh"
++            android:format24Hour="HH"
++            android:includeFontPadding="false"
++            android:singleLine="true"
++            android:textColor="@color/blueos_widget_on_surface"
++            android:textSize="44sp" />
++
++        <TextClock
++            android:id="@+id/blueos_minutes"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:fontFamily="blueos-clock"
++            android:fontVariationSettings="'wght' 600"
++            android:format12Hour="mm"
++            android:format24Hour="mm"
++            android:includeFontPadding="false"
++            android:singleLine="true"
++            android:textColor="@color/blueos_widget_primary"
++            android:textSize="44sp" />
++    </LinearLayout>
++</FrameLayout>
+diff --git a/res/values-night/blueos_widget_colors.xml b/res/values-night/blueos_widget_colors.xml
+index 19ad7a340..42ccb2d48 100644
+--- a/res/values-night/blueos_widget_colors.xml
++++ b/res/values-night/blueos_widget_colors.xml
+@@ -5,4 +5,6 @@
+     <color name="blueos_widget_on_surface">@android:color/system_on_surface_dark</color>
+     <color name="blueos_widget_on_surface_variant">@android:color/system_on_surface_variant_dark</color>
+     <color name="blueos_widget_primary">@android:color/system_primary_dark</color>
++    <color name="blueos_widget_primary_container">@android:color/system_primary_container_dark</color>
++    <color name="blueos_widget_on_primary_container">@android:color/system_on_primary_container_dark</color>
+ </resources>
+diff --git a/res/values-ru/blueos_strings.xml b/res/values-ru/blueos_strings.xml
+index d267b7329..88417d128 100644
+--- a/res/values-ru/blueos_strings.xml
++++ b/res/values-ru/blueos_strings.xml
+@@ -1,9 +1,12 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources>
+     <string name="blueos_clock_widget_card">Часы: карточка</string>
+-    <string name="blueos_clock_widget_card_description">Время, дата и ближайший будильник на карточке</string>
++    <string name="blueos_clock_widget_card_description">Время с ореолом, дата и ближайший будильник на карточке</string>
+     <string name="blueos_clock_widget_halo">Часы: ореол</string>
+     <string name="blueos_clock_widget_halo_description">Время с ореолом, без подложки</string>
+     <string name="blueos_clock_widget_tile">Часы: плитка</string>
+-    <string name="blueos_clock_widget_tile_description">Часы над минутами на квадратной плитке</string>
++    <string name="blueos_clock_widget_tile_description">Часы над минутами под ореолом</string>
++    <string name="blueos_clock_widget_alarm">Будильник</string>
++    <string name="blueos_clock_widget_alarm_description">Когда зазвонит ближайший будильник</string>
++    <string name="blueos_clock_widget_no_alarms">Будильников нет</string>
+ </resources>
+diff --git a/res/values/blueos_strings.xml b/res/values/blueos_strings.xml
+index 4f5fccc85..edd50e267 100644
+--- a/res/values/blueos_strings.xml
++++ b/res/values/blueos_strings.xml
+@@ -2,9 +2,12 @@
+ <!-- BlueOS clock widgets -->
+ <resources>
+     <string name="blueos_clock_widget_card">Clock card</string>
+-    <string name="blueos_clock_widget_card_description">Time, date and the next alarm on a card</string>
++    <string name="blueos_clock_widget_card_description">Time with a halo, date and the next alarm on a card</string>
+     <string name="blueos_clock_widget_halo">Halo clock</string>
+     <string name="blueos_clock_widget_halo_description">Time with a halo, no background</string>
+     <string name="blueos_clock_widget_tile">Clock tile</string>
+-    <string name="blueos_clock_widget_tile_description">Hours over minutes on a square tile</string>
++    <string name="blueos_clock_widget_tile_description">Hours over minutes under a halo</string>
++    <string name="blueos_clock_widget_alarm">Next alarm</string>
++    <string name="blueos_clock_widget_alarm_description">When the next alarm rings</string>
++    <string name="blueos_clock_widget_no_alarms">No alarms</string>
+ </resources>
+diff --git a/res/values/blueos_widget_colors.xml b/res/values/blueos_widget_colors.xml
+index e9a332892..a7d7fe674 100644
+--- a/res/values/blueos_widget_colors.xml
++++ b/res/values/blueos_widget_colors.xml
+@@ -5,4 +5,6 @@
+     <color name="blueos_widget_on_surface">@android:color/system_on_surface_light</color>
+     <color name="blueos_widget_on_surface_variant">@android:color/system_on_surface_variant_light</color>
+     <color name="blueos_widget_primary">@android:color/system_primary_light</color>
++    <color name="blueos_widget_primary_container">@android:color/system_primary_container_light</color>
++    <color name="blueos_widget_on_primary_container">@android:color/system_on_primary_container_light</color>
+ </resources>
+diff --git a/res/xml/blueos_clock_widget_alarm.xml b/res/xml/blueos_clock_widget_alarm.xml
+new file mode 100644
+index 000000000..a45ed4694
+--- /dev/null
++++ b/res/xml/blueos_clock_widget_alarm.xml
+@@ -0,0 +1,15 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS next alarm -->
++<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
++    android:description="@string/blueos_clock_widget_alarm_description"
++    android:initialLayout="@layout/blueos_clock_widget_alarm"
++    android:minWidth="110dp"
++    android:minHeight="50dp"
++    android:minResizeWidth="110dp"
++    android:minResizeHeight="50dp"
++    android:previewLayout="@layout/blueos_clock_widget_alarm"
++    android:resizeMode="horizontal|vertical"
++    android:targetCellWidth="2"
++    android:targetCellHeight="1"
++    android:updatePeriodMillis="0"
++    android:widgetCategory="home_screen" />
+diff --git a/res/xml/blueos_clock_widget_card.xml b/res/xml/blueos_clock_widget_card.xml
+index 313d61654..cc933dd19 100644
+--- a/res/xml/blueos_clock_widget_card.xml
++++ b/res/xml/blueos_clock_widget_card.xml
+@@ -1,15 +1,15 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS clock widget A (card) -->
++<!-- BlueOS clock card: narrow or wide layout by size -->
+ <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+     android:description="@string/blueos_clock_widget_card_description"
+-    android:initialLayout="@layout/blueos_clock_widget_card"
+-    android:minWidth="180dp"
+-    android:minHeight="60dp"
+-    android:minResizeWidth="150dp"
+-    android:minResizeHeight="60dp"
+-    android:previewLayout="@layout/blueos_clock_widget_card"
++    android:initialLayout="@layout/blueos_clock_widget_card_wide"
++    android:minWidth="110dp"
++    android:minHeight="70dp"
++    android:minResizeWidth="110dp"
++    android:minResizeHeight="70dp"
++    android:previewLayout="@layout/blueos_clock_widget_card_wide"
+     android:resizeMode="horizontal|vertical"
+-    android:targetCellWidth="3"
++    android:targetCellWidth="4"
+     android:targetCellHeight="1"
+     android:updatePeriodMillis="0"
+     android:widgetCategory="home_screen" />
+diff --git a/res/xml/blueos_clock_widget_halo.xml b/res/xml/blueos_clock_widget_halo.xml
+index 215ee79a7..e90040481 100644
+--- a/res/xml/blueos_clock_widget_halo.xml
++++ b/res/xml/blueos_clock_widget_halo.xml
+@@ -1,13 +1,13 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS clock widget B (halo, no card) -->
++<!-- BlueOS halo clock (no card) -->
+ <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+     android:description="@string/blueos_clock_widget_halo_description"
+-    android:initialLayout="@layout/blueos_clock_widget_halo"
+-    android:minWidth="180dp"
++    android:initialLayout="@layout/blueos_clock_widget_halo_light_text"
++    android:minWidth="150dp"
+     android:minHeight="70dp"
+     android:minResizeWidth="150dp"
+     android:minResizeHeight="70dp"
+-    android:previewLayout="@layout/blueos_clock_widget_halo"
++    android:previewLayout="@layout/blueos_clock_widget_halo_light_text"
+     android:resizeMode="horizontal|vertical"
+     android:targetCellWidth="3"
+     android:targetCellHeight="1"
+diff --git a/res/xml/blueos_clock_widget_tile.xml b/res/xml/blueos_clock_widget_tile.xml
+index c5f6c441f..e36d059ea 100644
+--- a/res/xml/blueos_clock_widget_tile.xml
++++ b/res/xml/blueos_clock_widget_tile.xml
+@@ -1,13 +1,15 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS clock widget C (2x2 tile) -->
++<!-- BlueOS clock tile -->
+ <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+     android:description="@string/blueos_clock_widget_tile_description"
+     android:initialLayout="@layout/blueos_clock_widget_tile"
+-    android:minWidth="110dp"
++    android:minWidth="90dp"
+     android:minHeight="110dp"
++    android:minResizeWidth="90dp"
++    android:minResizeHeight="110dp"
+     android:previewLayout="@layout/blueos_clock_widget_tile"
+-    android:resizeMode="none"
++    android:resizeMode="horizontal|vertical"
+     android:targetCellWidth="2"
+-    android:targetCellHeight="2"
++    android:targetCellHeight="1"
+     android:updatePeriodMillis="0"
+     android:widgetCategory="home_screen" />
+diff --git a/src/com/android/alarmclock/BlueOSClockWidgetProvider.java b/src/com/android/alarmclock/BlueOSClockWidgetProvider.java
+index 6a4da9513..bbcb84805 100644
+--- a/src/com/android/alarmclock/BlueOSClockWidgetProvider.java
++++ b/src/com/android/alarmclock/BlueOSClockWidgetProvider.java
+@@ -27,8 +27,11 @@ import android.appwidget.AppWidgetProvider;
+ import android.content.ComponentName;
+ import android.content.Context;
+ import android.content.Intent;
++import android.provider.AlarmClock;
++import android.provider.Settings;
+ import android.text.TextUtils;
+ import android.text.format.DateFormat;
++import android.util.SizeF;
+ import android.view.View;
+ import android.widget.RemoteViews;
+ 
+@@ -36,30 +39,27 @@ import com.android.deskclock.DeskClock;
+ import com.android.deskclock.R;
+ import com.android.deskclock.Utils;
+ 
++import java.util.LinkedHashMap;
+ import java.util.Locale;
++import java.util.Map;
+ 
+ /**
+- * BlueOS clock widgets: a card, a halo clock without a card and a 2x2 tile. Their colors are
+- * system palette resources, so they follow the accent color and the dark theme. The time itself
+- * is drawn by TextClocks; the provider only refreshes the date format, the next alarm and (halo)
+- * the text color picked from the home wallpaper.
++ * BlueOS clock widgets: a card, a halo clock without a card, a tile and the next alarm. Colors are
++ * system palette resources resolved by the launcher, so they follow the accent color and the dark
++ * theme right away. The time itself is drawn by TextClocks; the provider only refreshes the date
++ * format, the next alarm, the card transparency and (halo) dark or light text for the wallpaper.
+  */
+ public abstract class BlueOSClockWidgetProvider extends AppWidgetProvider {
+ 
+-    /** Sent by SystemUI (ThemeOverlayController) when the home wallpaper colors change. */
+-    private static final String ACTION_WALLPAPER_COLORS_CHANGED =
+-            "org.blueos.intent.action.WALLPAPER_COLORS_CHANGED";
++    /** Sent by SystemUI when the widget transparency or the home wallpaper colors change. */
++    private static final String ACTION_WIDGET_STYLE_CHANGED =
++            "org.blueos.intent.action.WIDGET_STYLE_CHANGED";
++    /** Secure setting (0..100) set in Wallpaper & style: how transparent widget cards are. */
++    private static final String SETTING_TRANSPARENCY = "blueos_widget_transparency";
++    private static final int DEFAULT_TRANSPARENCY = 10;
+ 
+-    protected abstract int getLayoutId();
+-
+-    /** Whether the layout has the date / next alarm row. */
+-    protected boolean hasDateRow() {
+-        return true;
+-    }
+-
+-    /** Last touches on the views, after the common setup. */
+-    protected void style(Context context, RemoteViews rv) {
+-    }
++    /** The views for one widget; sized layouts where the size matters. */
++    protected abstract RemoteViews buildViews(Context context, boolean clickable);
+ 
+     @Override
+     public void onReceive(Context context, Intent intent) {
+@@ -69,7 +69,7 @@ public abstract class BlueOSClockWidgetProvider extends AppWidgetProvider {
+                 || Intent.ACTION_LOCALE_CHANGED.equals(action)
+                 || Intent.ACTION_TIME_CHANGED.equals(action)
+                 || Intent.ACTION_TIMEZONE_CHANGED.equals(action)
+-                || ACTION_WALLPAPER_COLORS_CHANGED.equals(action)) {
++                || ACTION_WIDGET_STYLE_CHANGED.equals(action)) {
+             final AppWidgetManager wm = AppWidgetManager.getInstance(context);
+             onUpdate(context, wm, wm.getAppWidgetIds(new ComponentName(context, getClass())));
+         }
+@@ -78,92 +78,113 @@ public abstract class BlueOSClockWidgetProvider extends AppWidgetProvider {
+     @Override
+     public void onUpdate(Context context, AppWidgetManager wm, int[] widgetIds) {
+         for (int widgetId : widgetIds) {
+-            wm.updateAppWidget(widgetId, buildViews(context, wm, widgetId));
++            wm.updateAppWidget(widgetId,
++                    buildViews(context, Utils.isWidgetClickable(wm, widgetId)));
+         }
+     }
+ 
+-    private RemoteViews buildViews(Context context, AppWidgetManager wm, int widgetId) {
+-        final RemoteViews rv = new RemoteViews(context.getPackageName(), getLayoutId());
++    /** Common setup of a layout: card transparency, tap, date and next alarm. */
++    protected RemoteViews views(Context context, int layoutId, boolean clickable) {
++        final RemoteViews rv = new RemoteViews(context.getPackageName(), layoutId);
++        rv.setInt(R.id.blueos_widget_bg, "setImageAlpha", cardAlpha(context));
+ 
+         // Tapping on the widget opens the app (if not on the lock screen).
+-        if (Utils.isWidgetClickable(wm, widgetId)) {
++        if (clickable) {
+             final Intent openApp = new Intent(context, DeskClock.class);
+             final PendingIntent pi = PendingIntent.getActivity(context, 0, openApp, FLAG_IMMUTABLE);
+             rv.setOnClickPendingIntent(android.R.id.background, pi);
+         }
+ 
+-        if (hasDateRow()) {
+-            final String dateFormat =
+-                    DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEMMMd");
+-            rv.setCharSequence(R.id.blueos_date, "setFormat12Hour", dateFormat);
+-            rv.setCharSequence(R.id.blueos_date, "setFormat24Hour", dateFormat);
+-
+-            final String nextAlarm = Utils.getNextAlarm(context);
+-            final int alarmVisibility = TextUtils.isEmpty(nextAlarm) ? View.GONE : View.VISIBLE;
+-            rv.setViewVisibility(R.id.blueos_alarm_icon, alarmVisibility);
+-            rv.setViewVisibility(R.id.blueos_next_alarm, alarmVisibility);
+-            rv.setTextViewText(R.id.blueos_next_alarm, nextAlarm);
+-        }
++        final String dateFormat =
++                DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEMMMd");
++        rv.setCharSequence(R.id.blueos_date, "setFormat12Hour", dateFormat);
++        rv.setCharSequence(R.id.blueos_date, "setFormat24Hour", dateFormat);
+ 
+-        style(context, rv);
++        final String nextAlarm = Utils.getNextAlarm(context);
++        final int alarmVisibility = TextUtils.isEmpty(nextAlarm) ? View.GONE : View.VISIBLE;
++        rv.setViewVisibility(R.id.blueos_alarm_icon, alarmVisibility);
++        rv.setViewVisibility(R.id.blueos_next_alarm, alarmVisibility);
++        rv.setTextViewText(R.id.blueos_next_alarm, nextAlarm);
+         return rv;
+     }
+ 
+-    /** A: time, date and the next alarm on a card. */
++    private static int cardAlpha(Context context) {
++        final int transparency = Math.max(0, Math.min(100, Settings.Secure.getInt(
++                context.getContentResolver(), SETTING_TRANSPARENCY, DEFAULT_TRANSPARENCY)));
++        return (255 * (100 - transparency) + 50) / 100;
++    }
++
++    /** A: time with the halo over the minutes, date and next alarm; wide from 3 cells. */
+     public static class Card extends BlueOSClockWidgetProvider {
+         @Override
+-        protected int getLayoutId() {
+-            return R.layout.blueos_clock_widget_card;
++        protected RemoteViews buildViews(Context context, boolean clickable) {
++            final Map<SizeF, RemoteViews> sized = new LinkedHashMap<>();
++            sized.put(new SizeF(90f, 60f),
++                    views(context, R.layout.blueos_clock_widget_card, clickable));
++            sized.put(new SizeF(230f, 60f),
++                    views(context, R.layout.blueos_clock_widget_card_wide, clickable));
++            return new RemoteViews(sized);
+         }
+     }
+ 
+     /**
+      * B: no card, the halo over the minutes. Without a card the text has to contrast with the
+-     * wallpaper itself, so dark or light text is picked from the wallpaper colors.
++     * wallpaper itself, so the layout with dark or light text is picked from the wallpaper colors.
+      */
+     public static class Halo extends BlueOSClockWidgetProvider {
+         @Override
+-        protected int getLayoutId() {
+-            return R.layout.blueos_clock_widget_halo;
+-        }
+-
+-        @Override
+-        protected void style(Context context, RemoteViews rv) {
++        protected RemoteViews buildViews(Context context, boolean clickable) {
+             final WallpaperColors colors = WallpaperManager.getInstance(context)
+                     .getWallpaperColors(WallpaperManager.FLAG_SYSTEM);
+             final boolean darkText = colors != null
+                     && (colors.getColorHints() & WallpaperColors.HINT_SUPPORTS_DARK_TEXT) != 0;
+-
+-            final int text = context.getColor(darkText
+-                    ? android.R.color.system_on_surface_light
+-                    : android.R.color.system_on_surface_dark);
+-            final int secondary = context.getColor(darkText
+-                    ? android.R.color.system_on_surface_variant_light
+-                    : android.R.color.system_on_surface_variant_dark);
+-            final int accent = context.getColor(darkText
+-                    ? android.R.color.system_primary_light
+-                    : android.R.color.system_primary_dark);
+-
+-            rv.setTextColor(R.id.blueos_hours, text);
+-            rv.setTextColor(R.id.blueos_colon, text);
+-            rv.setTextColor(R.id.blueos_minutes, accent);
+-            rv.setInt(R.id.blueos_halo, "setColorFilter", accent);
+-            rv.setTextColor(R.id.blueos_date, secondary);
+-            rv.setTextColor(R.id.blueos_next_alarm, secondary);
+-            rv.setInt(R.id.blueos_alarm_icon, "setColorFilter", secondary);
++            return views(context, darkText
++                    ? R.layout.blueos_clock_widget_halo_dark_text
++                    : R.layout.blueos_clock_widget_halo_light_text, clickable);
+         }
+     }
+ 
+-    /** C: 2x2 tile, hours over minutes, the halo on top. */
++    /** C: tile, hours over minutes, the halo on top. */
+     public static class Tile extends BlueOSClockWidgetProvider {
+         @Override
+-        protected int getLayoutId() {
+-            return R.layout.blueos_clock_widget_tile;
++        protected RemoteViews buildViews(Context context, boolean clickable) {
++            return views(context, R.layout.blueos_clock_widget_tile, clickable);
+         }
++    }
+ 
++    /** D: when the next alarm rings; tap opens the alarms. */
++    public static class Alarm extends BlueOSClockWidgetProvider {
+         @Override
+-        protected boolean hasDateRow() {
+-            return false;
++        protected RemoteViews buildViews(Context context, boolean clickable) {
++            final RemoteViews rv = views(context, R.layout.blueos_clock_widget_alarm, false);
++            final AlarmManager.AlarmClockInfo next =
++                    context.getSystemService(AlarmManager.class).getNextAlarmClock();
++            if (next == null) {
++                rv.setTextViewText(R.id.blueos_alarm_time,
++                        context.getString(R.string.blueos_clock_widget_no_alarms));
++                rv.setTextViewText(R.id.blueos_alarm_day, "");
++                rv.setViewVisibility(R.id.blueos_alarm_day, View.GONE);
++            } else {
++                final long at = next.getTriggerTime();
++                final String time = DateFormat.getTimeFormat(context).format(at);
++                rv.setTextViewText(R.id.blueos_alarm_time, time);
++                rv.setTextViewText(R.id.blueos_alarm_day, day(context, at));
++                rv.setViewVisibility(R.id.blueos_alarm_day, View.VISIBLE);
++            }
++            if (clickable) {
++                final Intent alarms = new Intent(AlarmClock.ACTION_SHOW_ALARMS)
++                        .setClass(context, DeskClock.class);
++                rv.setOnClickPendingIntent(android.R.id.background,
++                        PendingIntent.getActivity(context, 1, alarms, FLAG_IMMUTABLE));
++            }
++            return rv;
++        }
++
++        /** The weekday and date; never "tomorrow", which would go stale at midnight. */
++        private static String day(Context context, long at) {
++            return DateFormat.format(
++                    DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEdMMM"), at)
++                    .toString();
+         }
+     }
+ }

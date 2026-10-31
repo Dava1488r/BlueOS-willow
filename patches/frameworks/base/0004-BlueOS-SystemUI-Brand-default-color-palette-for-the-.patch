@@ -1,0 +1,111 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sat, 24 Oct 2026 12:53:59 +0200
+Subject: [PATCH 04/30] BlueOS: SystemUI: Brand default color, palette for the
+ boot animation
+
+Until the user picks colors in Wallpaper & style the system palette comes from the BlueOS brand color (#128AFA, stored as a preset). The current palette is published to persist.bootanim.color1..4 so dynamically colored boot animations follow it.
+
+Change-Id: Id3bd0b1b4fb7e6ac72836cac8717735ab35a67de
+---
+ .../theme/ThemeOverlayController.java         | 58 ++++++++++++++++++-
+ 1 file changed, 56 insertions(+), 2 deletions(-)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java b/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java
+index ea7a1925d5ef..495df3297a3e 100644
+--- a/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java
++++ b/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java
+@@ -53,6 +53,7 @@ import android.database.ContentObserver;
+ import android.graphics.Color;
+ import android.net.Uri;
+ import android.os.Handler;
++import android.os.SystemProperties;
+ import android.os.UserHandle;
+ import android.os.UserManager;
+ import android.provider.Settings;
+@@ -128,6 +129,8 @@ import javax.inject.Inject;
+ public class ThemeOverlayController implements CoreStartable, Dumpable {
+     protected static final String TAG = "ThemeOverlayController";
+     private static final boolean DEBUG = false;
++    // BlueOS brand color "Голубой BA"
++    private static final String BLUEOS_DEFAULT_SEED_COLOR = "128AFA";
+ 
+     private static final String KEY_COLOR_PALETTE_VERSION = "global_color_palette_version";
+ 
+@@ -357,6 +360,13 @@ public class ThemeOverlayController implements CoreStartable, Dumpable {
+         String overlayPackageJson = mSecureSettings.getStringForUser(
+                 Settings.Secure.THEME_CUSTOMIZATION_OVERLAY_PACKAGES,
+                 currentUser);
++        if (TextUtils.isEmpty(overlayPackageJson)) {
++            // BlueOS: first wallpaper event on fresh data - store the brand color as a preset
++            // so the wallpaper doesn't take over and Wallpaper & style shows it as chosen
++            overlayPackageJson = withBlueOSDefaultColors(overlayPackageJson);
++            mSecureSettings.putStringForUser(Settings.Secure.THEME_CUSTOMIZATION_OVERLAY_PACKAGES,
++                    overlayPackageJson, UserHandle.USER_CURRENT);
++        }
+         boolean isDestinationBoth = (flags == (WallpaperManager.FLAG_SYSTEM
+                 | WallpaperManager.FLAG_LOCK));
+         boolean isDestinationHomeOnly = (flags == WallpaperManager.FLAG_SYSTEM);
+@@ -726,6 +736,50 @@ public class ThemeOverlayController implements CoreStartable, Dumpable {
+         assignColorsToOverlay(mDynamicOverlay, DynamicColors.getFixedColorsMapped());
+         // Custom Colors
+         assignColorsToOverlay(mDynamicOverlay, DynamicColors.getCustomColorsMapped());
++
++        publishBootAnimationColors();
++    }
++
++    /**
++     * BlueOS: hand the palette to the boot animation ("dynamic_colors" in its desc.txt, see
++     * frameworks/base/cmds/bootanimation/FORMAT.md). The BlueOS animations use:
++     * 1 = accent on a light background, 2 = accent on a dark background,
++     * 3 = text on a light background, 4 = white.
++     */
++    private void publishBootAnimationColors() {
++        final MaterialDynamicColors dynamicColors = new MaterialDynamicColors();
++        final int[] colors = {
++                dynamicColors.primary().getArgb(mLightColorScheme.getMaterialScheme()),
++                dynamicColors.primary().getArgb(mDarkColorScheme.getMaterialScheme()),
++                dynamicColors.onSurface().getArgb(mLightColorScheme.getMaterialScheme()),
++                Color.WHITE,
++        };
++        for (int i = 0; i < colors.length; i++) {
++            final String key = "persist.bootanim.color" + (i + 1);
++            final String value = String.valueOf(colors[i]);
++            if (value.equals(SystemProperties.get(key))) continue;
++            try {
++                SystemProperties.set(key, value);
++            } catch (RuntimeException e) {
++                Log.w(TAG, "Can't set " + key, e);
++            }
++        }
++    }
++
++    /**
++     * BlueOS: until the user picks colors in Wallpaper & style, the system uses the brand
++     * color ("Голубой BA") instead of the wallpaper's.
++     */
++    private static String withBlueOSDefaultColors(String overlayPackageJson) {
++        if (!TextUtils.isEmpty(overlayPackageJson)) return overlayPackageJson;
++        try {
++            return new JSONObject()
++                    .put(OVERLAY_COLOR_SOURCE, COLOR_SOURCE_PRESET)
++                    .put(OVERLAY_CATEGORY_SYSTEM_PALETTE, BLUEOS_DEFAULT_SEED_COLOR)
++                    .toString();
++        } catch (JSONException e) {
++            return overlayPackageJson;
++        }
+     }
+ 
+     private void assignColorsToOverlay(FabricatedOverlay overlay,
+@@ -785,9 +839,9 @@ public class ThemeOverlayController implements CoreStartable, Dumpable {
+     @SuppressWarnings("StringCaseLocaleUsage") // Package name is not localized
+     private void updateThemeOverlays(boolean forceUpdate) {
+         final int currentUser = mUserTracker.getUserId();
+-        final String overlayPackageJson = mSecureSettings.getStringForUser(
++        final String overlayPackageJson = withBlueOSDefaultColors(mSecureSettings.getStringForUser(
+                 Settings.Secure.THEME_CUSTOMIZATION_OVERLAY_PACKAGES,
+-                currentUser);
++                currentUser));
+         if (DEBUG) Log.d(TAG, "updateThemeOverlays. Setting: " + overlayPackageJson);
+         final Map<String, OverlayIdentifier> categoryToPackage = new ArrayMap<>();
+         if (!TextUtils.isEmpty(overlayPackageJson)) {

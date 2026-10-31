@@ -1,0 +1,49 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sun, 25 Oct 2026 12:33:42 +0100
+Subject: [PATCH 04/12] BlueOS: ThemePicker: Halo clock first in the clock list
+
+Halo, then the stock clock, the divider, then the Moe clocks. The divider
+follows the last clock with presets, so Halo (no presets) can sit first.
+
+Change-Id: Ieca423c4f929deab4ffae4bf1766f24dceb12332
+---
+ .../clock/ui/viewmodel/ClockPickerViewModel.kt      | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/src/com/android/customization/picker/clock/ui/viewmodel/ClockPickerViewModel.kt b/src/com/android/customization/picker/clock/ui/viewmodel/ClockPickerViewModel.kt
+index d52995f8..1aad5987 100644
+--- a/src/com/android/customization/picker/clock/ui/viewmodel/ClockPickerViewModel.kt
++++ b/src/com/android/customization/picker/clock/ui/viewmodel/ClockPickerViewModel.kt
+@@ -197,8 +197,13 @@ constructor(
+                 // Delay to avoid the case that the full list of clocks is not initiated.
+                 delay(CLOCKS_EVENT_UPDATE_DELAY_MILLIS)
+ 
+-                val (hasAxisConfig, noAxisConfig) =
++                val (hasAxisConfig, noAxisConfigAll) =
+                     allClocks.partition { it.axisPresetConfig != null }
++                // BlueOS: the Halo clock first, then the stock clock, the divider, then the rest
++                // (Moe clocks); the divider follows the last clock with presets, so Halo (no
++                // presets, no width slider) can sit before the stock one
++                val (blueOSHalo, noAxisConfig) =
++                    noAxisConfigAll.partition { it.clockId == BLUEOS_HALO_CLOCK_ID }
+ 
+                 buildList {
+                     var index = 0
+@@ -208,6 +213,9 @@ constructor(
+                     if (customClockStyleThumbnail != null) {
+                         add(customClockStyleThumbnail)
+                     }
++                    blueOSHalo.forEach {
++                        add(it.toOption(resources, isBeforeDivider = false, index = index++))
++                    }
+                     hasAxisConfig.forEach {
+                         add(
+                             it.toOption(
+@@ -641,3 +649,6 @@ constructor(
+         fun create(viewModelScope: CoroutineScope): ClockPickerViewModel
+     }
+ }
++
++/** BlueOS: id of the Halo clock (SystemUI DefaultClockProvider). */
++private const val BLUEOS_HALO_CLOCK_ID = "BLUEOS_HALO"

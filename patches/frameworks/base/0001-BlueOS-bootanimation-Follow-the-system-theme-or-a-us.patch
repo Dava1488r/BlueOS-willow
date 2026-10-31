@@ -1,0 +1,65 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BlueOS <blueos@localhost>
+Date: Sat, 24 Oct 2026 03:52:56 +0200
+Subject: [PATCH 01/30] BlueOS: bootanimation: Follow the system theme or a
+ user choice
+
+Plays bootanimation-dark.zip when persist.sys.blueos.bootanim is dark, or auto and the system theme (persist.sys.theme) is dark.
+
+Change-Id: I94784744b6fbf76a481f93543ef2db25049777db
+---
+ cmds/bootanimation/BootAnimation.cpp | 38 +++++++++++++++++++++++++---
+ 1 file changed, 35 insertions(+), 3 deletions(-)
+
+diff --git a/cmds/bootanimation/BootAnimation.cpp b/cmds/bootanimation/BootAnimation.cpp
+index eb55bbdf09ed..d79462dabedb 100644
+--- a/cmds/bootanimation/BootAnimation.cpp
++++ b/cmds/bootanimation/BootAnimation.cpp
+@@ -666,12 +666,44 @@ bool BootAnimation::findBootAnimationFileInternal(const std::vector<std::string>
+     return false;
+ }
+ 
++// BlueOS: boot animation chosen in Settings > Display > Boot animation.
++// persist.sys.blueos.bootanim is "auto" (follow the system theme), "light", "dark",
++// "classic_light" or "classic_dark"; persist.sys.theme is kept up to date by
++// UiModeManagerService (2 = dark theme). Files are relative to /product/media/.
++static const char BLUEOS_BOOTANIMATION_DARK_FILE[] = "blueos/bootanimation-dark.zip";
++static const char BLUEOS_BOOTANIMATION_CLASSIC_FILE[] = "blueos/bootanimation-classic.zip";
++static const char BLUEOS_BOOTANIMATION_CLASSIC_DARK_FILE[] =
++        "blueos/bootanimation-classic-dark.zip";
++
++static bool productMediaExists(const char* file) {
++    return access((std::string(PRODUCT_BOOTANIMATION_DIR) + file).c_str(), R_OK) == 0;
++}
++
++static const char* blueosBootAnimationFile() {
++    android::base::WaitForProperty("ro.persistent_properties.ready", "true",
++                                   std::chrono::seconds(5));
++    const std::string style = android::base::GetProperty("persist.sys.blueos.bootanim", "auto");
++    bool dark = style == "dark" || style == "classic_dark";
++    if (style == "auto") {
++        dark = android::base::GetIntProperty("ro.boot.theme", 0) == 1 ||
++                android::base::GetIntProperty("persist.sys.theme", 0) == 2;
++    }
++    if (style == "classic_light" && productMediaExists(BLUEOS_BOOTANIMATION_CLASSIC_FILE)) {
++        return BLUEOS_BOOTANIMATION_CLASSIC_FILE;
++    }
++    if (style == "classic_dark" && productMediaExists(BLUEOS_BOOTANIMATION_CLASSIC_DARK_FILE)) {
++        return BLUEOS_BOOTANIMATION_CLASSIC_DARK_FILE;
++    }
++    if (!dark) return PRODUCT_BOOTANIMATION_FILE;
++    // BlueOS ships its dark animation separately (LineageOS' dark one is a symlink to the light one)
++    return productMediaExists(BLUEOS_BOOTANIMATION_DARK_FILE) ?
++            BLUEOS_BOOTANIMATION_DARK_FILE : PRODUCT_BOOTANIMATION_DARK_FILE;
++}
++
+ void BootAnimation::findBootAnimationFile() {
+     ATRACE_CALL();
+-    const bool playDarkAnim = android::base::GetIntProperty("ro.boot.theme", 0) == 1;
+     const std::string productBootanimationFile = PRODUCT_BOOTANIMATION_DIR +
+-        android::base::GetProperty("ro.product.bootanim.file", playDarkAnim ?
+-        PRODUCT_BOOTANIMATION_DARK_FILE : PRODUCT_BOOTANIMATION_FILE);
++        android::base::GetProperty("ro.product.bootanim.file", blueosBootAnimationFile());
+     static const std::vector<std::string> bootFiles = {
+         APEX_BOOTANIMATION_FILE, productBootanimationFile,
+         OEM_BOOTANIMATION_FILE, SYSTEM_BOOTANIMATION_FILE

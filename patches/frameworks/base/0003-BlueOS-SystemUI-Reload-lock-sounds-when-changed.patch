@@ -1,0 +1,64 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BlueOS <blueos@localhost>
+Date: Sat, 24 Oct 2026 03:52:56 +0200
+Subject: [PATCH 03/30] BlueOS: SystemUI: Reload lock sounds when changed
+
+Lock/unlock sounds are selectable in Settings, apply them without a reboot.
+
+Change-Id: Id10ed841b01b9bfe2f1a80ad2384c224f886be20
+---
+ .../keyguard/KeyguardViewMediator.java        | 27 +++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardViewMediator.java b/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardViewMediator.java
+index cf7475590e9f..d82431f11388 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardViewMediator.java
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardViewMediator.java
+@@ -64,6 +64,7 @@ import android.content.Intent;
+ import android.content.IntentFilter;
+ import android.content.pm.PackageManager.NameNotFoundException;
+ import android.content.pm.UserInfo;
++import android.database.ContentObserver;
+ import android.graphics.Matrix;
+ import android.hardware.biometrics.BiometricSourceType;
+ import android.media.AudioAttributes;
+@@ -1776,6 +1777,20 @@ public class KeyguardViewMediator implements CoreStartable,
+         mUiBgExecutor.execute(() -> mPM.userActivity(mSystemClock.uptimeMillis(), false));
+     }
+ 
++    private void reloadLockSounds() {
++        final ContentResolver cr = mContext.getContentResolver();
++        final String lockPath = Settings.Global.getString(cr, Settings.Global.LOCK_SOUND);
++        final String unlockPath = Settings.Global.getString(cr, Settings.Global.UNLOCK_SOUND);
++        if (mLockSoundId != 0) {
++            mLockSounds.unload(mLockSoundId);
++        }
++        if (mUnlockSoundId != 0) {
++            mLockSounds.unload(mUnlockSoundId);
++        }
++        mLockSoundId = lockPath != null ? mLockSounds.load(lockPath, 1) : 0;
++        mUnlockSoundId = unlockPath != null ? mLockSounds.load(unlockPath, 1) : 0;
++    }
++
+     private void setupLocked() {
+         IntentFilter filter = new IntentFilter();
+         filter.addAction(Intent.ACTION_SHUTDOWN);
+@@ -1849,6 +1864,18 @@ public class KeyguardViewMediator implements CoreStartable,
+             Log.w(TAG, "failed to load trusted sound from " + soundPath);
+         }
+ 
++        // BlueOS: lock/unlock sounds can be changed in Settings > Sound, reload them right away.
++        final ContentObserver lockSoundObserver = new ContentObserver(mHandler) {
++            @Override
++            public void onChange(boolean selfChange) {
++                reloadLockSounds();
++            }
++        };
++        cr.registerContentObserver(Settings.Global.getUriFor(Settings.Global.LOCK_SOUND),
++                false, lockSoundObserver);
++        cr.registerContentObserver(Settings.Global.getUriFor(Settings.Global.UNLOCK_SOUND),
++                false, lockSoundObserver);
++
+         int lockSoundDefaultAttenuation = mContext.getResources().getInteger(
+                 com.android.internal.R.integer.config_lockSoundVolumeDb);
+         mLockSoundVolume = (float)Math.pow(10, (float)lockSoundDefaultAttenuation/20);

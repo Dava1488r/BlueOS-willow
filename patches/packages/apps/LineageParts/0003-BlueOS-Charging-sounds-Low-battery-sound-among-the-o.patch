@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sat, 24 Oct 2026 17:50:39 +0200
+Subject: [PATCH 3/4] BlueOS: Charging sounds: Low battery sound among the
+ other sounds
+
+Change-Id: Ia114f9ee99e03e2eafdd21cf35fd11d6985ce481
+---
+ res/xml/charging_sounds_settings.xml | 8 +-------
+ 1 file changed, 1 insertion(+), 7 deletions(-)
+
+diff --git a/res/xml/charging_sounds_settings.xml b/res/xml/charging_sounds_settings.xml
+index ac19aed..f512b81 100644
+--- a/res/xml/charging_sounds_settings.xml
++++ b/res/xml/charging_sounds_settings.xml
+@@ -55,13 +55,7 @@
+             android:dependency="charging_sounds_enabled"
+             android:persistent="false" />
+ 
+-    </PreferenceCategory>
+-
+-    <!-- BlueOS: plays with the low battery warning, independent of the switch above -->
+-    <PreferenceCategory
+-        android:key="blueos_battery_sounds_category"
+-        android:title="@string/blueos_battery_sounds_category_title">
+-
++        <!-- BlueOS: plays with the low battery warning, independent of the switch above -->
+         <Preference
+             android:key="blueos_low_battery_sound"
+             android:title="@string/blueos_low_battery_sound_title"

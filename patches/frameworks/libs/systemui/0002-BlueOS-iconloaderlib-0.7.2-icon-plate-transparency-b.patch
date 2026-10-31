@@ -1,0 +1,53 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 27 Oct 2026 12:31:22 +0100
+Subject: [PATCH 2/3] BlueOS: iconloaderlib: 0.7.2 icon plate transparency
+ (blueos_icon_transparency)
+
+Change-Id: I3903bfd3b7bdaad0e5373bbf0172b8d9b57f66d3
+---
+ .../launcher3/icons/mono/ThemedIconDelegate.kt   | 16 ++++++++++------
+ 1 file changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/iconloaderlib/src/com/android/launcher3/icons/mono/ThemedIconDelegate.kt b/iconloaderlib/src/com/android/launcher3/icons/mono/ThemedIconDelegate.kt
+index 017931b..b8afdd0 100644
+--- a/iconloaderlib/src/com/android/launcher3/icons/mono/ThemedIconDelegate.kt
++++ b/iconloaderlib/src/com/android/launcher3/icons/mono/ThemedIconDelegate.kt
+@@ -87,27 +87,31 @@ class ThemedIconDelegate(
+          * BlueOS 0.7: the icon plate material (Обои и стиль → Рабочий стол → Значки приложений):
+          * -1 like the widgets, 0/2 solid (as before), 1 glass (see-through), 3 outline (barely there),
+          * 4 accent. Monet colours only, so it follows any wallpaper.
++         * 0.7.2: «Прозрачность подложки» (blueos_icon_transparency, 0…100) thins every material.
+          */
+         private fun blueOSPlate(context: Context, base: Int): Int {
+             val cr = context.contentResolver
+             var m = android.provider.Settings.Secure.getInt(cr, "blueos_icon_material", -1)
+             if (m == -1) m = android.provider.Settings.Secure.getInt(cr, "blueos_widget_material", 0)
+-            fun alpha(a: Float) = (base and 0x00ffffff) or ((a * android.graphics.Color.alpha(base)).toInt() shl 24)
++            val opacity = 1f - android.provider.Settings.Secure.getInt(cr, "blueos_icon_transparency", 0)
++                .coerceIn(0, 100) / 100f
++            fun alpha(color: Int, a: Float) =
++                (color and 0x00ffffff) or ((a * opacity * android.graphics.Color.alpha(color)).toInt() shl 24)
+             return when (m) {
+-                1 -> alpha(0.38f)
+-                3 -> alpha(0.12f)
++                1 -> alpha(base, 0.38f)
++                3 -> alpha(base, 0.12f)
+                 4 -> {
+                     val dark = (context.resources.configuration.uiMode and
+                         android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                         android.content.res.Configuration.UI_MODE_NIGHT_YES
+                     val acc = context.getColor(
+                         if (dark) android.R.color.system_accent1_300 else android.R.color.system_accent1_200)
+-                    android.graphics.Color.rgb(
++                    alpha(android.graphics.Color.rgb(
+                         (android.graphics.Color.red(acc) * 0.38f + android.graphics.Color.red(base) * 0.62f).toInt(),
+                         (android.graphics.Color.green(acc) * 0.38f + android.graphics.Color.green(base) * 0.62f).toInt(),
+-                        (android.graphics.Color.blue(acc) * 0.38f + android.graphics.Color.blue(base) * 0.62f).toInt())
++                        (android.graphics.Color.blue(acc) * 0.38f + android.graphics.Color.blue(base) * 0.62f).toInt()), 1f)
+                 }
+-                else -> base
++                else -> alpha(base, 1f)
+             }
+         }
+ 

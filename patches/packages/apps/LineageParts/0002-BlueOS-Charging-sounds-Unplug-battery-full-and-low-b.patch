@@ -1,0 +1,352 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sat, 24 Oct 2026 12:58:27 +0200
+Subject: [PATCH 2/4] BlueOS: Charging sounds: Unplug, battery full and low
+ battery sounds
+
+One picker per event. The unplug and battery full sounds are played by frameworks/base (BlueOS patch), low battery by SystemUI. Defaults are the BlueOS Emoticon sounds.
+
+Change-Id: Iaa2060062a02c872c0c166a7fc2da42f6df87077
+---
+ res/values-ru/blueos_strings.xml              |   8 +
+ res/values-ru/strings.xml                     |   4 +-
+ res/values/blueos_strings.xml                 |   8 +
+ res/values/strings.xml                        |   4 +-
+ res/xml/charging_sounds_settings.xml          |  25 +++
+ .../sounds/ChargingSoundsSettings.java        | 148 +++++++++---------
+ 6 files changed, 115 insertions(+), 82 deletions(-)
+ create mode 100644 res/values-ru/blueos_strings.xml
+ create mode 100644 res/values/blueos_strings.xml
+
+diff --git a/res/values-ru/blueos_strings.xml b/res/values-ru/blueos_strings.xml
+new file mode 100644
+index 0000000..4067c48
+--- /dev/null
++++ b/res/values-ru/blueos_strings.xml
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS additions to Charging sounds -->
++<resources>
++    <string name="blueos_charging_stopped_sound_title">Отключение зарядки</string>
++    <string name="blueos_battery_full_sound_title">Полный заряд</string>
++    <string name="blueos_battery_sounds_category_title">Батарея</string>
++    <string name="blueos_low_battery_sound_title">Низкий заряд</string>
++</resources>
+diff --git a/res/values-ru/strings.xml b/res/values-ru/strings.xml
+index b1d6638..ce3403c 100644
+--- a/res/values-ru/strings.xml
++++ b/res/values-ru/strings.xml
+@@ -460,8 +460,8 @@
+     <string name="charging_sounds_summary">Воспроизводить звук при подключении или отключении источника питания</string>
+     <string name="power_notifications_vibrate_title">Вибросигнал</string>
+     <string name="charging_sounds_ringtone_silent">Без звука</string>
+-    <string name="charging_sounds_notification_category_title">Звуки уведомлений</string>
+-    <string name="wired_charging_sounds_title">Проводная зарядка</string>
++    <string name="charging_sounds_notification_category_title">Звуки</string>
++    <string name="wired_charging_sounds_title">Подключение зарядки</string>
+     <string name="wireless_charging_sounds_title">Беспроводная зарядка</string>
+     <string name="touchscreen_gesture_settings_title">Жесты сенсорного экрана</string>
+     <string name="touchscreen_gesture_settings_summary">Настройка жестов сенсорного экрана для выполнения действий</string>
+diff --git a/res/values/blueos_strings.xml b/res/values/blueos_strings.xml
+new file mode 100644
+index 0000000..4349e7e
+--- /dev/null
++++ b/res/values/blueos_strings.xml
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS additions to Charging sounds -->
++<resources>
++    <string name="blueos_charging_stopped_sound_title">Charger disconnected</string>
++    <string name="blueos_battery_full_sound_title">Battery full</string>
++    <string name="blueos_battery_sounds_category_title">Battery</string>
++    <string name="blueos_low_battery_sound_title">Low battery</string>
++</resources>
+diff --git a/res/values/strings.xml b/res/values/strings.xml
+index 9a0010f..d7e499a 100644
+--- a/res/values/strings.xml
++++ b/res/values/strings.xml
+@@ -596,8 +596,8 @@
+     <string name="charging_sounds_summary">Play a sound when connecting or disconnecting a power source</string>
+     <string name="power_notifications_vibrate_title">Vibrate</string>
+     <string name="charging_sounds_ringtone_silent">Silent</string>
+-    <string name="charging_sounds_notification_category_title">Notification sounds</string>
+-    <string name="wired_charging_sounds_title">Wired charging</string>
++    <string name="charging_sounds_notification_category_title">Sounds</string>
++    <string name="wired_charging_sounds_title">Charger connected</string>
+     <string name="wireless_charging_sounds_title">Wireless charging</string>
+ 
+     <!-- Gestures: Touchscreen gestures -->
+diff --git a/res/xml/charging_sounds_settings.xml b/res/xml/charging_sounds_settings.xml
+index 640b506..ac19aed 100644
+--- a/res/xml/charging_sounds_settings.xml
++++ b/res/xml/charging_sounds_settings.xml
+@@ -42,6 +42,31 @@
+             android:persistent="false"
+             lineage:requiresConfig="@*lineageos.platform:bool/config_deviceSupportsWirelessCharging" />
+ 
++        <!-- BlueOS -->
++        <Preference
++            android:key="blueos_charging_stopped_sound"
++            android:title="@string/blueos_charging_stopped_sound_title"
++            android:dependency="charging_sounds_enabled"
++            android:persistent="false" />
++
++        <Preference
++            android:key="blueos_battery_full_sound"
++            android:title="@string/blueos_battery_full_sound_title"
++            android:dependency="charging_sounds_enabled"
++            android:persistent="false" />
++
++    </PreferenceCategory>
++
++    <!-- BlueOS: plays with the low battery warning, independent of the switch above -->
++    <PreferenceCategory
++        android:key="blueos_battery_sounds_category"
++        android:title="@string/blueos_battery_sounds_category_title">
++
++        <Preference
++            android:key="blueos_low_battery_sound"
++            android:title="@string/blueos_low_battery_sound_title"
++            android:persistent="false" />
++
+     </PreferenceCategory>
+ 
+ </PreferenceScreen>
+diff --git a/src/org/lineageos/lineageparts/sounds/ChargingSoundsSettings.java b/src/org/lineageos/lineageparts/sounds/ChargingSoundsSettings.java
+index f9bf414..614712b 100644
+--- a/src/org/lineageos/lineageparts/sounds/ChargingSoundsSettings.java
++++ b/src/org/lineageos/lineageparts/sounds/ChargingSoundsSettings.java
+@@ -38,33 +38,52 @@ public class ChargingSoundsSettings
+     private static final String TAG = "ChargingSoundsSettings";
+ 
+     private static final String KEY_CHARGING_VIBRATION_ENABLED = "charging_vibration_enabled";
+-    private static final String KEY_WIRED_CHARGING_SOUNDS = "charging_sounds";
+     private static final String KEY_WIRELESS_CHARGING_SOUNDS = "wireless_charging_sounds";
+ 
+     // Used for power notification uri string if set to silent
+     private static final String RINGTONE_SILENT_URI_STRING = "silent";
+ 
+-    private static final String DEFAULT_WIRED_CHARGING_SOUND =
+-            "/product/media/audio/ui/ChargingStarted.ogg";
+-    private static final String DEFAULT_WIRELESS_CHARGING_SOUND =
+-            "/product/media/audio/ui/WirelessChargingStarted.ogg";
+-
+-    // Request code for charging notification ringtone picker
+-    private static final int REQUEST_CODE_WIRED_CHARGING_SOUND = 1;
+-    private static final int REQUEST_CODE_WIRELESS_CHARGING_SOUND = 2;
+-
+-    private Preference mWiredChargingSounds;
+-    private Preference mWirelessChargingSounds;
++    private static final String BLUEOS_SOUNDS = "/product/media/audio/notifications/";
++
++    /** BlueOS: one picker per event (plug, wireless, unplug, battery full, low battery). */
++    private static final class Sound {
++        final String key;
++        final String setting;
++        final String defaultFile;
++        final int titleRes;
++        Preference preference;
++        Uri defaultUri;
++
++        Sound(String key, String setting, String defaultFile, int titleRes) {
++            this.key = key;
++            this.setting = setting;
++            this.defaultFile = defaultFile;
++            this.titleRes = titleRes;
++        }
++    }
+ 
+-    private Uri mDefaultWiredChargingSoundUri;
+-    private Uri mDefaultWirelessChargingSoundUri;
++    private final Sound[] mSounds = {
++            new Sound("charging_sounds", Settings.Global.CHARGING_STARTED_SOUND,
++                    BLUEOS_SOUNDS + "Emoticon_Surprise.ogg", R.string.wired_charging_sounds_title),
++            new Sound(KEY_WIRELESS_CHARGING_SOUNDS, Settings.Global.WIRELESS_CHARGING_STARTED_SOUND,
++                    BLUEOS_SOUNDS + "Emoticon_Surprise.ogg",
++                    R.string.wireless_charging_sounds_title),
++            // Settings.Global keys read by frameworks/base power/Notifier.java (BlueOS patch)
++            new Sound("blueos_charging_stopped_sound", "blueos_charging_stopped_sound",
++                    BLUEOS_SOUNDS + "Emoticon_Sweat.ogg",
++                    R.string.blueos_charging_stopped_sound_title),
++            new Sound("blueos_battery_full_sound", "blueos_battery_full_sound",
++                    BLUEOS_SOUNDS + "Emoticon_Steam.ogg", R.string.blueos_battery_full_sound_title),
++            new Sound("blueos_low_battery_sound", Settings.Global.LOW_BATTERY_SOUND,
++                    BLUEOS_SOUNDS + "Emoticon_Zzz.ogg", R.string.blueos_low_battery_sound_title),
++    };
+ 
+-    private int mRequestCode;
++    private Sound mPicking;
+ 
+     private final ActivityResultLauncher<Intent> mActivityResultLauncher =
+             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
+                     result -> {
+-                        if (result.getResultCode() != Activity.RESULT_OK) {
++                        if (result.getResultCode() != Activity.RESULT_OK || mPicking == null) {
+                             return;
+                         }
+                         Intent data = result.getData();
+@@ -75,28 +94,26 @@ public class ChargingSoundsSettings
+                                 Uri.class);
+ 
+                         if (uri == null) {
+-                            updateChargingSounds(RINGTONE_SILENT_URI_STRING,
+-                                    mRequestCode == REQUEST_CODE_WIRELESS_CHARGING_SOUND);
++                            updateSound(mPicking, RINGTONE_SILENT_URI_STRING);
+                             return;
+                         }
+ 
+                         String mimeType = requireContext().getContentResolver().getType(uri);
+                         if (mimeType == null) {
+-                            Log.e(TAG, "call to updateChargingSounds for URI:" + uri
++                            Log.e(TAG, "call to updateSound for URI:" + uri
+                                     + " ignored: failure to find mimeType "
+                                     + "(no access from this context?)");
+                             return;
+                         }
+ 
+                         if (!isSupportedMimeType(mimeType)) {
+-                            Log.e(TAG, "call to updateChargingSounds for URI:" + uri
++                            Log.e(TAG, "call to updateSound for URI:" + uri
+                                     + " ignored: associated mimeType:" + mimeType
+                                     + " is not an audio type");
+                             return;
+                         }
+ 
+-                        updateChargingSounds(uri.toString(),
+-                                mRequestCode == REQUEST_CODE_WIRELESS_CHARGING_SOUND);
++                        updateSound(mPicking, uri.toString());
+             });
+ 
+     private boolean isSupportedMimeType(String mimeType) {
+@@ -114,28 +131,22 @@ public class ChargingSoundsSettings
+             removePreference(KEY_CHARGING_VIBRATION_ENABLED);
+         }
+ 
+-        mWiredChargingSounds = findPreference(KEY_WIRED_CHARGING_SOUNDS);
+-        mWirelessChargingSounds = findPreference(KEY_WIRELESS_CHARGING_SOUNDS);
++        for (Sound sound : mSounds) {
++            sound.preference = findPreference(sound.key);
++        }
+     }
+ 
+     @Override
+     public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
+         super.onViewCreated(view, savedInstanceState);
+ 
+-        final String currentWiredChargingSound = Settings.Global.getString(getContentResolver(),
+-                Settings.Global.CHARGING_STARTED_SOUND);
+-        final String currentWirelessChargingSound = Settings.Global.getString(getContentResolver(),
+-                Settings.Global.WIRELESS_CHARGING_STARTED_SOUND);
+-
+-        // Convert default sound file path to a media uri so that we can
+-        // set a proper default for the ringtone picker.
+-        mDefaultWiredChargingSoundUri = audioFileToUri(requireContext(),
+-                DEFAULT_WIRED_CHARGING_SOUND);
+-        mDefaultWirelessChargingSoundUri = audioFileToUri(requireContext(),
+-                DEFAULT_WIRELESS_CHARGING_SOUND);
+-
+-        updateChargingSounds(currentWiredChargingSound, false /* wireless */);
+-        updateChargingSounds(currentWirelessChargingSound, true /* wireless */);
++        for (Sound sound : mSounds) {
++            if (sound.preference == null) continue;  // e.g. no wireless charging
++            // Convert default sound file path to a media uri so that we can
++            // set a proper default for the ringtone picker.
++            sound.defaultUri = audioFileToUri(requireContext(), sound.defaultFile);
++            updateSound(sound, Settings.Global.getString(getContentResolver(), sound.setting));
++        }
+     }
+ 
+     private Uri audioFileToUri(@NonNull Context context, String audioFile) {
+@@ -157,18 +168,17 @@ public class ChargingSoundsSettings
+                 Integer.toString(id));
+     }
+ 
+-    private void updateChargingSounds(String toneUriString, boolean wireless) {
++    private void updateSound(Sound sound, String toneUriString) {
+         final String toneTitle;
+ 
+-        if (wireless) {
+-            if ((toneUriString == null || toneUriString.equals(DEFAULT_WIRELESS_CHARGING_SOUND))
+-                    && mDefaultWirelessChargingSoundUri != null) {
+-                toneUriString = mDefaultWirelessChargingSoundUri.toString();
+-            }
+-        } else {
+-            if ((toneUriString == null || toneUriString.equals(DEFAULT_WIRED_CHARGING_SOUND))
+-                    && mDefaultWiredChargingSoundUri != null) {
+-                toneUriString = mDefaultWiredChargingSoundUri.toString();
++        if ((toneUriString == null || toneUriString.equals(sound.defaultFile))
++                && sound.defaultUri != null) {
++            toneUriString = sound.defaultUri.toString();
++        } else if (toneUriString != null && toneUriString.startsWith("/")) {
++            // A plain file path (e.g. a SettingsProvider default)
++            final Uri fileUri = audioFileToUri(requireContext(), toneUriString);
++            if (fileUri != null) {
++                toneUriString = fileUri.toString();
+             }
+         }
+ 
+@@ -189,52 +199,34 @@ public class ChargingSoundsSettings
+             toneUriString = RINGTONE_SILENT_URI_STRING;
+         }
+ 
+-        if (wireless) {
+-            mWirelessChargingSounds.setSummary(toneTitle);
+-            Settings.Global.putString(getContentResolver(),
+-                    Settings.Global.WIRELESS_CHARGING_STARTED_SOUND, toneUriString);
+-        } else {
+-            mWiredChargingSounds.setSummary(toneTitle);
+-            Settings.Global.putString(getContentResolver(),
+-                    Settings.Global.CHARGING_STARTED_SOUND, toneUriString);
+-        }
++        sound.preference.setSummary(toneTitle);
++        Settings.Global.putString(getContentResolver(), sound.setting, toneUriString);
+     }
+ 
+     @Override
+     public boolean onPreferenceTreeClick(Preference preference) {
+-        if (preference == mWiredChargingSounds) {
+-            launchNotificationSoundPicker(REQUEST_CODE_WIRED_CHARGING_SOUND,
+-                    Settings.Global.getString(getContentResolver(),
+-                            Settings.Global.CHARGING_STARTED_SOUND));
+-        } else if (preference == mWirelessChargingSounds) {
+-            launchNotificationSoundPicker(REQUEST_CODE_WIRELESS_CHARGING_SOUND,
+-                    Settings.Global.getString(getContentResolver(),
+-                            Settings.Global.WIRELESS_CHARGING_STARTED_SOUND));
++        for (Sound sound : mSounds) {
++            if (preference == sound.preference) {
++                launchNotificationSoundPicker(sound,
++                        Settings.Global.getString(getContentResolver(), sound.setting));
++                break;
++            }
+         }
+         return super.onPreferenceTreeClick(preference);
+     }
+ 
+-    private void launchNotificationSoundPicker(int requestCode, String toneUriString) {
++    private void launchNotificationSoundPicker(Sound sound, String toneUriString) {
+         final Intent intent = new Intent(RingtoneManager.ACTION_RINGTONE_PICKER);
+ 
+         intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE,
+                 RingtoneManager.TYPE_NOTIFICATION);
+-        if (requestCode == REQUEST_CODE_WIRED_CHARGING_SOUND) {
+-            intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE,
+-                    getString(R.string.wired_charging_sounds_title));
+-            intent.putExtra(RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI,
+-                    mDefaultWiredChargingSoundUri);
+-        } else if (requestCode == REQUEST_CODE_WIRELESS_CHARGING_SOUND) {
+-            intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE,
+-                    getString(R.string.wireless_charging_sounds_title));
+-            intent.putExtra(RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI,
+-                    mDefaultWirelessChargingSoundUri);
+-        }
++        intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, getString(sound.titleRes));
++        intent.putExtra(RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI, sound.defaultUri);
+         if (toneUriString != null && !toneUriString.equals(RINGTONE_SILENT_URI_STRING)) {
+             Uri uri = Uri.parse(toneUriString);
+             intent.putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, uri);
+         }
+-        mRequestCode = requestCode;
++        mPicking = sound;
+         mActivityResultLauncher.launch(intent);
+     }
+ 

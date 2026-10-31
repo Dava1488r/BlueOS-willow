@@ -1,0 +1,126 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Fri, 30 Oct 2026 22:08:22 +0100
+Subject: [PATCH 7/7] BlueOS: Settings: sound lists show only the sounds the
+ build has
+
+Screen lock and touch sound list only packs whose files exist; a missing
+chosen file shows as Android (that is what plays). The touch sound
+defaults to the stock tick, as in LineageOS.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: I374764a3ed7b37753a2e005e1131dc9a14b941a1
+---
+ .../BlueOSLockSoundPreferenceController.java  | 25 ++++++++++++++++-
+ .../BlueOSTouchSoundPreferenceController.java | 28 +++++++++++++++++--
+ 2 files changed, 49 insertions(+), 4 deletions(-)
+
+diff --git a/src/com/android/settings/notification/BlueOSLockSoundPreferenceController.java b/src/com/android/settings/notification/BlueOSLockSoundPreferenceController.java
+index 1394b8158c6..0f9d294bcad 100644
+--- a/src/com/android/settings/notification/BlueOSLockSoundPreferenceController.java
++++ b/src/com/android/settings/notification/BlueOSLockSoundPreferenceController.java
+@@ -15,6 +15,10 @@ import androidx.preference.PreferenceScreen;
+ 
+ import com.android.settings.core.BasePreferenceController;
+ 
++import java.io.File;
++import java.util.ArrayList;
++import java.util.List;
++
+ /**
+  * BlueOS: screen lock / unlock sound pack.
+  * Writes Settings.Global LOCK_SOUND and UNLOCK_SOUND; SystemUI reloads them on change.
+@@ -43,6 +47,24 @@ public class BlueOSLockSoundPreferenceController extends BasePreferenceControlle
+         if (preference != null) {
+             preference.setOnPreferenceChangeListener(this);
+         }
++        // Only the packs this build has (a build without the optional sounds keeps the others out)
++        if (preference instanceof ListPreference list) {
++            final List<CharSequence> entries = new ArrayList<>();
++            final List<CharSequence> values = new ArrayList<>();
++            for (int i = 0; i < list.getEntryValues().length; i++) {
++                final String pack = list.getEntryValues()[i].toString();
++                if (STOCK.equals(pack) || hasPack(pack)) {
++                    entries.add(list.getEntries()[i]);
++                    values.add(pack);
++                }
++            }
++            list.setEntries(entries.toArray(new CharSequence[0]));
++            list.setEntryValues(values.toArray(new CharSequence[0]));
++        }
++    }
++
++    private static boolean hasPack(String pack) {
++        return new File(getLockPath(pack)).isFile() && new File(getUnlockPath(pack)).isFile();
+     }
+ 
+     @Override
+@@ -69,7 +91,8 @@ public class BlueOSLockSoundPreferenceController extends BasePreferenceControlle
+         final String lock = Settings.Global.getString(mContext.getContentResolver(),
+                 Settings.Global.LOCK_SOUND);
+         if (lock != null && lock.startsWith(LOCK_PREFIX) && lock.endsWith(".ogg")) {
+-            return lock.substring(LOCK_PREFIX.length(), lock.length() - ".ogg".length());
++            final String pack = lock.substring(LOCK_PREFIX.length(), lock.length() - ".ogg".length());
++            if (hasPack(pack)) return pack;
+         }
+         return STOCK;
+     }
+diff --git a/src/com/android/settings/notification/BlueOSTouchSoundPreferenceController.java b/src/com/android/settings/notification/BlueOSTouchSoundPreferenceController.java
+index 2ec31fcd422..eaf2127c96c 100644
+--- a/src/com/android/settings/notification/BlueOSTouchSoundPreferenceController.java
++++ b/src/com/android/settings/notification/BlueOSTouchSoundPreferenceController.java
+@@ -16,6 +16,10 @@ import androidx.preference.PreferenceScreen;
+ import com.android.settings.core.BasePreferenceController;
+ import com.android.settingslib.utils.ThreadUtils;
+ 
++import java.io.File;
++import java.util.ArrayList;
++import java.util.List;
++
+ /**
+  * BlueOS: touch sound. Writes Settings.Global blueos_touch_sound (a file path, or "android"
+  * for the stock tick), read by the audio service when it loads the sound effects.
+@@ -24,8 +28,9 @@ public class BlueOSTouchSoundPreferenceController extends BasePreferenceControll
+         implements Preference.OnPreferenceChangeListener {
+ 
+     private static final String SETTING = "blueos_touch_sound";
+-    private static final String DEFAULT_SOUND = "/product/media/audio/ui/BlueOS_Touch.ogg";
+     private static final String STOCK = "android";
++    // unset = the stock tick, as in LineageOS (the audio service does the same)
++    private static final String DEFAULT_SOUND = STOCK;
+     private static final String STOCK_SOUND = "/product/media/audio/ui/Effect_Tick.ogg";
+ 
+     public BlueOSTouchSoundPreferenceController(Context context, String key) {
+@@ -44,13 +49,30 @@ public class BlueOSTouchSoundPreferenceController extends BasePreferenceControll
+         if (preference != null) {
+             preference.setOnPreferenceChangeListener(this);
+         }
++        // Only the sounds this build has (a build without the optional sounds keeps the others out)
++        if (preference instanceof ListPreference list) {
++            final List<CharSequence> entries = new ArrayList<>();
++            final List<CharSequence> values = new ArrayList<>();
++            for (int i = 0; i < list.getEntryValues().length; i++) {
++                final String value = list.getEntryValues()[i].toString();
++                if (STOCK.equals(value) || new File(value).isFile()) {
++                    entries.add(list.getEntries()[i]);
++                    values.add(value);
++                }
++            }
++            list.setEntries(entries.toArray(new CharSequence[0]));
++            list.setEntryValues(values.toArray(new CharSequence[0]));
++        }
+     }
+ 
+     @Override
+     public void updateState(Preference preference) {
+         final ListPreference list = (ListPreference) preference;
+-        final String value = Settings.Global.getString(mContext.getContentResolver(), SETTING);
+-        list.setValue(value != null ? value : DEFAULT_SOUND);
++        String value = Settings.Global.getString(mContext.getContentResolver(), SETTING);
++        if (value == null) value = DEFAULT_SOUND;
++        // the audio service plays the stock tick when the file is missing
++        if (!STOCK.equals(value) && !new File(value).isFile()) value = STOCK;
++        list.setValue(value);
+         list.setSummary(list.getEntry());
+     }
+ 

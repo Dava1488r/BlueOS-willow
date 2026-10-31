@@ -1,0 +1,1045 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sun, 25 Oct 2026 04:49:34 +0100
+Subject: [PATCH 2/5] BlueOS: Etar: Widgets 0.6
+
+- Date widget: card transparency, the user's font, one event in one row.
+- New countdown widget: days until a picked date (once or every year),
+  set up and changed in BlueOSCountdownConfigActivity.
+
+Change-Id: Id0b8de031ea24d482cf5228a695f5d9bbb52324f
+---
+ app/src/main/AndroidManifest.xml              |  27 ++
+ .../widget/BlueOSCountdownConfigActivity.java |  84 ++++++
+ .../widget/BlueOSCountdownWidgetProvider.java | 189 ++++++++++++++
+ .../widget/BlueOSDateWidgetProvider.java      |  19 +-
+ .../main/res/color/blueos_widget_card_bg.xml  |   5 -
+ .../main/res/drawable/blueos_widget_card.xml  |   4 +-
+ .../drawable/blueos_widget_card_accent.xml    |   7 +
+ .../res/drawable/blueos_widget_outline.xml    |   7 +
+ .../res/layout/blueos_countdown_config.xml    |  55 ++++
+ .../res/layout/blueos_countdown_widget.xml    |  61 +++++
+ .../main/res/layout/blueos_date_widget.xml    | 246 ++++++++++--------
+ .../res/values-night/blueos_widget_colors.xml |   3 +-
+ app/src/main/res/values-ru/blueos_strings.xml |  23 +-
+ app/src/main/res/values/blueos_strings.xml    |  23 +-
+ .../main/res/values/blueos_widget_colors.xml  |   3 +-
+ .../res/xml/blueos_countdown_widget_info.xml  |  17 ++
+ .../main/res/xml/blueos_date_widget_info.xml  |   2 +-
+ 17 files changed, 645 insertions(+), 130 deletions(-)
+ create mode 100644 app/src/main/java/com/android/calendar/widget/BlueOSCountdownConfigActivity.java
+ create mode 100644 app/src/main/java/com/android/calendar/widget/BlueOSCountdownWidgetProvider.java
+ delete mode 100644 app/src/main/res/color/blueos_widget_card_bg.xml
+ create mode 100644 app/src/main/res/drawable/blueos_widget_card_accent.xml
+ create mode 100644 app/src/main/res/drawable/blueos_widget_outline.xml
+ create mode 100644 app/src/main/res/layout/blueos_countdown_config.xml
+ create mode 100644 app/src/main/res/layout/blueos_countdown_widget.xml
+ create mode 100644 app/src/main/res/xml/blueos_countdown_widget_info.xml
+
+diff --git a/app/src/main/AndroidManifest.xml b/app/src/main/AndroidManifest.xml
+index c53abfa2..9202a323 100644
+--- a/app/src/main/AndroidManifest.xml
++++ b/app/src/main/AndroidManifest.xml
+@@ -302,6 +302,8 @@
+                 <action android:name="android.intent.action.TIME_SET" />
+                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                 <action android:name="android.intent.action.LOCALE_CHANGED" />
++                <!-- Sent by SystemUI: widget transparency changed -->
++                <action android:name="org.blueos.intent.action.WIDGET_STYLE_CHANGED" />
+             </intent-filter>
+             <intent-filter>
+                 <action android:name="android.intent.action.PROVIDER_CHANGED" />
+@@ -312,6 +314,31 @@
+                 android:resource="@xml/blueos_date_widget_info" />
+         </receiver>
+ 
++        <!-- BlueOS countdown widget and its setup -->
++        <receiver android:name="com.android.calendar.widget.BlueOSCountdownWidgetProvider"
++            android:exported="true"
++            android:label="@string/blueos_countdown_widget">
++            <intent-filter>
++                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
++                <action android:name="android.intent.action.TIME_SET" />
++                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
++                <action android:name="android.intent.action.LOCALE_CHANGED" />
++                <action android:name="org.blueos.intent.action.WIDGET_STYLE_CHANGED" />
++            </intent-filter>
++            <meta-data android:name="android.appwidget.provider"
++                android:resource="@xml/blueos_countdown_widget_info" />
++        </receiver>
++
++        <activity android:name="com.android.calendar.widget.BlueOSCountdownConfigActivity"
++            android:exported="true"
++            android:excludeFromRecents="true"
++            android:label="@string/blueos_countdown_widget"
++            android:theme="@android:style/Theme.DeviceDefault.DayNight">
++            <intent-filter>
++                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
++            </intent-filter>
++        </activity>
++
+         <receiver android:name="com.android.calendar.widget.CalendarAppWidgetService$CalendarFactory"
+             android:exported="true">
+             <intent-filter>
+diff --git a/app/src/main/java/com/android/calendar/widget/BlueOSCountdownConfigActivity.java b/app/src/main/java/com/android/calendar/widget/BlueOSCountdownConfigActivity.java
+new file mode 100644
+index 00000000..2120964c
+--- /dev/null
++++ b/app/src/main/java/com/android/calendar/widget/BlueOSCountdownConfigActivity.java
+@@ -0,0 +1,84 @@
++/*
++ * Copyright (C) 2026 BlueOS
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.calendar.widget;
++
++import android.app.Activity;
++import android.appwidget.AppWidgetManager;
++import android.content.Intent;
++import android.content.SharedPreferences;
++import android.os.Bundle;
++import android.widget.DatePicker;
++import android.widget.EditText;
++import android.widget.Switch;
++
++import java.time.LocalDate;
++import java.time.ZoneId;
++
++import ws.xsoh.etar.R;
++
++/** BlueOS countdown widget setup: a title, a date and whether it comes back every year. */
++public class BlueOSCountdownConfigActivity extends Activity {
++
++    private int mWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID;
++
++    @Override
++    protected void onCreate(Bundle savedInstanceState) {
++        super.onCreate(savedInstanceState);
++        // Backing out leaves no half-made widget
++        setResult(RESULT_CANCELED);
++        mWidgetId = getIntent().getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,
++                AppWidgetManager.INVALID_APPWIDGET_ID);
++        if (mWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
++            finish();
++            return;
++        }
++        setContentView(R.layout.blueos_countdown_config);
++
++        final EditText title = findViewById(R.id.blueos_countdown_title_input);
++        final DatePicker date = findViewById(R.id.blueos_countdown_date);
++        final Switch yearly = findViewById(R.id.blueos_countdown_yearly);
++
++        // Editing an existing one starts from what it shows
++        final SharedPreferences prefs = BlueOSCountdownWidgetProvider.prefs(this);
++        title.setText(prefs.getString(BlueOSCountdownWidgetProvider.keyTitle(mWidgetId), ""));
++        yearly.setChecked(prefs.getBoolean(
++                BlueOSCountdownWidgetProvider.keyYearly(mWidgetId), false));
++        final long saved = prefs.getLong(
++                BlueOSCountdownWidgetProvider.keyDate(mWidgetId), Long.MIN_VALUE);
++        final LocalDate start = saved == Long.MIN_VALUE
++                ? LocalDate.now(ZoneId.systemDefault()).plusDays(7)
++                : LocalDate.ofEpochDay(saved);
++        date.updateDate(start.getYear(), start.getMonthValue() - 1, start.getDayOfMonth());
++
++        findViewById(R.id.blueos_countdown_done).setOnClickListener(v -> {
++            final LocalDate picked = LocalDate.of(date.getYear(), date.getMonth() + 1,
++                    date.getDayOfMonth());
++            prefs.edit()
++                    .putString(BlueOSCountdownWidgetProvider.keyTitle(mWidgetId),
++                            title.getText().toString().trim())
++                    .putLong(BlueOSCountdownWidgetProvider.keyDate(mWidgetId), picked.toEpochDay())
++                    .putBoolean(BlueOSCountdownWidgetProvider.keyYearly(mWidgetId),
++                            yearly.isChecked())
++                    .commit();
++            BlueOSCountdownWidgetProvider.update(this, AppWidgetManager.getInstance(this),
++                    mWidgetId);
++            setResult(RESULT_OK, new Intent()
++                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, mWidgetId));
++            finish();
++        });
++    }
++}
+diff --git a/app/src/main/java/com/android/calendar/widget/BlueOSCountdownWidgetProvider.java b/app/src/main/java/com/android/calendar/widget/BlueOSCountdownWidgetProvider.java
+new file mode 100644
+index 00000000..30d9d202
+--- /dev/null
++++ b/app/src/main/java/com/android/calendar/widget/BlueOSCountdownWidgetProvider.java
+@@ -0,0 +1,189 @@
++/*
++ * Copyright (C) 2026 BlueOS
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.calendar.widget;
++
++import android.app.AlarmManager;
++import android.app.PendingIntent;
++import android.appwidget.AppWidgetManager;
++import android.appwidget.AppWidgetProvider;
++import android.content.ComponentName;
++import android.content.Context;
++import android.content.Intent;
++import android.content.SharedPreferences;
++import android.provider.Settings;
++import android.text.format.DateFormat;
++import android.view.View;
++import android.widget.RemoteViews;
++
++import java.time.LocalDate;
++import java.time.ZoneId;
++import java.time.temporal.ChronoUnit;
++import java.util.Locale;
++
++import ws.xsoh.etar.R;
++
++/**
++ * BlueOS countdown widget: how many days until a date the user picked (a birthday every year, or
++ * once). Set up in {@link BlueOSCountdownConfigActivity}; refreshed every midnight.
++ */
++public class BlueOSCountdownWidgetProvider extends AppWidgetProvider {
++
++    static final String PREFS = "blueos_countdown";
++    private static final String ACTION_MIDNIGHT = "org.blueos.calendar.action.COUNTDOWN_MIDNIGHT";
++    private static final String ACTION_WIDGET_STYLE_CHANGED =
++            "org.blueos.intent.action.WIDGET_STYLE_CHANGED";
++    /** Secure setting (0..100) set in Wallpaper & style: how transparent widget cards are. */
++    private static final String SETTING_TRANSPARENCY = "blueos_widget_transparency";
++    private static final int DEFAULT_TRANSPARENCY = 10;
++
++    static String keyTitle(int id) {
++        return "title_" + id;
++    }
++
++    static String keyDate(int id) {
++        return "date_" + id;
++    }
++
++    static String keyYearly(int id) {
++        return "yearly_" + id;
++    }
++
++    /** 0..255 for the card layer of the BlueOS widget layouts. */
++    static int cardAlpha(Context context) {
++        final int transparency = Math.max(0, Math.min(100, Settings.Secure.getInt(
++                context.getContentResolver(), SETTING_TRANSPARENCY, DEFAULT_TRANSPARENCY)));
++        return (255 * (100 - transparency) + 50) / 100;
++    }
++
++    @Override
++    public void onReceive(Context context, Intent intent) {
++        super.onReceive(context, intent);
++        final String action = intent.getAction();
++        if (ACTION_MIDNIGHT.equals(action)
++                || ACTION_WIDGET_STYLE_CHANGED.equals(action)
++                || Intent.ACTION_TIME_CHANGED.equals(action)
++                || Intent.ACTION_TIMEZONE_CHANGED.equals(action)
++                || Intent.ACTION_LOCALE_CHANGED.equals(action)) {
++            final AppWidgetManager wm = AppWidgetManager.getInstance(context);
++            onUpdate(context, wm, wm.getAppWidgetIds(new ComponentName(context, getClass())));
++        }
++    }
++
++    @Override
++    public void onUpdate(Context context, AppWidgetManager wm, int[] widgetIds) {
++        for (int id : widgetIds) {
++            update(context, wm, id);
++        }
++        if (widgetIds.length > 0) {
++            scheduleMidnight(context);
++        }
++    }
++
++    @Override
++    public void onDeleted(Context context, int[] widgetIds) {
++        final SharedPreferences.Editor editor = prefs(context).edit();
++        for (int id : widgetIds) {
++            editor.remove(keyTitle(id)).remove(keyDate(id)).remove(keyYearly(id));
++        }
++        editor.apply();
++    }
++
++    @Override
++    public void onDisabled(Context context) {
++        context.getSystemService(AlarmManager.class).cancel(midnightIntent(context));
++    }
++
++    static SharedPreferences prefs(Context context) {
++        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
++    }
++
++    static void update(Context context, AppWidgetManager wm, int id) {
++        final SharedPreferences prefs = prefs(context);
++        final RemoteViews rv = new RemoteViews(context.getPackageName(),
++                R.layout.blueos_countdown_widget);
++        rv.setInt(R.id.blueos_widget_bg, "setImageAlpha", cardAlpha(context));
++
++        final long epochDay = prefs.getLong(keyDate(id), Long.MIN_VALUE);
++        if (epochDay == Long.MIN_VALUE) {
++            // Not set up (yet): the setup opens on tap
++            rv.setTextViewText(R.id.blueos_countdown_title,
++                    context.getString(R.string.blueos_countdown_widget_description));
++            rv.setTextViewText(R.id.blueos_countdown_number, "…");
++            rv.setViewVisibility(R.id.blueos_countdown_caption, View.GONE);
++        } else {
++            final boolean yearly = prefs.getBoolean(keyYearly(id), false);
++            final LocalDate today = LocalDate.now(ZoneId.systemDefault());
++            final LocalDate target = nextDate(LocalDate.ofEpochDay(epochDay), today, yearly);
++            final long days = ChronoUnit.DAYS.between(today, target);
++            final String title = prefs.getString(keyTitle(id), "");
++            rv.setTextViewText(R.id.blueos_countdown_title, title);
++            rv.setViewVisibility(R.id.blueos_countdown_title,
++                    title.isEmpty() ? View.GONE : View.VISIBLE);
++
++            final String date = DateFormat.format(
++                    DateFormat.getBestDateTimePattern(Locale.getDefault(), "dMMM"),
++                    target.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli())
++                    .toString();
++            if (days == 0) {
++                rv.setTextViewText(R.id.blueos_countdown_number,
++                        context.getString(R.string.blueos_countdown_today));
++                rv.setTextViewText(R.id.blueos_countdown_caption, date);
++            } else {
++                final int n = (int) Math.min(Integer.MAX_VALUE, Math.abs(days));
++                rv.setTextViewText(R.id.blueos_countdown_number, String.valueOf(n));
++                rv.setTextViewText(R.id.blueos_countdown_caption,
++                        context.getResources().getQuantityString(days > 0
++                                ? R.plurals.blueos_countdown_days_until
++                                : R.plurals.blueos_countdown_days_since, n, date));
++            }
++            rv.setViewVisibility(R.id.blueos_countdown_caption, View.VISIBLE);
++        }
++
++        // Tap: change what to count down to
++        final Intent setup = new Intent(context, BlueOSCountdownConfigActivity.class)
++                .setAction(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE)
++                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id);
++        rv.setOnClickPendingIntent(android.R.id.background, PendingIntent.getActivity(
++                context, id, setup, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
++        wm.updateAppWidget(id, rv);
++    }
++
++    /** The picked date, or for a yearly one its next time from today (Feb 29 → Feb 28). */
++    static LocalDate nextDate(LocalDate picked, LocalDate today, boolean yearly) {
++        if (!yearly) {
++            return picked;
++        }
++        LocalDate next = picked.withYear(today.getYear());
++        if (next.isBefore(today)) {
++            next = picked.withYear(today.getYear() + 1);
++        }
++        return next;
++    }
++
++    private static void scheduleMidnight(Context context) {
++        final long midnight = LocalDate.now(ZoneId.systemDefault()).plusDays(1)
++                .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() + 1000;
++        context.getSystemService(AlarmManager.class)
++                .set(AlarmManager.RTC, midnight, midnightIntent(context));
++    }
++
++    private static PendingIntent midnightIntent(Context context) {
++        final Intent intent = new Intent(ACTION_MIDNIGHT)
++                .setClass(context, BlueOSCountdownWidgetProvider.class);
++        return PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_IMMUTABLE);
++    }
++}
+diff --git a/app/src/main/java/com/android/calendar/widget/BlueOSDateWidgetProvider.java b/app/src/main/java/com/android/calendar/widget/BlueOSDateWidgetProvider.java
+index e1b26ddf..bde6fc3a 100644
+--- a/app/src/main/java/com/android/calendar/widget/BlueOSDateWidgetProvider.java
++++ b/app/src/main/java/com/android/calendar/widget/BlueOSDateWidgetProvider.java
+@@ -32,6 +32,7 @@ import android.provider.CalendarContract;
+ import android.provider.CalendarContract.Instances;
+ import android.text.format.DateFormat;
+ import android.text.format.DateUtils;
++import android.util.SizeF;
+ import android.view.View;
+ import android.widget.RemoteViews;
+ 
+@@ -39,8 +40,10 @@ import com.android.calendar.AllInOneActivity;
+ 
+ import java.util.ArrayList;
+ import java.util.Calendar;
++import java.util.LinkedHashMap;
+ import java.util.List;
+ import java.util.Locale;
++import java.util.Map;
+ 
+ import ws.xsoh.etar.R;
+ 
+@@ -51,6 +54,9 @@ import ws.xsoh.etar.R;
+ public class BlueOSDateWidgetProvider extends AppWidgetProvider {
+ 
+     private static final String ACTION_REFRESH = "org.blueos.calendar.action.DATE_WIDGET_REFRESH";
++    /** Sent by SystemUI when the widget transparency changes. */
++    private static final String ACTION_WIDGET_STYLE_CHANGED =
++            "org.blueos.intent.action.WIDGET_STYLE_CHANGED";
+     private static final int MAX_EVENTS = 2;
+     private static final long LOOK_AHEAD_MILLIS = 7 * DateUtils.DAY_IN_MILLIS;
+ 
+@@ -91,6 +97,7 @@ public class BlueOSDateWidgetProvider extends AppWidgetProvider {
+         super.onReceive(context, intent);
+         final String action = intent.getAction();
+         if (ACTION_REFRESH.equals(action)
++                || ACTION_WIDGET_STYLE_CHANGED.equals(action)
+                 || Intent.ACTION_PROVIDER_CHANGED.equals(action)
+                 || Intent.ACTION_DATE_CHANGED.equals(action)
+                 || Intent.ACTION_TIME_CHANGED.equals(action)
+@@ -107,7 +114,11 @@ public class BlueOSDateWidgetProvider extends AppWidgetProvider {
+             return;
+         }
+         final List<Event> events = loadEvents(context);
+-        final RemoteViews rv = buildViews(context, events);
++        // One row (the 6a's cells are tall) fits one event, two rows both
++        final Map<SizeF, RemoteViews> sized = new LinkedHashMap<>();
++        sized.put(new SizeF(90f, 90f), buildViews(context, events, 1));
++        sized.put(new SizeF(90f, 170f), buildViews(context, events, MAX_EVENTS));
++        final RemoteViews rv = new RemoteViews(sized);
+         for (int widgetId : widgetIds) {
+             wm.updateAppWidget(widgetId, rv);
+         }
+@@ -119,9 +130,11 @@ public class BlueOSDateWidgetProvider extends AppWidgetProvider {
+         context.getSystemService(AlarmManager.class).cancel(refreshIntent(context));
+     }
+ 
+-    private RemoteViews buildViews(Context context, List<Event> events) {
++    private RemoteViews buildViews(Context context, List<Event> events, int maxShown) {
+         final RemoteViews rv = new RemoteViews(context.getPackageName(),
+                 R.layout.blueos_date_widget);
++        rv.setInt(R.id.blueos_widget_bg, "setImageAlpha",
++                BlueOSCountdownWidgetProvider.cardAlpha(context));
+         final Locale locale = Locale.getDefault();
+         setClockFormat(rv, R.id.blueos_day, "d");
+         setClockFormat(rv, R.id.blueos_weekday, DateFormat.getBestDateTimePattern(locale, "EEEE"));
+@@ -130,7 +143,7 @@ public class BlueOSDateWidgetProvider extends AppWidgetProvider {
+         final boolean canRead = canReadCalendar(context);
+         for (int i = 0; i < EVENT_VIEWS.length; i++) {
+             final int[] views = EVENT_VIEWS[i];
+-            if (i < events.size()) {
++            if (i < events.size() && i < maxShown) {
+                 final Event event = events.get(i);
+                 rv.setViewVisibility(views[0], View.VISIBLE);
+                 rv.setTextViewText(views[1], event.title);
+diff --git a/app/src/main/res/color/blueos_widget_card_bg.xml b/app/src/main/res/color/blueos_widget_card_bg.xml
+deleted file mode 100644
+index 7252c413..00000000
+--- a/app/src/main/res/color/blueos_widget_card_bg.xml
++++ /dev/null
+@@ -1,5 +0,0 @@
+-<?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS: slightly translucent card, the wallpaper shows through a little -->
+-<selector xmlns:android="http://schemas.android.com/apk/res/android">
+-    <item android:alpha="0.9" android:color="@color/blueos_widget_card" />
+-</selector>
+diff --git a/app/src/main/res/drawable/blueos_widget_card.xml b/app/src/main/res/drawable/blueos_widget_card.xml
+index a44eb949..d8eba383 100644
+--- a/app/src/main/res/drawable/blueos_widget_card.xml
++++ b/app/src/main/res/drawable/blueos_widget_card.xml
+@@ -1,7 +1,7 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS date widget: card background -->
++<!-- BlueOS calendar widgets: card. Its transparency (Wallpaper & style) is the ImageView alpha. -->
+ <shape xmlns:android="http://schemas.android.com/apk/res/android"
+     android:shape="rectangle">
+-    <solid android:color="@color/blueos_widget_card_bg" />
++    <solid android:color="@color/blueos_widget_card" />
+     <corners android:radius="@android:dimen/system_app_widget_background_radius" />
+ </shape>
+diff --git a/app/src/main/res/drawable/blueos_widget_card_accent.xml b/app/src/main/res/drawable/blueos_widget_card_accent.xml
+new file mode 100644
+index 00000000..7ee0c326
+--- /dev/null
++++ b/app/src/main/res/drawable/blueos_widget_card_accent.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS calendar widgets: card in the accent container color (countdown) -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android"
++    android:shape="rectangle">
++    <solid android:color="@color/blueos_widget_primary_container" />
++    <corners android:radius="@android:dimen/system_app_widget_background_radius" />
++</shape>
+diff --git a/app/src/main/res/drawable/blueos_widget_outline.xml b/app/src/main/res/drawable/blueos_widget_outline.xml
+new file mode 100644
+index 00000000..0c532d77
+--- /dev/null
++++ b/app/src/main/res/drawable/blueos_widget_outline.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS calendar widgets: the rounded outline the whole widget is clipped to -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android"
++    android:shape="rectangle">
++    <solid android:color="@android:color/transparent" />
++    <corners android:radius="@android:dimen/system_app_widget_background_radius" />
++</shape>
+diff --git a/app/src/main/res/layout/blueos_countdown_config.xml b/app/src/main/res/layout/blueos_countdown_config.xml
+new file mode 100644
+index 00000000..8418442a
+--- /dev/null
++++ b/app/src/main/res/layout/blueos_countdown_config.xml
+@@ -0,0 +1,55 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS countdown widget setup: what to count down to and when -->
++<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
++    android:layout_width="match_parent"
++    android:layout_height="match_parent"
++    android:fitsSystemWindows="true">
++
++    <LinearLayout
++        android:layout_width="match_parent"
++        android:layout_height="wrap_content"
++        android:orientation="vertical"
++        android:padding="24dp">
++
++        <TextView
++            android:layout_width="match_parent"
++            android:layout_height="wrap_content"
++            android:fontFamily="google-sans"
++            android:text="@string/blueos_countdown_widget"
++            android:textAppearance="?android:attr/textAppearanceLarge" />
++
++        <EditText
++            android:id="@+id/blueos_countdown_title_input"
++            android:layout_width="match_parent"
++            android:layout_height="wrap_content"
++            android:layout_marginTop="16dp"
++            android:hint="@string/blueos_countdown_title_hint"
++            android:importantForAutofill="no"
++            android:inputType="textCapSentences"
++            android:maxLength="60" />
++
++        <DatePicker
++            android:id="@+id/blueos_countdown_date"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_gravity="center_horizontal"
++            android:layout_marginTop="8dp"
++            android:datePickerMode="calendar" />
++
++        <Switch
++            android:id="@+id/blueos_countdown_yearly"
++            android:layout_width="match_parent"
++            android:layout_height="wrap_content"
++            android:layout_marginTop="8dp"
++            android:minHeight="48dp"
++            android:text="@string/blueos_countdown_yearly" />
++
++        <Button
++            android:id="@+id/blueos_countdown_done"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_gravity="end"
++            android:layout_marginTop="16dp"
++            android:text="@string/blueos_countdown_done" />
++    </LinearLayout>
++</ScrollView>
+diff --git a/app/src/main/res/layout/blueos_countdown_widget.xml b/app/src/main/res/layout/blueos_countdown_widget.xml
+new file mode 100644
+index 00000000..cf366d89
+--- /dev/null
++++ b/app/src/main/res/layout/blueos_countdown_widget.xml
+@@ -0,0 +1,61 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS countdown widget: days until a date the user picked, on the accent card -->
++<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
++    android:id="@android:id/background"
++    android:layout_width="match_parent"
++    android:layout_height="match_parent"
++    android:background="@drawable/blueos_widget_outline"
++    android:clipToOutline="true">
++
++    <ImageView
++        android:id="@+id/blueos_widget_bg"
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:contentDescription="@null"
++        android:scaleType="fitXY"
++        android:src="@drawable/blueos_widget_card_accent" />
++
++    <LinearLayout
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:gravity="center_vertical"
++        android:orientation="vertical"
++        android:paddingHorizontal="16dp"
++        android:paddingVertical="10dp">
++
++        <TextView
++            android:id="@+id/blueos_countdown_title"
++            android:layout_width="match_parent"
++            android:layout_height="wrap_content"
++            android:alpha="0.8"
++            android:ellipsize="end"
++            android:fontFamily="google-sans-text"
++            android:maxLines="2"
++            android:textColor="@color/blueos_widget_on_primary_container"
++            android:textSize="13sp" />
++
++        <TextView
++            android:id="@+id/blueos_countdown_number"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_marginTop="4dp"
++            android:fontFamily="blueos-clock"
++            android:fontVariationSettings="'wght' 600"
++            android:includeFontPadding="false"
++            android:singleLine="true"
++            android:textColor="@color/blueos_widget_on_primary_container"
++            android:textSize="44sp" />
++
++        <TextView
++            android:id="@+id/blueos_countdown_caption"
++            android:layout_width="match_parent"
++            android:layout_height="wrap_content"
++            android:layout_marginTop="2dp"
++            android:alpha="0.8"
++            android:ellipsize="end"
++            android:fontFamily="google-sans-text"
++            android:singleLine="true"
++            android:textColor="@color/blueos_widget_on_primary_container"
++            android:textSize="13sp" />
++    </LinearLayout>
++</FrameLayout>
+diff --git a/app/src/main/res/layout/blueos_date_widget.xml b/app/src/main/res/layout/blueos_date_widget.xml
+index 11c162d6..9fb22e5c 100644
+--- a/app/src/main/res/layout/blueos_date_widget.xml
++++ b/app/src/main/res/layout/blueos_date_widget.xml
+@@ -1,147 +1,169 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS "Date and calendar" widget: big date in the accent color, the next two events -->
+-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
++<!-- BlueOS "Date and calendar" widget: big date in the accent color, the next events -->
++<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+     android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@drawable/blueos_widget_card"
+-    android:orientation="vertical"
+-    android:padding="14dp">
++    android:background="@drawable/blueos_widget_outline"
++    android:clipToOutline="true">
++
++    <ImageView
++        android:id="@+id/blueos_widget_bg"
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:contentDescription="@null"
++        android:scaleType="fitXY"
++        android:src="@drawable/blueos_widget_card" />
+ 
+     <LinearLayout
+         android:layout_width="match_parent"
+-        android:layout_height="wrap_content"
++        android:layout_height="match_parent"
+         android:gravity="center_vertical"
+-        android:orientation="horizontal">
+-
+-        <TextClock
+-            android:id="@+id/blueos_day"
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:fontFamily="blueos-clock"
+-            android:fontVariationSettings="'wght' 600"
+-            android:includeFontPadding="false"
+-            android:singleLine="true"
+-            android:textColor="@color/blueos_widget_primary"
+-            android:textSize="40sp" />
++        android:orientation="vertical"
++        android:padding="14dp">
+ 
+         <LinearLayout
+             android:layout_width="match_parent"
+             android:layout_height="wrap_content"
+-            android:layout_marginStart="10dp"
+-            android:orientation="vertical">
++            android:gravity="center_vertical"
++            android:orientation="horizontal">
+ 
+             <TextClock
+-                android:id="@+id/blueos_weekday"
+-                android:layout_width="match_parent"
++                android:id="@+id/blueos_day"
++                android:layout_width="wrap_content"
+                 android:layout_height="wrap_content"
+-                android:ellipsize="end"
++                android:fontFamily="blueos-clock"
++                android:fontVariationSettings="'wght' 600"
++                android:includeFontPadding="false"
+                 android:singleLine="true"
+-                android:textColor="@color/blueos_widget_on_surface"
+-                android:textSize="13sp" />
++                android:textColor="@color/blueos_widget_primary"
++                android:textSize="40sp" />
+ 
+-            <TextClock
+-                android:id="@+id/blueos_month"
++            <LinearLayout
+                 android:layout_width="match_parent"
+                 android:layout_height="wrap_content"
+-                android:ellipsize="end"
+-                android:singleLine="true"
+-                android:textColor="@color/blueos_widget_on_surface_variant"
+-                android:textSize="13sp" />
++                android:layout_marginStart="10dp"
++                android:orientation="vertical">
++
++                <TextClock
++                    android:id="@+id/blueos_weekday"
++                    android:layout_width="match_parent"
++                    android:layout_height="wrap_content"
++                    android:ellipsize="end"
++                    android:singleLine="true"
++                    android:fontFamily="google-sans-text"
++                    android:textColor="@color/blueos_widget_on_surface"
++                    android:textSize="13sp" />
++
++                <TextClock
++                    android:id="@+id/blueos_month"
++                    android:layout_width="match_parent"
++                    android:layout_height="wrap_content"
++                    android:ellipsize="end"
++                    android:singleLine="true"
++                    android:fontFamily="google-sans-text"
++                    android:textColor="@color/blueos_widget_on_surface_variant"
++                    android:textSize="13sp" />
++            </LinearLayout>
+         </LinearLayout>
+-    </LinearLayout>
+-
+-    <LinearLayout
+-        android:id="@+id/blueos_event1"
+-        android:layout_width="match_parent"
+-        android:layout_height="wrap_content"
+-        android:layout_marginTop="10dp"
+-        android:orientation="horizontal"
+-        android:visibility="gone">
+-
+-        <ImageView
+-            android:layout_width="3dp"
+-            android:layout_height="match_parent"
+-            android:contentDescription="@null"
+-            android:scaleType="fitXY"
+-            android:src="@drawable/blueos_widget_event_bar"
+-            android:tint="@color/blueos_widget_primary" />
+ 
+         <LinearLayout
++            android:id="@+id/blueos_event1"
+             android:layout_width="match_parent"
+             android:layout_height="wrap_content"
+-            android:layout_marginStart="8dp"
+-            android:orientation="vertical">
+-
+-            <TextView
+-                android:id="@+id/blueos_event1_title"
+-                android:layout_width="match_parent"
+-                android:layout_height="wrap_content"
+-                android:ellipsize="end"
+-                android:singleLine="true"
+-                android:textColor="@color/blueos_widget_on_surface"
+-                android:textSize="13sp" />
+-
+-            <TextView
+-                android:id="@+id/blueos_event1_time"
++            android:layout_marginTop="10dp"
++            android:orientation="horizontal"
++            android:visibility="gone">
++
++            <ImageView
++                android:layout_width="3dp"
++                android:layout_height="match_parent"
++                android:contentDescription="@null"
++                android:scaleType="fitXY"
++                android:src="@drawable/blueos_widget_event_bar"
++                android:tint="@color/blueos_widget_primary" />
++
++            <LinearLayout
+                 android:layout_width="match_parent"
+                 android:layout_height="wrap_content"
+-                android:ellipsize="end"
+-                android:singleLine="true"
+-                android:textColor="@color/blueos_widget_on_surface_variant"
+-                android:textSize="12sp" />
++                android:layout_marginStart="8dp"
++                android:orientation="vertical">
++
++                <TextView
++                    android:id="@+id/blueos_event1_title"
++                    android:layout_width="match_parent"
++                    android:layout_height="wrap_content"
++                    android:ellipsize="end"
++                    android:singleLine="true"
++                    android:fontFamily="google-sans-text"
++                    android:textColor="@color/blueos_widget_on_surface"
++                    android:textSize="13sp" />
++
++                <TextView
++                    android:id="@+id/blueos_event1_time"
++                    android:layout_width="match_parent"
++                    android:layout_height="wrap_content"
++                    android:ellipsize="end"
++                    android:singleLine="true"
++                    android:fontFamily="google-sans-text"
++                    android:textColor="@color/blueos_widget_on_surface_variant"
++                    android:textSize="12sp" />
++            </LinearLayout>
+         </LinearLayout>
+-    </LinearLayout>
+-
+-    <LinearLayout
+-        android:id="@+id/blueos_event2"
+-        android:layout_width="match_parent"
+-        android:layout_height="wrap_content"
+-        android:layout_marginTop="6dp"
+-        android:orientation="horizontal"
+-        android:visibility="gone">
+-
+-        <ImageView
+-            android:layout_width="3dp"
+-            android:layout_height="match_parent"
+-            android:contentDescription="@null"
+-            android:scaleType="fitXY"
+-            android:src="@drawable/blueos_widget_event_bar"
+-            android:tint="@color/blueos_widget_primary_container" />
+ 
+         <LinearLayout
++            android:id="@+id/blueos_event2"
+             android:layout_width="match_parent"
+             android:layout_height="wrap_content"
+-            android:layout_marginStart="8dp"
+-            android:orientation="vertical">
+-
+-            <TextView
+-                android:id="@+id/blueos_event2_title"
+-                android:layout_width="match_parent"
+-                android:layout_height="wrap_content"
+-                android:ellipsize="end"
+-                android:singleLine="true"
+-                android:textColor="@color/blueos_widget_on_surface"
+-                android:textSize="13sp" />
+-
+-            <TextView
+-                android:id="@+id/blueos_event2_time"
++            android:layout_marginTop="6dp"
++            android:orientation="horizontal"
++            android:visibility="gone">
++
++            <ImageView
++                android:layout_width="3dp"
++                android:layout_height="match_parent"
++                android:contentDescription="@null"
++                android:scaleType="fitXY"
++                android:src="@drawable/blueos_widget_event_bar"
++                android:tint="@color/blueos_widget_primary_container" />
++
++            <LinearLayout
+                 android:layout_width="match_parent"
+                 android:layout_height="wrap_content"
+-                android:ellipsize="end"
+-                android:singleLine="true"
+-                android:textColor="@color/blueos_widget_on_surface_variant"
+-                android:textSize="12sp" />
++                android:layout_marginStart="8dp"
++                android:orientation="vertical">
++
++                <TextView
++                    android:id="@+id/blueos_event2_title"
++                    android:layout_width="match_parent"
++                    android:layout_height="wrap_content"
++                    android:ellipsize="end"
++                    android:singleLine="true"
++                    android:fontFamily="google-sans-text"
++                    android:textColor="@color/blueos_widget_on_surface"
++                    android:textSize="13sp" />
++
++                <TextView
++                    android:id="@+id/blueos_event2_time"
++                    android:layout_width="match_parent"
++                    android:layout_height="wrap_content"
++                    android:ellipsize="end"
++                    android:singleLine="true"
++                    android:fontFamily="google-sans-text"
++                    android:textColor="@color/blueos_widget_on_surface_variant"
++                    android:textSize="12sp" />
++            </LinearLayout>
+         </LinearLayout>
+-    </LinearLayout>
+ 
+-    <TextView
+-        android:id="@+id/blueos_no_events"
+-        android:layout_width="match_parent"
+-        android:layout_height="wrap_content"
+-        android:layout_marginTop="10dp"
+-        android:maxLines="2"
+-        android:text="@string/blueos_date_widget_no_events"
+-        android:textColor="@color/blueos_widget_on_surface_variant"
+-        android:textSize="12sp" />
+-</LinearLayout>
++        <TextView
++            android:id="@+id/blueos_no_events"
++            android:layout_width="match_parent"
++            android:layout_height="wrap_content"
++            android:layout_marginTop="10dp"
++            android:maxLines="2"
++            android:text="@string/blueos_date_widget_no_events"
++            android:fontFamily="google-sans-text"
++            android:textColor="@color/blueos_widget_on_surface_variant"
++            android:textSize="12sp" />
++    </LinearLayout>
++</FrameLayout>
+diff --git a/app/src/main/res/values-night/blueos_widget_colors.xml b/app/src/main/res/values-night/blueos_widget_colors.xml
+index 68e51dc9..72d408c9 100644
+--- a/app/src/main/res/values-night/blueos_widget_colors.xml
++++ b/app/src/main/res/values-night/blueos_widget_colors.xml
+@@ -1,9 +1,10 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS date widget: dark theme -->
++<!-- BlueOS calendar widgets: system palette colors, so they follow the accent color (dark theme) -->
+ <resources>
+     <color name="blueos_widget_card">@android:color/system_surface_container_dark</color>
+     <color name="blueos_widget_on_surface">@android:color/system_on_surface_dark</color>
+     <color name="blueos_widget_on_surface_variant">@android:color/system_on_surface_variant_dark</color>
+     <color name="blueos_widget_primary">@android:color/system_primary_dark</color>
+     <color name="blueos_widget_primary_container">@android:color/system_primary_container_dark</color>
++    <color name="blueos_widget_on_primary_container">@android:color/system_on_primary_container_dark</color>
+ </resources>
+diff --git a/app/src/main/res/values-ru/blueos_strings.xml b/app/src/main/res/values-ru/blueos_strings.xml
+index 5941f288..6c9d617c 100644
+--- a/app/src/main/res/values-ru/blueos_strings.xml
++++ b/app/src/main/res/values-ru/blueos_strings.xml
+@@ -1,8 +1,27 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<resources>
++<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+     <string name="blueos_date_widget">Дата и календарь</string>
+     <string name="blueos_date_widget_description">Сегодняшняя дата и ближайшие события</string>
+     <string name="blueos_date_widget_no_events">Ближайших событий нет</string>
+     <string name="blueos_date_widget_no_access">Откройте «Календарь», чтобы видеть события</string>
+-    <string name="blueos_date_widget_tomorrow">Завтра, <xliff:g id="time" example="10:00" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%1$s</xliff:g></string>
++    <string name="blueos_date_widget_tomorrow">Завтра, <xliff:g id="time" example="10:00">%1$s</xliff:g></string>
++
++    <string name="blueos_countdown_widget">Обратный отсчёт</string>
++    <string name="blueos_countdown_widget_description">Сколько дней до выбранной даты</string>
++    <string name="blueos_countdown_title_hint">Чего ждём? Например, день рождения Хосино</string>
++    <string name="blueos_countdown_yearly">Каждый год</string>
++    <string name="blueos_countdown_done">Готово</string>
++    <string name="blueos_countdown_today">Сегодня</string>
++    <plurals name="blueos_countdown_days_until">
++        <item quantity="one">день · <xliff:g id="date" example="6 нояб.">%1$s</xliff:g></item>
++        <item quantity="few">дня · <xliff:g id="date" example="6 нояб.">%1$s</xliff:g></item>
++        <item quantity="many">дней · <xliff:g id="date" example="6 нояб.">%1$s</xliff:g></item>
++        <item quantity="other">дня · <xliff:g id="date" example="6 нояб.">%1$s</xliff:g></item>
++    </plurals>
++    <plurals name="blueos_countdown_days_since">
++        <item quantity="one">день назад · <xliff:g id="date" example="6 нояб.">%1$s</xliff:g></item>
++        <item quantity="few">дня назад · <xliff:g id="date" example="6 нояб.">%1$s</xliff:g></item>
++        <item quantity="many">дней назад · <xliff:g id="date" example="6 нояб.">%1$s</xliff:g></item>
++        <item quantity="other">дня назад · <xliff:g id="date" example="6 нояб.">%1$s</xliff:g></item>
++    </plurals>
+ </resources>
+diff --git a/app/src/main/res/values/blueos_strings.xml b/app/src/main/res/values/blueos_strings.xml
+index 66a02e8c..fa5599af 100644
+--- a/app/src/main/res/values/blueos_strings.xml
++++ b/app/src/main/res/values/blueos_strings.xml
+@@ -1,10 +1,27 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS "Date and calendar" widget -->
+-<resources>
++<!-- BlueOS calendar widgets -->
++<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+     <string name="blueos_date_widget">Date and calendar</string>
+     <string name="blueos_date_widget_description">Today\'s date and the next events</string>
+     <string name="blueos_date_widget_no_events">No upcoming events</string>
+     <string name="blueos_date_widget_no_access">Open Calendar to show your events</string>
+     <!-- An event tomorrow; the start time -->
+-    <string name="blueos_date_widget_tomorrow">Tomorrow, <xliff:g id="time" example="10:00" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%1$s</xliff:g></string>
++    <string name="blueos_date_widget_tomorrow">Tomorrow, <xliff:g id="time" example="10:00">%1$s</xliff:g></string>
++
++    <!-- Countdown widget: days until a date the user picks -->
++    <string name="blueos_countdown_widget">Countdown</string>
++    <string name="blueos_countdown_widget_description">Days until a date you pick</string>
++    <string name="blueos_countdown_title_hint">What are you waiting for?</string>
++    <string name="blueos_countdown_yearly">Every year</string>
++    <string name="blueos_countdown_done">Done</string>
++    <string name="blueos_countdown_today">Today</string>
++    <!-- Under the number of days: "days · 6 Nov" -->
++    <plurals name="blueos_countdown_days_until">
++        <item quantity="one">day · <xliff:g id="date" example="6 Nov">%1$s</xliff:g></item>
++        <item quantity="other">days · <xliff:g id="date" example="6 Nov">%1$s</xliff:g></item>
++    </plurals>
++    <plurals name="blueos_countdown_days_since">
++        <item quantity="one">day ago · <xliff:g id="date" example="6 Nov">%1$s</xliff:g></item>
++        <item quantity="other">days ago · <xliff:g id="date" example="6 Nov">%1$s</xliff:g></item>
++    </plurals>
+ </resources>
+diff --git a/app/src/main/res/values/blueos_widget_colors.xml b/app/src/main/res/values/blueos_widget_colors.xml
+index 187cfa55..5ab84cfd 100644
+--- a/app/src/main/res/values/blueos_widget_colors.xml
++++ b/app/src/main/res/values/blueos_widget_colors.xml
+@@ -1,9 +1,10 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS date widget: system palette colors, so it follows the accent color -->
++<!-- BlueOS calendar widgets: system palette colors, so they follow the accent color -->
+ <resources>
+     <color name="blueos_widget_card">@android:color/system_surface_container_light</color>
+     <color name="blueos_widget_on_surface">@android:color/system_on_surface_light</color>
+     <color name="blueos_widget_on_surface_variant">@android:color/system_on_surface_variant_light</color>
+     <color name="blueos_widget_primary">@android:color/system_primary_light</color>
+     <color name="blueos_widget_primary_container">@android:color/system_primary_container_light</color>
++    <color name="blueos_widget_on_primary_container">@android:color/system_on_primary_container_light</color>
+ </resources>
+diff --git a/app/src/main/res/xml/blueos_countdown_widget_info.xml b/app/src/main/res/xml/blueos_countdown_widget_info.xml
+new file mode 100644
+index 00000000..0ce1e280
+--- /dev/null
++++ b/app/src/main/res/xml/blueos_countdown_widget_info.xml
+@@ -0,0 +1,17 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS countdown widget -->
++<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
++    android:configure="com.android.calendar.widget.BlueOSCountdownConfigActivity"
++    android:description="@string/blueos_countdown_widget_description"
++    android:initialLayout="@layout/blueos_countdown_widget"
++    android:minWidth="90dp"
++    android:minHeight="90dp"
++    android:minResizeWidth="90dp"
++    android:minResizeHeight="90dp"
++    android:previewLayout="@layout/blueos_countdown_widget"
++    android:resizeMode="horizontal|vertical"
++    android:targetCellWidth="2"
++    android:targetCellHeight="1"
++    android:updatePeriodMillis="0"
++    android:widgetCategory="home_screen"
++    android:widgetFeatures="reconfigurable" />
+diff --git a/app/src/main/res/xml/blueos_date_widget_info.xml b/app/src/main/res/xml/blueos_date_widget_info.xml
+index 94c285be..b528eafd 100644
+--- a/app/src/main/res/xml/blueos_date_widget_info.xml
++++ b/app/src/main/res/xml/blueos_date_widget_info.xml
+@@ -10,6 +10,6 @@
+     android:previewLayout="@layout/blueos_date_widget"
+     android:resizeMode="horizontal|vertical"
+     android:targetCellWidth="2"
+-    android:targetCellHeight="2"
++    android:targetCellHeight="1"
+     android:updatePeriodMillis="0"
+     android:widgetCategory="home_screen" />

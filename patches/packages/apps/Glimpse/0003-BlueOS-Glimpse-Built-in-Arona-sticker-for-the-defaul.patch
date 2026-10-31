@@ -1,0 +1,70 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sun, 25 Oct 2026 12:33:42 +0100
+Subject: [PATCH 3/3] BlueOS: Glimpse: Built-in Arona sticker for the default
+ home screen
+
+The launcher's default workspace asks for it with the extra
+blueos_default_sticker=arona (APPWIDGET_DEFAULT_WORKSPACE_CONFIGURE); the
+widget gets a copy of the sticker from /product/media/blueos/stickers
+(vendor/blueos/media/stickers; a build without it does nothing).
+
+Change-Id: If6cca483b378e3155a3938f1c84ce073708dba6c
+---
+ .../widgets/BlueOSPhotoWidgetProvider.kt      | 36 +++++++++++++++++++
+ 1 file changed, 36 insertions(+)
+
+diff --git a/app/src/main/java/org/lineageos/glimpse/widgets/BlueOSPhotoWidgetProvider.kt b/app/src/main/java/org/lineageos/glimpse/widgets/BlueOSPhotoWidgetProvider.kt
+index d5b5ad6..91d8c97 100644
+--- a/app/src/main/java/org/lineageos/glimpse/widgets/BlueOSPhotoWidgetProvider.kt
++++ b/app/src/main/java/org/lineageos/glimpse/widgets/BlueOSPhotoWidgetProvider.kt
+@@ -30,6 +30,20 @@ open class BlueOSPhotoWidgetProvider : AppWidgetProvider() {
+ 
+     class Wide : BlueOSPhotoWidgetProvider()
+ 
++    override fun onReceive(context: Context, intent: Intent) {
++        super.onReceive(context, intent)
++        // The launcher's default home screen asks for the built-in Arona sticker
++        if (intent.action == ACTION_DEFAULT_WORKSPACE_CONFIGURE &&
++            intent.getStringExtra(EXTRA_DEFAULT_STICKER) == "arona") {
++            val id = intent.getIntExtra(
++                AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
++            if (id != AppWidgetManager.INVALID_APPWIDGET_ID) {
++                useDefaultSticker(context, id)
++                update(context, AppWidgetManager.getInstance(context), id)
++            }
++        }
++    }
++
+     override fun onUpdate(context: Context, wm: AppWidgetManager, widgetIds: IntArray) {
+         widgetIds.forEach { update(context, wm, it) }
+     }
+@@ -49,6 +63,28 @@ open class BlueOSPhotoWidgetProvider : AppWidgetProvider() {
+ 
+     companion object {
+         private const val PREFS = "blueos_photo_widgets"
++        private const val ACTION_DEFAULT_WORKSPACE_CONFIGURE =
++            "com.android.launcher.action.APPWIDGET_DEFAULT_WORKSPACE_CONFIGURE"
++        private const val EXTRA_DEFAULT_STICKER = "blueos_default_sticker"
++
++        /** The built-in sticker on /product (vendor/blueos/media/stickers; a public build may have none). */
++        private const val DEFAULT_STICKER = "/product/media/blueos/stickers/arona.png"
++
++        /** Copies the built-in Arona sticker for this widget (a sticker: transparency kept). */
++        fun useDefaultSticker(context: Context, id: Int) {
++            val src = File(DEFAULT_STICKER)
++            if (!src.isFile) return
++            val file = File(photosDir(context), "${java.util.UUID.randomUUID()}.png")
++            src.inputStream().use { input ->
++                file.outputStream().use { input.copyTo(it) }
++            }
++            photoFile(context, id)?.delete()
++            prefs(context)
++                .edit()
++                .putString(keyFile(id), file.name)
++                .putString(keyShape(id), Shape.STICKER.name)
++                .commit()
++        }
+ 
+         fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+ 

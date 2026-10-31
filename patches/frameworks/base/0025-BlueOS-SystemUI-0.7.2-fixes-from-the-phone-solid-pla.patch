@@ -1,0 +1,355 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 27 Oct 2026 16:19:42 +0100
+Subject: [PATCH 25/30] =?UTF-8?q?BlueOS:=20SystemUI:=200.7.2=20fixes=20fro?=
+ =?UTF-8?q?m=20the=20phone=20=E2=80=94=20solid=20player=20card,=20bold=20g?=
+ =?UTF-8?q?reeting,=20lock=20text=20colour=20by=20the=20theme?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Player without a cover: a solid Monet card (the player is drawn over black: a see-through card came out grey or
+black, with or without a blur — measured), the app icon in the card's text colour. Greeting «like the Summary»:
+BOLD as a style (BlueOS's fonts have one weight, 600 did nothing); the date row keeps its weight, the weather in
+the clock's colour. A new palette re-colours «Сэнсэй» and the weather (they kept the old accent).
+«Цвет текста на блокировке» (blueos_lock_text_color): by the theme (default — the dark theme keeps the clock,
+halo, greeting and date light) or by the wallpaper under the clock (0.5–0.7.1). The halo takes the colour the
+digits are really drawn with (they kept the AOD colour, the halo took the lock screen's).
+
+Change-Id: I098cf7d31c683019b7dd799a9e000db195c20245
+---
+ .../shared/clocks/view/FlexClockTextView.kt   | 17 +++++-
+ .../android/keyguard/ClockEventController.kt  | 18 +++++++
+ .../android/keyguard/KeyguardSliceView.java   | 17 +++---
+ .../keyguard/KeyguardSliceViewController.java | 33 ++++++++++--
+ .../systemui/blueos/media/BlueOSMediaGlass.kt | 54 ++++---------------
+ .../ui/animation/ColorSchemeTransition.kt     |  2 +-
+ 6 files changed, 86 insertions(+), 55 deletions(-)
+
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt
+index c0cac99481f5..84f9530c92c2 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt
+@@ -101,12 +101,27 @@ class FlexClockTextView(clockCtx: FlexClockContext, private val isLargeClock: Bo
+         val rx = minutesWidth * HALO_RX_FRACTION
+         val visibility = haloVisibility(this, blueOSHaloAlpha)
+         if (rx <= 0f || visibility <= 0f) return
+-        val digitColor = if (isDozing) aodColor else lockscreenColor
++        // BlueOS 0.7.2: the colour the digits are really drawn with (the text animator's), not lockscreenColor —
++        // after a theme change in AOD the digits kept their light AOD colour while the halo took the dark one
++        val digitColor = drawnDigitColor() ?: if (isDozing) aodColor else lockscreenColor
+         val color = if (haloUsesAccent) haloAccentFor(context, digitColor) else digitColor
+         drawHaloShape(canvas, minutesStart + minutesWidth / 2f, extraTopSpace / 2f, rx, isDozing,
+             haloPaint, haloOval, withVisibility(color, visibility))
+     }
+ 
++    private fun drawnDigitColor(): Int? = runCatching {
++        val interp = textAnimator.textInterpolator
++        val t = textAnimator.progress.coerceIn(0f, 1f)
++        val a = interp.basePaint.color
++        val b = interp.targetPaint.color
++        fun mix(sa: Int, sb: Int) = (sa + (sb - sa) * t).toInt()
++        android.graphics.Color.argb(
++            mix(android.graphics.Color.alpha(a), android.graphics.Color.alpha(b)),
++            mix(android.graphics.Color.red(a), android.graphics.Color.red(b)),
++            mix(android.graphics.Color.green(a), android.graphics.Color.green(b)),
++            mix(android.graphics.Color.blue(a), android.graphics.Color.blue(b)))
++    }.getOrNull()
++
+     override fun updateFontVariations(lsAxes: ClockAxisStyle): FontVariations {
+         // BlueOS Halo: Outfit only has a weight axis, the weights are fixed
+         if (isBlueOSHalo) return fontVariations
+diff --git a/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt b/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt
+index 955596e33fe1..99a1fb61cca0 100644
+--- a/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt
++++ b/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt
+@@ -248,6 +248,7 @@ constructor(
+     private var isCharging = false
+     private var isKeyguardVisible = false
+     private var isRegistered = false
++    private var unobserveBlueOS: (() -> Unit)? = null
+     // BlueOS: always sample the wallpaper under the clock, so the digits are dark on a light
+     // wallpaper even in the dark theme (the flag is unreleased upstream)
+     private val regionSamplingEnabled = true
+@@ -267,6 +268,18 @@ constructor(
+ 
+     private fun updateColors() {
+         val isDarkTheme = isDarkTheme()
++        // BlueOS 0.7.2: «Цвет текста на блокировке» — «По теме» (default): the dark theme keeps the clock (and its
++        // halo) light like stock Android, only the light theme follows the wallpaper under the clock; «По обоям»:
++        // always the wallpaper (0.5–0.7.1: a light wallpaper made everything dark even in the dark theme)
++        if (regionSamplingEnabled && isDarkTheme &&
++            org.blueos.arona.BlueOSSettings.int(context.contentResolver,
++                org.blueos.arona.BlueOSSettings.LOCK_TEXT_COLOR) == 0) {
++            clock?.run {
++                smallClock.updateTheme { it.copy(isDarkTheme = true) }
++                largeClock.updateTheme { it.copy(isDarkTheme = true) }
++            }
++            return
++        }
+         if (regionSamplingEnabled) {
+             clock?.smallClock?.run {
+                 val isDark = smallRegionSampler?.currentRegionDarkness()?.isDark ?: isDarkTheme
+@@ -497,6 +510,9 @@ constructor(
+             IntentFilter(Intent.ACTION_LOCALE_CHANGED),
+         )
+         configurationController.addCallback(configListener)
++        // BlueOS 0.7.2: «Цвет текста на блокировке» applies at once
++        unobserveBlueOS = org.blueos.arona.BlueOSSettings.observe(
++            context, listOf(org.blueos.arona.BlueOSSettings.LOCK_TEXT_COLOR)) { updateColors() }
+         batteryController.addCallback(batteryCallback)
+         keyguardUpdateMonitor.registerCallback(keyguardUpdateMonitorCallback)
+         zenModeController.addCallback(zenModeCallback)
+@@ -525,6 +541,8 @@ constructor(
+ 
+         broadcastDispatcher.unregisterReceiver(localeBroadcastReceiver)
+         configurationController.removeCallback(configListener)
++        unobserveBlueOS?.invoke()
++        unobserveBlueOS = null
+         batteryController.removeCallback(batteryCallback)
+         keyguardUpdateMonitor.removeCallback(keyguardUpdateMonitorCallback)
+         zenModeController.removeCallback(zenModeCallback)
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java
+index e9a03bd95856..41cf603b50a7 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java
+@@ -148,7 +148,9 @@ public class KeyguardSliceView extends LinearLayout {
+             mTitle.setText(text);
+             return;
+         }
+-        mTitle.setTypeface(android.graphics.Typeface.create(mTitleTypeface, 600, false));
++        // BOLD as a style, not a weight: BlueOS's system fonts may have one weight only (600 was ignored), and the
++        // style falls back to a synthesized bold — like the Summary widget's greeting
++        mTitle.setTypeface(android.graphics.Typeface.create(mTitleTypeface, android.graphics.Typeface.BOLD));
+         final SpannableStringBuilder s = new SpannableStringBuilder(text);
+         final String name = mContext.getString(R.string.blueos_sensei);
+         final int at = text.toString().lastIndexOf(name);
+@@ -163,14 +165,12 @@ public class KeyguardSliceView extends LinearLayout {
+         return Uri.parse(KeyguardSliceProvider.KEYGUARD_WEATHER_URI).equals(v.getTag());
+     }
+ 
+-    /** 0.7.2: the date row like the Summary widget — medium weight, the weather in the clock's colour. */
++    /**
++     * 0.7.2: the date row «like the Summary widget» — the weather (icon + temperature) in the clock's colour, the
++     * date as it is (regular, like the Summary's date line). (A weight of 500 did nothing with BlueOS's fonts.)
++     */
+     private void styleRowItem(TextView v, int blendedColor) {
+         final boolean summary = blueOSStyle(org.blueos.arona.BlueOSSettings.LOCK_DATE_STYLE) != 0;
+-        final Object saved = v.getTag(R.id.blueos_slice_typeface);
+-        final android.graphics.Typeface base = saved instanceof android.graphics.Typeface
+-                ? (android.graphics.Typeface) saved : v.getTypeface();
+-        v.setTag(R.id.blueos_slice_typeface, base);
+-        v.setTypeface(summary ? android.graphics.Typeface.create(base, 500, false) : base);
+         v.setTextColor(summary && isWeather(v) ? blueOSAccent() : blendedColor);
+     }
+ 
+@@ -465,6 +465,9 @@ public class KeyguardSliceView extends LinearLayout {
+                 ((KeyguardSliceTextView) child).onOverlayChanged();
+             }
+         }
++        // BlueOS 0.7.2: a new palette (wallpaper, «Яркие цвета») — colour the greeting's «Сэнсэй» and the weather
++        // again: they kept the old palette's accent (and the text appearance above reset the row's colour)
++        updateTextColors();
+     }
+     public void dump(PrintWriter pw, String[] args) {
+         pw.println("KeyguardSliceView:");
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java
+index d8f3a957a729..1d173ffb6191 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java
+@@ -96,8 +96,27 @@ public class KeyguardSliceViewController extends ViewController<KeyguardSliceVie
+         @Override
+         public void onThemeChanged() {
+             mView.onOverlayChanged();
++            applyTextColor();
+         }
+     };
++    private kotlin.jvm.functions.Function0<kotlin.Unit> mUnobserveBlueOS;
++
++    /**
++     * BlueOS 0.7.2: «Цвет текста на блокировке» — «По теме» (default): the dark theme keeps the greeting and the
++     * date light (like the clock, ClockEventController), the light theme follows the wallpaper under them;
++     * «По обоям»: always the wallpaper (0.5–0.7.1: dark on a light wallpaper even in the dark theme).
++     */
++    private void applyTextColor() {
++        if (mRegionSampler == null) return;
++        // the system's dark theme (the lock screen views' own configuration didn't say it — measured on the phone)
++        final boolean dark = (android.content.res.Resources.getSystem().getConfiguration().uiMode
++                & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
++                == android.content.res.Configuration.UI_MODE_NIGHT_YES;
++        final boolean byTheme = org.blueos.arona.BlueOSSettings.getInt(
++                mView.getContext().getContentResolver(),
++                org.blueos.arona.BlueOSSettings.LOCK_TEXT_COLOR) == 0;
++        mView.setTextColor(dark && byTheme ? Color.WHITE : mRegionSampler.currentForegroundColor());
++    }
+ 
+     Observer<Slice> mObserver = new Observer<Slice>() {
+         @Override
+@@ -172,14 +191,18 @@ public class KeyguardSliceViewController extends ViewController<KeyguardSliceVie
+         mConfigurationController.addCallback(mConfigurationListener);
+         mRegionSampler = new RegionSampler(mView, mHandler::post, mBgHandler::post,
+                 true /* regionSamplingEnabled */, true /* isLockscreen */, () -> {
+-                    if (mRegionSampler != null) {
+-                        mView.setTextColor(mRegionSampler.currentForegroundColor());
+-                    }
++                    applyTextColor();
+                     return Unit.INSTANCE;
+                 });
+         mRegionSampler.setForegroundColors(Color.WHITE,
+                 mView.getContext().getColor(android.R.color.system_on_surface_light));
+         mRegionSampler.startRegionSampler();
++        applyTextColor();
++        mUnobserveBlueOS = org.blueos.arona.BlueOSSettings.INSTANCE.observe(mView.getContext(),
++                java.util.List.of(org.blueos.arona.BlueOSSettings.LOCK_TEXT_COLOR), () -> {
++                    applyTextColor();
++                    return Unit.INSTANCE;
++                });
+         mDumpManager.registerNormalDumpable(
+                 TAG + "@" + Integer.toHexString(
+                         KeyguardSliceViewController.this.hashCode()),
+@@ -197,6 +220,10 @@ public class KeyguardSliceViewController extends ViewController<KeyguardSliceVie
+             mRegionSampler.stopRegionSampler();
+             mRegionSampler = null;
+         }
++        if (mUnobserveBlueOS != null) {
++            mUnobserveBlueOS.invoke();
++            mUnobserveBlueOS = null;
++        }
+         mDumpManager.unregisterDumpable(
+                 TAG + "@" + Integer.toHexString(
+                         KeyguardSliceViewController.this.hashCode()));
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/media/BlueOSMediaGlass.kt b/packages/SystemUI/src/com/android/systemui/blueos/media/BlueOSMediaGlass.kt
+index e00607b3c8f8..19c4f042a41b 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/media/BlueOSMediaGlass.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/media/BlueOSMediaGlass.kt
+@@ -6,20 +6,20 @@ import android.content.res.Configuration
+ import android.graphics.Color
+ import android.graphics.drawable.Drawable
+ import android.graphics.drawable.GradientDrawable
+-import android.graphics.drawable.LayerDrawable
+ import android.view.View
+ import android.widget.ImageView
+-import android.widget.TextView
+ import com.android.systemui.media.controls.ui.view.MediaViewHolder
+ import com.android.systemui.res.R
+ import java.util.WeakHashMap
+ import org.blueos.arona.BlueOSSettings as K
+ 
+ /**
+- * BlueOS 0.7.2: a track without a cover gets the home widgets' glass — the wallpaper blurred under the card,
+- * a see-through card of the Monet surface colour (the widgets' transparency slider), a thin edge, text and
+- * buttons in the system palette. Before, Android took the colours of the app's icon, and the near-black icon of
+- * «Музыка» made a black player. With a cover nothing changes (the cover and its colours, as before).
++ * BlueOS 0.7.2: a track without a cover gets a card like the home widgets — the Monet surface colour, a thin
++ * edge, text and buttons in the system palette (light theme: a light card, dark text; dark theme: the opposite).
++ * Before, Android took the colours of the app's icon, and the near-black icon of «Музыка» made a black player.
++ * With a cover nothing changes (the cover and its colours, as before).
++ * The card is solid: the player is drawn over black (measured on the phone, lock screen and shade alike: #000000
++ * under a fully transparent card, with or without a blur), so a see-through card only came out grey / black.
+  */
+ object BlueOSMediaGlass {
+     class Colors(
+@@ -35,12 +35,11 @@ object BlueOSMediaGlass {
+     fun colors(c: Context): Colors {
+         val d = dark(c)
+         fun col(light: Int, dark: Int) = c.getColor(if (d) dark else light)
+-        val opacity = 1f - K.int(c.contentResolver, K.WIDGET_TRANSPARENCY).coerceIn(0, 100) / 100f
+         val card = col(android.R.color.system_surface_container_light, android.R.color.system_surface_container_dark)
+         val onS = col(android.R.color.system_on_surface_light, android.R.color.system_on_surface_dark)
+         val onSV = col(android.R.color.system_on_surface_variant_light, android.R.color.system_on_surface_variant_dark)
+         return Colors(
+-            fill = alpha(card, 0.65f * opacity),                     // = the widgets' glass
++            fill = card,
+             edge = alpha(onS, 0.16f),
+             fg = onS, fg2 = onSV,
+             primary = col(android.R.color.system_primary_light, android.R.color.system_primary_dark),
+@@ -56,7 +55,7 @@ object BlueOSMediaGlass {
+     private class Original(
+         val title: ColorStateList?, val artist: ColorStateList?, val elapsed: ColorStateList?, val total: ColorStateList?,
+         val actions: List<ColorStateList?>, val progress: ColorStateList?, val thumb: ColorStateList?,
+-        val playerBg: Drawable?, val albumFg: Drawable?,
++        val albumFg: Drawable?,
+     )
+     private val originals = WeakHashMap<View, Original>()
+ 
+@@ -65,7 +64,7 @@ object BlueOSMediaGlass {
+ 
+     /**
+      * Dresses the player for [g] (a track without a cover) or gives back its own look (null). Called on the main
+-     * thread after the colour scheme was updated; the blur needs the window, so it waits for the attach.
++     * thread after the colour scheme was updated (the card itself is the album view's tint, ColorSchemeTransition).
+      */
+     @JvmStatic
+     fun apply(h: MediaViewHolder, g: Colors?) {
+@@ -77,7 +76,6 @@ object BlueOSMediaGlass {
+             actions(h).forEachIndexed { i, b -> b.imageTintList = o.actions[i] }
+             h.seekBar.progressTintList = o.progress
+             h.seekBar.thumbTintList = o.thumb
+-            player.background = o.playerBg
+             h.albumView.foreground = o.albumFg
+             return
+         }
+@@ -86,7 +84,7 @@ object BlueOSMediaGlass {
+                 h.titleText.textColors, h.artistText.textColors,
+                 h.scrubbingElapsedTimeView.textColors, h.scrubbingTotalTimeView.textColors,
+                 actions(h).map { it.imageTintList }, h.seekBar.progressTintList, h.seekBar.thumbTintList,
+-                player.background, h.albumView.foreground)
++                h.albumView.foreground)
+         }
+         val c = player.context
+         h.titleText.setTextColor(g.fg)
+@@ -99,40 +97,10 @@ object BlueOSMediaGlass {
+         actions(h).forEach { it.imageTintList = buttons }
+         h.seekBar.progressTintList = ColorStateList.valueOf(g.primary)
+         h.seekBar.thumbTintList = ColorStateList.valueOf(g.primary)
+-        val r = c.resources.getDimension(R.dimen.notification_corner_radius)
+         h.albumView.foreground = GradientDrawable().apply {
+-            cornerRadius = r
++            cornerRadius = c.resources.getDimension(R.dimen.notification_corner_radius)
+             setColor(Color.TRANSPARENT)
+             setStroke(c.resources.displayMetrics.density.toInt().coerceAtLeast(1), g.edge)
+         }
+-        val base = originals[player]?.playerBg
+-        fun blur() {
+-            val d = blurDrawable(player, r) ?: return
+-            player.background = if (base == null) d else LayerDrawable(arrayOf(d, base))
+-        }
+-        if (player.isAttachedToWindow) blur()
+-        else player.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+-            override fun onViewAttachedToWindow(v: View) {
+-                v.removeOnAttachStateChangeListener(this)
+-                if (originals.containsKey(v)) blur()
+-            }
+-            override fun onViewDetachedFromWindow(v: View) {}
+-        })
+-    }
+-
+-    /** The widgets' blur: «Размытие под виджетами», glass always a little (BlueOSMaterial.blurRadius). */
+-    private fun blurDrawable(view: View, cornerRadius: Float): Drawable? {
+-        val c = view.context
+-        val p = maxOf(K.int(c.contentResolver, K.WIDGET_BLUR).coerceIn(0, 100), 15)
+-        val radius = (p / 100f * 50f * c.resources.displayMetrics.density).toInt()
+-        return try {
+-            view.viewRootImpl?.createBackgroundBlurDrawable()?.apply {
+-                setBlurRadius(radius)
+-                setCornerRadius(cornerRadius)
+-                setColor(Color.TRANSPARENT)
+-            }
+-        } catch (t: Throwable) {
+-            null
+-        }
+     }
+ }
+diff --git a/packages/SystemUI/src/com/android/systemui/media/controls/ui/animation/ColorSchemeTransition.kt b/packages/SystemUI/src/com/android/systemui/media/controls/ui/animation/ColorSchemeTransition.kt
+index e27ec45ff21e..797e9d3cbb95 100644
+--- a/packages/SystemUI/src/com/android/systemui/media/controls/ui/animation/ColorSchemeTransition.kt
++++ b/packages/SystemUI/src/com/android/systemui/media/controls/ui/animation/ColorSchemeTransition.kt
+@@ -189,7 +189,7 @@ internal constructor(
+     }
+ 
+     fun getAppIconColor(): Int {
+-        return primaryColor.targetColor
++        return blueOSGlass?.fg ?: primaryColor.targetColor           // BlueOS 0.7.2: the glass card's text colour
+     }
+ 
+     fun getSurfaceEffectColor(): Int {

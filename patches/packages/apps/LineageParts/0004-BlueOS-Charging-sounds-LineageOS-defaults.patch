@@ -1,0 +1,57 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Fri, 30 Oct 2026 22:08:22 +0100
+Subject: [PATCH 4/4] BlueOS: Charging sounds: LineageOS defaults
+
+Plug-in, wireless, unplug and low battery default to LineageOS' own sounds
+(unplug = the plug-in sound, as in LineageOS), a full battery to silent.
+The game's sounds stay in the picker.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: Iaaeff0b9569f8e134c619725e9f1bae9ffd1f01a
+---
+ .../sounds/ChargingSoundsSettings.java           | 16 +++++++++-------
+ 1 file changed, 9 insertions(+), 7 deletions(-)
+
+diff --git a/src/org/lineageos/lineageparts/sounds/ChargingSoundsSettings.java b/src/org/lineageos/lineageparts/sounds/ChargingSoundsSettings.java
+index 614712b..1d5fa6a 100644
+--- a/src/org/lineageos/lineageparts/sounds/ChargingSoundsSettings.java
++++ b/src/org/lineageos/lineageparts/sounds/ChargingSoundsSettings.java
+@@ -43,7 +43,7 @@ public class ChargingSoundsSettings
+     // Used for power notification uri string if set to silent
+     private static final String RINGTONE_SILENT_URI_STRING = "silent";
+ 
+-    private static final String BLUEOS_SOUNDS = "/product/media/audio/notifications/";
++    private static final String STOCK_SOUNDS = "/product/media/audio/ui/";
+ 
+     /** BlueOS: one picker per event (plug, wireless, unplug, battery full, low battery). */
+     private static final class Sound {
+@@ -62,20 +62,22 @@ public class ChargingSoundsSettings
+         }
+     }
+ 
++    // Defaults = LineageOS' own sounds (the user, 2026-10-30); the game's are in the picker
+     private final Sound[] mSounds = {
+             new Sound("charging_sounds", Settings.Global.CHARGING_STARTED_SOUND,
+-                    BLUEOS_SOUNDS + "Emoticon_Surprise.ogg", R.string.wired_charging_sounds_title),
++                    STOCK_SOUNDS + "ChargingStarted.ogg", R.string.wired_charging_sounds_title),
+             new Sound(KEY_WIRELESS_CHARGING_SOUNDS, Settings.Global.WIRELESS_CHARGING_STARTED_SOUND,
+-                    BLUEOS_SOUNDS + "Emoticon_Surprise.ogg",
++                    STOCK_SOUNDS + "WirelessChargingStarted.ogg",
+                     R.string.wireless_charging_sounds_title),
+-            // Settings.Global keys read by frameworks/base power/Notifier.java (BlueOS patch)
++            // Settings.Global keys read by frameworks/base power/Notifier.java (BlueOS patch);
++            // unplugging plays the plug-in sound as in LineageOS, a full battery is silent
+             new Sound("blueos_charging_stopped_sound", "blueos_charging_stopped_sound",
+-                    BLUEOS_SOUNDS + "Emoticon_Sweat.ogg",
++                    STOCK_SOUNDS + "ChargingStarted.ogg",
+                     R.string.blueos_charging_stopped_sound_title),
+             new Sound("blueos_battery_full_sound", "blueos_battery_full_sound",
+-                    BLUEOS_SOUNDS + "Emoticon_Steam.ogg", R.string.blueos_battery_full_sound_title),
++                    RINGTONE_SILENT_URI_STRING, R.string.blueos_battery_full_sound_title),
+             new Sound("blueos_low_battery_sound", Settings.Global.LOW_BATTERY_SOUND,
+-                    BLUEOS_SOUNDS + "Emoticon_Zzz.ogg", R.string.blueos_low_battery_sound_title),
++                    STOCK_SOUNDS + "LowBattery.ogg", R.string.blueos_low_battery_sound_title),
+     };
+ 
+     private Sound mPicking;

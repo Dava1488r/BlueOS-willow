@@ -1,0 +1,26 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sat, 24 Oct 2026 12:58:27 +0200
+Subject: [PATCH 1/4] BlueOS: Hide Contributors from About phone
+
+The contributors cloud is drawn in the shape of the LineageOS logo. Credit stays in the legal info.
+
+Change-Id: I3167fd29774d5d02ebfad16b6169919d9f2b8856
+---
+ AndroidManifest.xml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/AndroidManifest.xml b/AndroidManifest.xml
+index 67dd1f9..250c3e9 100644
+--- a/AndroidManifest.xml
++++ b/AndroidManifest.xml
+@@ -302,8 +302,8 @@
+             android:exported="true"
+             android:label="@string/contributors_cloud_fragment_title"
+             android:targetActivity="PartsActivity">
++            <!-- BlueOS: not shown in About phone (no IA_SETTINGS action) -->
+             <intent-filter>
+-                <action android:name="com.android.settings.action.IA_SETTINGS" />
+                 <action android:name="org.lineageos.lineageparts.CONTRIBUTORS_CLOUD" />
+                 <category android:name="android.intent.category.DEFAULT" />
+             </intent-filter>

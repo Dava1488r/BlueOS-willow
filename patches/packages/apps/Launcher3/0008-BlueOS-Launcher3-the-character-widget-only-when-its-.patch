@@ -1,0 +1,85 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Fri, 30 Oct 2026 11:59:16 +0100
+Subject: [PATCH 8/9] BlueOS: Launcher3: the character widget only when its
+ files are there
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+A public build has no character models (vendor/blueos/ASSETS.md): a custom
+widget can say it isn't available (CustomWidget.isAvailable) — it isn't in
+the widget picker, and the default layout leaves its place empty.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: I389a647d5faa9b2aaa67fe454607e3bf929a1cde
+---
+ src/com/android/launcher3/AutoInstallsLayout.java          | 2 ++
+ src/com/android/launcher3/blueos/BlueOSAronaWidget.kt      | 3 +++
+ src/com/android/launcher3/widget/custom/CustomWidget.kt    | 6 ++++++
+ .../launcher3/widget/custom/CustomWidgetManager.java       | 7 ++++++-
+ 4 files changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/src/com/android/launcher3/AutoInstallsLayout.java b/src/com/android/launcher3/AutoInstallsLayout.java
+index 3fe32678dd..621f872a43 100644
+--- a/src/com/android/launcher3/AutoInstallsLayout.java
++++ b/src/com/android/launcher3/AutoInstallsLayout.java
+@@ -505,6 +505,8 @@ public class AutoInstallsLayout {
+             // BlueOS 0.8: the launcher's own widgets («Погода», «Арона»: packageName="custom-widget",
+             // className = the widget's id) in the default layout, stored like the widget picker does
+             if (CUSTOM_WIDGET_PACKAGE.equals(cn.getPackageName())) {
++                // not in this build (the character widget without the game's files): leave the place empty
++                if (!CustomWidgetManager.INSTANCE.get(mContext).hasWidget(cn)) return -1;
+                 mValues.put(Favorites.SPANX, element.get(ATTR_SPAN_X));
+                 mValues.put(Favorites.SPANY, element.get(ATTR_SPAN_Y));
+                 mValues.put(Favorites.ITEM_TYPE, Favorites.ITEM_TYPE_CUSTOM_APPWIDGET);
+diff --git a/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt b/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt
+index 19592967d0..358870a362 100644
+--- a/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt
++++ b/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt
+@@ -62,6 +62,9 @@ object BlueOSAronaWidget : CustomWidget {
+     override fun createView(context: Context, info: LauncherAppWidgetProviderInfo): AppWidgetHostView =
+         BlueOSAronaWidgetView(context)
+ 
++    /** 0.8: a build without the game's files (public sources) has no character to show. */
++    override fun isAvailable(context: Context): Boolean = Character.anyAvailable
++
+     /**
+      * 0.8: the picker's preview — the chosen one (Arona or Plana) in her idle pose on the card, her name and a line
+      * of the time of day. Her model loads on its own thread; until then (≤ 5 s) this waits.
+diff --git a/src/com/android/launcher3/widget/custom/CustomWidget.kt b/src/com/android/launcher3/widget/custom/CustomWidget.kt
+index d2a6ab5a99..2468dd0b46 100644
+--- a/src/com/android/launcher3/widget/custom/CustomWidget.kt
++++ b/src/com/android/launcher3/widget/custom/CustomWidget.kt
+@@ -36,4 +36,10 @@ interface CustomWidget {
+      * (it may hop to the main thread itself); null = the stock placeholder.
+      */
+     fun preview(context: Context, width: Int, height: Int): android.graphics.Bitmap? = null
++
++    /**
++     * BlueOS 0.8: false = this build can't show it (the character widget without the game's files in a public
++     * build): it isn't offered in the widget picker and the default layout leaves it out.
++     */
++    fun isAvailable(context: Context): Boolean = true
+ }
+diff --git a/src/com/android/launcher3/widget/custom/CustomWidgetManager.java b/src/com/android/launcher3/widget/custom/CustomWidgetManager.java
+index 65e0b981e6..e8383a3645 100644
+--- a/src/com/android/launcher3/widget/custom/CustomWidgetManager.java
++++ b/src/com/android/launcher3/widget/custom/CustomWidgetManager.java
+@@ -85,10 +85,15 @@ public class CustomWidgetManager implements PluginListener<CustomWidgetPlugin> {
+         tracker.addCloseable(() -> pluginManager.removePluginListener(this));
+ 
+         for (CustomWidget w : customWidgetSet) {
+-            onCustomWidgetAdded(w);
++            if (w.isAvailable(context)) onCustomWidgetAdded(w);
+         }
+     }
+ 
++    /** BlueOS 0.8: [cn] is a custom widget this build has (the default layout skips the others). */
++    public boolean hasWidget(ComponentName cn) {
++        return mWidgets.containsKey(cn);
++    }
++
+     private void onCustomWidgetAdded(CustomWidget widget) {
+         CustomAppWidgetProviderInfo info = getAndAddInfo(
+                 new ComponentName(CUSTOM_WIDGET_PACKAGE, widget.getId()));

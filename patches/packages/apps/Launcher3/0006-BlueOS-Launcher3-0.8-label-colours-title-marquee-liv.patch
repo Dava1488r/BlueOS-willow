@@ -1,0 +1,458 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Thu, 29 Oct 2026 18:11:23 +0100
+Subject: [PATCH 6/9] BlueOS: Launcher3: 0.8 label colours, title marquee, live
+ weather icon in place, notes over the album art, icon plates exactly like the
+ widgets
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Label colour roles (by the wallpaper / white / pill); a cut track title runs as a marquee overlay; the live weather icon is laid out by hand (it stayed 0x0 after a theme switch) and follows the widget's tint; the rising notes start from the album art too (they showed only over the placeholder); «Точно как у виджетов»: the wallpaper blurred under home screen icon plates; the Arona widget shows her own name and «За партой».
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: I040f7a357d0eed5b064cad4958b7f025c954a8d9
+---
+ res/values-ru/blueos_strings.xml              |  9 +-
+ res/values/blueos_strings.xml                 |  6 ++
+ src/com/android/launcher3/BubbleTextView.java | 19 +++-
+ src/com/android/launcher3/Launcher.java       | 11 +++
+ .../launcher3/blueos/BlueOSAronaWidget.kt     |  4 +-
+ .../android/launcher3/blueos/BlueOSIcons.kt   | 43 ++++++++-
+ .../launcher3/blueos/BlueOSWeatherWidget.kt   | 11 ++-
+ .../launcher3/blueos/BlueOSWidgetDecorator.kt | 95 +++++++++++++++++--
+ src/com/android/launcher3/util/Themes.java    |  7 +-
+ 9 files changed, 189 insertions(+), 16 deletions(-)
+
+diff --git a/res/values-ru/blueos_strings.xml b/res/values-ru/blueos_strings.xml
+index 37e362ade3..1d527d1a20 100644
+--- a/res/values-ru/blueos_strings.xml
++++ b/res/values-ru/blueos_strings.xml
+@@ -1,6 +1,8 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources>
+     <string name="blueos_widget_arona">Арона</string>
++    <!-- 0.8: the widget's name in the widget list (Arona or Plana inside) -->
++    <string name="blueos_widget_character">Персонаж</string>
+     <string name="blueos_widget_weather">Погода</string>
+     <string name="blueos_arona_waiting">Ждёт тебя</string>
+     <string name="blueos_arona_listening">Слушает ♪</string>
+@@ -14,6 +16,10 @@
+     <string name="blueos_weather_rain">Дождь</string>
+     <string name="blueos_weather_snow">Снег</string>
+     <string name="blueos_weather_storm">Гроза</string>
++    <!-- 0.8: WMO 2 is not «Облачно» -->
++    <string name="blueos_weather_partly">Малооблачно</string>
++    <string name="blueos_weather_overcast">Пасмурно</string>
++    <string name="blueos_weather_fog">Туман</string>
+     <!-- 0.7.1: «Разные фразы» of the Arona widget, "status|hint", change every 20 min -->
+     <string-array name="blueos_arona_phr_morning">
+         <item>Доброе утро!|завтрак — это важно</item>
+@@ -43,7 +49,8 @@
+     </string-array>
+     <!-- BlueOS 0.7.2 -->
+     <string name="blueos_widget_plana">Плана</string>
+-    <string name="blueos_arona_desk">Сидит на парте</string>
++    <!-- short: at the desk the text has ~100 dp beside it -->
++    <string name="blueos_arona_desk">За партой</string>
+     <string name="blueos_arona_desk_hint">болтает ногами</string>
+     <string-array name="blueos_plana_phr_morning">
+         <item>Доброе утро, Сэнсэй|система в норме</item>
+diff --git a/res/values/blueos_strings.xml b/res/values/blueos_strings.xml
+index afde364abc..da9d1d345d 100644
+--- a/res/values/blueos_strings.xml
++++ b/res/values/blueos_strings.xml
+@@ -2,6 +2,8 @@
+ <!-- BlueOS 0.7: the launcher's own widgets (Arona, Weather) and the live widget layer -->
+ <resources>
+     <string name="blueos_widget_arona">Arona</string>
++    <!-- 0.8: the widget's name in the widget list (Arona or Plana inside) -->
++    <string name="blueos_widget_character">Character</string>
+     <string name="blueos_widget_weather">Weather</string>
+     <string name="blueos_arona_waiting">Waiting for you</string>
+     <string name="blueos_arona_listening">Listening ♪</string>
+@@ -15,6 +17,10 @@
+     <string name="blueos_weather_rain">Rain</string>
+     <string name="blueos_weather_snow">Snow</string>
+     <string name="blueos_weather_storm">Thunderstorm</string>
++    <!-- 0.8: WMO 2 is not «Cloudy» -->
++    <string name="blueos_weather_partly">Partly cloudy</string>
++    <string name="blueos_weather_overcast">Overcast</string>
++    <string name="blueos_weather_fog">Fog</string>
+     <item type="id" name="blueos_original_bg" />
+     <item type="id" name="blueos_decorator" />
+     <item type="id" name="blueos_applied_material" />
+diff --git a/src/com/android/launcher3/BubbleTextView.java b/src/com/android/launcher3/BubbleTextView.java
+index 81bd9abc1c..17875b6af2 100644
+--- a/src/com/android/launcher3/BubbleTextView.java
++++ b/src/com/android/launcher3/BubbleTextView.java
+@@ -182,6 +182,7 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
+     private final MultiTranslateDelegate mTranslateDelegate = new MultiTranslateDelegate(this);
+     protected final ActivityContext mActivity;
+     private FastBitmapDrawable mIcon;
++    private final Rect mBlueOSPlate = new Rect();
+     private DeviceProfile mDeviceProfile;
+     private boolean mCenterVertically;
+ 
+@@ -948,6 +949,15 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
+     public void onDraw(Canvas canvas) {
+         drawSelectedBackgroundIfNecessary(canvas);
+ 
++        // BlueOS 0.8: «Подложка значков: Точно как у виджетов» — the wallpaper blurred under the plate, as under the
++        // widget cards (the plate is the icon bounds scaled like the shape in ThemedIconDelegate)
++        if (mDisplay == DISPLAY_WORKSPACE && mIsIconVisible && mIcon != null && mIcon.isThemed()) {
++            getIconBounds(mBlueOSPlate);
++            Utilities.scaleRectAboutCenter(mBlueOSPlate, ICON_VISIBLE_AREA_FACTOR);
++            mBlueOSPlate.offset(getScrollX(), getScrollY());
++            com.android.launcher3.blueos.BlueOSIcons.drawBlur(this, canvas, mBlueOSPlate);
++        }
++
+         super.onDraw(canvas);
+         drawDotIfNecessary(canvas);
+         drawRunningAppIndicatorIfNecessary(canvas);
+@@ -1244,8 +1254,13 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
+                 // mTextAlpha could be null if setTextColor is called before BubbleTextView is
+                 // initialized.
+                 && (mTextAlpha == null || Float.compare(mTextAlpha.value, 1f) == 0)
+-                && PillColorProvider.getInstance(getContext()).isMatchaEnabled()
+-                && enableContrastTiles();
++                && ((PillColorProvider.getInstance(getContext()).isMatchaEnabled()
++                        && enableContrastTiles())
++                        // BlueOS 0.8: «Подписи под значками: Подложка» (Обои и стиль → Цвета) —
++                        // the same Material pill as Android's high-contrast labels
++                        || org.blueos.arona.BlueOSSettings.getInt(getContext().getContentResolver(),
++                                org.blueos.arona.BlueOSSettings.COLOR_LABELS)
++                                == org.blueos.arona.BlueOSColorRoles.LABELS_PILL);
+     }
+ 
+     private int getModifiedColor() {
+diff --git a/src/com/android/launcher3/Launcher.java b/src/com/android/launcher3/Launcher.java
+index 9d3341aa30..725f97b43c 100644
+--- a/src/com/android/launcher3/Launcher.java
++++ b/src/com/android/launcher3/Launcher.java
+@@ -394,6 +394,7 @@ public class Launcher extends StatefulActivity<LauncherState>
+     private boolean mIsNaturalScrollingEnabled;
+ 
+     private @Nullable SafeCloseable mNaturalScrollingChangedSafeCloseable;
++    private @Nullable kotlin.jvm.functions.Function0<kotlin.Unit> mUnobserveBlueOSLabels;
+ 
+     private StartupLatencyLogger mStartupLatencyLogger;
+ 
+@@ -496,6 +497,12 @@ public class Launcher extends StatefulActivity<LauncherState>
+ 
+         // Listen for screen turning off
+         ScreenOnTracker.INSTANCE.get(this).addListener(mScreenOnListener);
++        // BlueOS 0.8: «Подписи под значками» lives in the activity theme (dark text or not): apply it at once
++        mUnobserveBlueOSLabels = org.blueos.arona.BlueOSSettings.INSTANCE.observe(this,
++                java.util.List.of(org.blueos.arona.BlueOSSettings.COLOR_LABELS), () -> {
++                    recreate();
++                    return kotlin.Unit.INSTANCE;
++                });
+         getSystemUiController().updateUiState(SystemUiController.UI_STATE_BASE_WINDOW,
+                 Themes.getAttrBoolean(this, R.attr.isWorkspaceDarkText));
+ 
+@@ -1586,6 +1593,10 @@ public class Launcher extends StatefulActivity<LauncherState>
+             mNaturalScrollingChangedSafeCloseable = null;
+         }
+         ScreenOnTracker.INSTANCE.get(this).removeListener(mScreenOnListener);
++        if (mUnobserveBlueOSLabels != null) {
++            mUnobserveBlueOSLabels.invoke();
++            mUnobserveBlueOSLabels = null;
++        }
+ 
+         mModel.removeCallbacks(modelCallbacks);
+         mRotationHelper.destroy();
+diff --git a/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt b/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt
+index a1e77bdb11..b6f6be2208 100644
+--- a/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt
++++ b/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt
+@@ -41,7 +41,8 @@ object BlueOSAronaWidget : CustomWidget {
+     override val id: String = "blueos-arona"
+ 
+     override fun updateWidgetInfo(context: Context, info: LauncherAppWidgetProviderInfo) {
+-        info.label = context.getString(R.string.blueos_widget_arona)
++        // the picker's name is generic (Arona or Plana); inside, the widget shows the chosen one's own name
++        info.label = context.getString(R.string.blueos_widget_character)
+         info.widgetFeatures = 0
+         info.configure = null
+         // the info is cloned from another provider: drop its previews
+@@ -97,6 +98,7 @@ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(contex
+         setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
+         typeface = Typeface.create(if (bold) "google-sans-text-medium" else "google-sans-text", if (bold) Typeface.BOLD else Typeface.NORMAL)
+         maxLines = 2
++        ellipsize = android.text.TextUtils.TruncateAt.END          // a cut word shows «…», never vanishes
+     }
+ 
+     init {
+diff --git a/src/com/android/launcher3/blueos/BlueOSIcons.kt b/src/com/android/launcher3/blueos/BlueOSIcons.kt
+index f9d558789a..8f46820b2d 100644
+--- a/src/com/android/launcher3/blueos/BlueOSIcons.kt
++++ b/src/com/android/launcher3/blueos/BlueOSIcons.kt
+@@ -1,6 +1,10 @@
+ package com.android.launcher3.blueos
+ 
+ import android.content.Context
++import android.graphics.Canvas
++import android.graphics.Rect
++import android.graphics.drawable.Drawable
++import android.view.View
+ import java.util.Locale
+ import org.blueos.arona.BlueOSSettings as K
+ 
+@@ -25,7 +29,12 @@ object BlueOSIcons {
+     /** The icon mask to use, or null to keep the picked shape. */
+     fun mask(context: Context): String? = roundness(context).let { if (it >= 100) null else roundedPath(it) }
+ 
+-    val KEYS = listOf(K.ICON_ROUNDNESS, K.ICON_MATERIAL, K.WIDGET_MATERIAL, K.ICON_TRANSPARENCY)
++    val KEYS = listOf(K.ICON_ROUNDNESS, K.ICON_MATERIAL, K.WIDGET_MATERIAL, K.ICON_TRANSPARENCY, K.COLOR_ICONS,
++        K.WIDGET_TRANSPARENCY, K.WIDGET_BLUR)
++
++    /** 0.8 «Точно как у виджетов» (-2): the blur radius in px under the plates, 0 = none; the corner as a part of the plate. */
++    @Volatile private var blurPx = 0f
++    @Volatile private var cornerPart = 0.5f
+ 
+     /**
+      * The plate the icons really use: their own material or the widgets' («как у виджетов», -1), and its
+@@ -34,6 +43,36 @@ object BlueOSIcons {
+     fun plate(context: Context): String {
+         val cr = context.contentResolver
+         val m = K.int(cr, K.ICON_MATERIAL)
+-        return "${if (m == -1) K.int(cr, K.WIDGET_MATERIAL) else m}/${K.int(cr, K.ICON_TRANSPARENCY)}"
++        // 0.8: «Точно как у виджетов»: their material, transparency and blur (ThemedIconDelegate makes the colour)
++        if (m == -2) {
++            val wm = K.int(cr, K.WIDGET_MATERIAL)
++            blurPx = if (wm == 2) 0f else BlueOSMaterial.blurRadius(context, wm)
++            cornerPart = roundness(context) / 200f
++            return "exact/$wm/${K.int(cr, K.WIDGET_TRANSPARENCY)}/${K.int(cr, K.WIDGET_BLUR)}/${K.int(cr, K.COLOR_ICONS)}"
++        }
++        blurPx = 0f
++        // 0.8: and the glyph's role («Цвет значков» in «Цвета»)
++        return "${if (m == -1) K.int(cr, K.WIDGET_MATERIAL) else m}/${K.int(cr, K.ICON_TRANSPARENCY)}/${K.int(cr, K.COLOR_ICONS)}"
++    }
++
++    private val blurs = java.util.WeakHashMap<View, Pair<String, Drawable>>()
++
++    /**
++     * 0.8: the wallpaper blurred under a home screen icon's plate [plate] (in [v]'s coordinates), like under the widget
++     * cards — drawn by BubbleTextView before the icon. Only on a hardware canvas: a software one (a drag preview) can't.
++     */
++    @JvmStatic
++    fun drawBlur(v: View, canvas: Canvas, plate: Rect) {
++        val r = blurPx
++        if (r < 1f || !canvas.isHardwareAccelerated || !v.isAttachedToWindow || plate.isEmpty) return
++        val corner = plate.width() * cornerPart
++        val key = "$r/$corner"
++        var e = blurs[v]
++        if (e == null || e.first != key) {
++            e = key to (BlueOSMaterial.blur(v, corner, r) ?: return)
++            blurs[v] = e
++        }
++        e.second.bounds = plate
++        e.second.draw(canvas)
+     }
+ }
+diff --git a/src/com/android/launcher3/blueos/BlueOSWeatherWidget.kt b/src/com/android/launcher3/blueos/BlueOSWeatherWidget.kt
+index 3f851885db..a3df0cfd1a 100644
+--- a/src/com/android/launcher3/blueos/BlueOSWeatherWidget.kt
++++ b/src/com/android/launcher3/blueos/BlueOSWeatherWidget.kt
+@@ -110,7 +110,8 @@ class BlueOSWeatherWidgetView(context: Context) : LauncherAppWidgetHostView(cont
+         val variant = BlueOSColors.onSurfaceVariant(context)
+         // one accent, like «Дата»: the big value
+         big.setTextColor(BlueOSColors.primary(context)); name.setTextColor(onS); hiLo.setTextColor(variant); feels.setTextColor(variant)
+-        icon.color = onS
++        // 0.8: the big icon like the captions — on_surface (text) made a near-black blob in the light theme
++        icon.color = variant
+         icon.live = K.on(cr, K.LIVE_WIDGETS) && K.on(cr, K.WEATHER_LIVE)
+         val w = Weather.read(cr)
+         if (w == null) {
+@@ -121,7 +122,13 @@ class BlueOSWeatherWidgetView(context: Context) : LauncherAppWidgetHostView(cont
+         big.text = Weather.format(cr, w.temp)
+         name.setText(when (w.kind) {
+             Weather.Kind.CLEAR -> R.string.blueos_weather_clear
+-            Weather.Kind.CLOUDY -> R.string.blueos_weather_cloudy
++            // 0.8: by the WMO code — 2 is «малооблачно», 3 «пасмурно»
++            Weather.Kind.CLOUDY -> when (w.code) {
++                2 -> R.string.blueos_weather_partly
++                3 -> R.string.blueos_weather_overcast
++                45, 48 -> R.string.blueos_weather_fog
++                else -> R.string.blueos_weather_cloudy
++            }
+             Weather.Kind.RAIN -> R.string.blueos_weather_rain
+             Weather.Kind.SNOW -> R.string.blueos_weather_snow
+             Weather.Kind.STORM -> R.string.blueos_weather_storm
+diff --git a/src/com/android/launcher3/blueos/BlueOSWidgetDecorator.kt b/src/com/android/launcher3/blueos/BlueOSWidgetDecorator.kt
+index 64bd5cd039..86e3f75ad5 100644
+--- a/src/com/android/launcher3/blueos/BlueOSWidgetDecorator.kt
++++ b/src/com/android/launcher3/blueos/BlueOSWidgetDecorator.kt
+@@ -111,7 +111,7 @@ object BlueOSMaterial {
+     }
+ 
+     /** Cross-window blur of what is behind the launcher window (the wallpaper); null if unavailable. */
+-    private fun blur(view: View, r: Float, radiusPx: Float): Drawable? = try {
++    fun blur(view: View, r: Float, radiusPx: Float): Drawable? = try {
+         val root = View::class.java.getMethod("getViewRootImpl").invoke(view) ?: return null
+         val d = root.javaClass.getMethod("createBackgroundBlurDrawable").invoke(root) as Drawable
+         d.javaClass.getMethod("setBlurRadius", Int::class.javaPrimitiveType).invoke(d, radiusPx.toInt())
+@@ -147,8 +147,11 @@ class BlueOSWidgetDecorator(private val host: AppWidgetHostView) : Choreographer
+     private var halo: ImageView? = null
+     private var play: View? = null
+     private var note: View? = null
++    private var art: View? = null
+     private var toggles = listOf<View>()
+     private val weatherIcons = mutableListOf<Pair<View, WeatherIconView>>()
++    /** 0.8: track titles too long for the widget → our marquee copy over the hidden original. */
++    private val titles = mutableListOf<Pair<TextView, TextView>>()
+     private var deskClock = false
+ 
+     private var haloSwingA = 0f
+@@ -197,12 +200,68 @@ class BlueOSWidgetDecorator(private val host: AppWidgetHostView) : Choreographer
+         halo = find("blueos_halo")
+         play = find("blueos_media_play_pause")
+         note = find("blueos_media_placeholder")
++        art = find("blueos_media_art")
+         toggles = listOf("blueos_toggle_flashlight", "blueos_toggle_dnd", "blueos_toggle_rotate", "blueos_toggle_dark", "blueos_toggle_saver").mapNotNull { find<View>(it) }
+         applyMaterial()
+         attachWeatherIcons()
++        marquee()
+         updateRunning()
+     }
+ 
++    /**
++     * 0.8: a track title too long for its lines runs as a marquee (with «Живые виджеты»). A widget can't do it
++     * itself — a TextView scrolls only while selected (no RemoteViews call), and the music widget re-sets its text
++     * every 3 s for the progress bar, which restarts a marquee from the start. So, like the live weather icons, the
++     * launcher lays its own one-line TextView over the hidden title and changes its text only when the track
++     * changes. Titles that fit (or the idle line) stay the widget's own; without live widgets: «…» as before.
++     */
++    private fun marquee() {
++        val srcs = if (live()) findAll("blueos_media_title").filterIsInstance<TextView>() else emptyList()
++        // keep the overlays of titles that are still there: this runs after every widget update (every 3 s while
++        // music plays), and a new overlay starts its run from the beginning — the text ran a bit and stood still
++        titles.removeAll { (src, t) ->
++            (src !in srcs).also { gone -> if (gone) { host.removeView(t); src.alpha = 1f } }
++        }
++        for (src in srcs) {
++            if (titles.any { it.first === src }) continue
++            val t = TextView(ctx).apply {
++                setSingleLine(true)
++                ellipsize = android.text.TextUtils.TruncateAt.MARQUEE
++                marqueeRepeatLimit = -1
++                isSelected = true
++                gravity = android.view.Gravity.CENTER_VERTICAL or android.view.Gravity.START
++                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
++                visibility = View.GONE
++            }
++            host.addView(t, FrameLayout.LayoutParams(0, 0))
++            titles += src to t
++        }
++    }
++
++    /** Before every frame: the overlay follows the hidden title's place and look; shown only while it's cut. */
++    private fun syncTitles() {
++        for ((src, t) in titles) {
++            val l = src.layout
++            val cut = src.isShown && l != null && l.lineCount > 0 && l.getEllipsisCount(l.lineCount - 1) > 0
++            if (!cut) {
++                if (t.visibility != View.GONE) t.visibility = View.GONE
++                if (src.alpha != 1f) src.alpha = 1f
++                continue
++            }
++            val text = src.text.toString()
++            if (t.text.toString() != text) t.text = text                 // only a new track restarts the run
++            if (t.currentTextColor != src.currentTextColor) t.setTextColor(src.currentTextColor)
++            if (t.textSize != src.textSize) t.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, src.textSize)
++            if (t.typeface != src.typeface) t.typeface = src.typeface
++            if (t.paddingLeft != src.paddingLeft || t.paddingRight != src.paddingRight)
++                t.setPadding(src.paddingLeft, 0, src.paddingRight, 0)
++            if (t.visibility != View.VISIBLE) t.visibility = View.VISIBLE
++            if (!t.isSelected) t.isSelected = true                    // a parent's setSelected(false) reaches it too
++            if (src.alpha != 0f) src.alpha = 0f
++            place(src, t)
++        }
++    }
++
+     /** What the cards were last dressed for; a card without this tag (new views, a reapply) gets dressed again. */
+     private var signature = ""
+ 
+@@ -233,7 +292,8 @@ class BlueOSWidgetDecorator(private val host: AppWidgetHostView) : Choreographer
+      * theme change), new views, a window that wasn't there yet for the blur. Cheap, checked before every frame.
+      */
+     private fun stale(): Boolean {
+-        if (cards.any { !it.isAttachedToWindow } || weatherIcons.any { !it.first.isAttachedToWindow }) return true
++        if (cards.any { !it.isAttachedToWindow } || weatherIcons.any { !it.first.isAttachedToWindow } ||
++            titles.any { !it.first.isAttachedToWindow }) return true
+         val m0 = signature.substringBefore('|') != "0"
+         return cards.any { c ->
+             val iv = c as? ImageView ?: return@any false
+@@ -243,6 +303,14 @@ class BlueOSWidgetDecorator(private val host: AppWidgetHostView) : Choreographer
+ 
+     private val preDraw = ViewTreeObserver.OnPreDrawListener {
+         if (isOurs && stale()) onUpdated()
++        // 0.8: the live weather icon must sit exactly on the hidden static one — after a theme switch the widget's
++        // layout could stay the same, no layout change came, and the icon stayed 0×0: an empty gap in «Сводка»
++        weatherIcons.forEach { (src, icon) ->
++            place(src, icon)
++            // the colour follows the widget's icon (a reapply in a new theme keeps the same views)
++            (src as? ImageView)?.imageTintList?.defaultColor?.let { if (it != icon.color) icon.color = it }
++        }
++        syncTitles()
+         true
+     }
+ 
+@@ -266,12 +334,23 @@ class BlueOSWidgetDecorator(private val host: AppWidgetHostView) : Choreographer
+ 
+     private fun place(src: View, icon: View) {
+         if (!src.isAttachedToWindow) return
+-        tmp.set(0, 0, src.width, src.height)
++        // the source's own scroll cancelled: a centred one-line TextView keeps scrollX ≈ 524288 (half its "endless"
++        // width), and the marquee copy of the equalizer's title landed at x = -524029
++        tmp.set(src.scrollX, src.scrollY, src.scrollX + src.width, src.scrollY + src.height)
+         host.offsetDescendantRectToMyCoords(src, tmp)
+         val lp = icon.layoutParams as FrameLayout.LayoutParams
+-        if (lp.width == tmp.width() && lp.height == tmp.height() && lp.leftMargin == tmp.left && lp.topMargin == tmp.top) return
+-        lp.width = tmp.width(); lp.height = tmp.height(); lp.leftMargin = tmp.left; lp.topMargin = tmp.top
+-        icon.layoutParams = lp
++        if (lp.width != tmp.width() || lp.height != tmp.height() || lp.leftMargin != tmp.left || lp.topMargin != tmp.top) {
++            lp.width = tmp.width(); lp.height = tmp.height(); lp.leftMargin = tmp.left; lp.topMargin = tmp.top
++            icon.layoutParams = lp
++        }
++        // 0.8: the new params alone weren't enough — after a theme / palette switch the requested layout never came
++        // and the live weather icon of «Сводка» stayed 0×0 (dumpsys: 577,216-577,216): an empty gap before «3°».
++        // So it's also put in place right here; the next real layout gives it the same frame from the params
++        if (icon.left != tmp.left || icon.top != tmp.top || icon.width != tmp.width() || icon.height != tmp.height()) {
++            icon.measure(View.MeasureSpec.makeMeasureSpec(tmp.width(), View.MeasureSpec.EXACTLY),
++                View.MeasureSpec.makeMeasureSpec(tmp.height(), View.MeasureSpec.EXACTLY))
++            icon.layout(tmp.left, tmp.top, tmp.right, tmp.bottom)
++        }
+     }
+ 
+     fun onAttached(on: Boolean) {
+@@ -412,7 +491,9 @@ class BlueOSWidgetDecorator(private val host: AppWidgetHostView) : Choreographer
+                 paint.color = BlueOSColors.withAlpha(BlueOSColors.onSurface(ctx), 0.32f * (1 - p))
+                 canvas.drawCircle(rectF.centerX(), rectF.centerY(), rectF.width() / 2 + p * 7 * dp, paint)
+             }
+-            note?.takeIf { it.isShown }?.let { n ->
++            // 0.8: the notes rise from the album art too — the placeholder note is hidden whenever the track has art,
++            // so with art they were gone (only a blink while a new track's art was loading)
++            (note?.takeIf { it.isShown } ?: art?.takeIf { it.isShown })?.let { n ->
+                 bounds(n)
+                 paint.style = Paint.Style.FILL; paint.textSize = 13 * dp
+                 for (i in 0..2) {
+diff --git a/src/com/android/launcher3/util/Themes.java b/src/com/android/launcher3/util/Themes.java
+index 68dd376f70..6af05d4d6f 100644
+--- a/src/com/android/launcher3/util/Themes.java
++++ b/src/com/android/launcher3/util/Themes.java
+@@ -47,7 +47,12 @@ public class Themes {
+     }
+ 
+     public static int getActivityThemeRes(Context context, int wallpaperColorHints) {
+-        boolean supportsDarkText = (wallpaperColorHints & HINT_SUPPORTS_DARK_TEXT) != 0;
++        // BlueOS 0.8: «Подписи под значками» (Обои и стиль → Цвета): «По обоям» = stock, dark on light
++        // wallpapers; «Всегда белые» and «Подложка» never switch to dark text
++        boolean supportsDarkText = (wallpaperColorHints & HINT_SUPPORTS_DARK_TEXT) != 0
++                && org.blueos.arona.BlueOSSettings.getInt(context.getContentResolver(),
++                        org.blueos.arona.BlueOSSettings.COLOR_LABELS)
++                        == org.blueos.arona.BlueOSColorRoles.LABELS_WALLPAPER;
+         boolean isMainColorDark = (wallpaperColorHints & HINT_SUPPORTS_DARK_THEME) != 0;
+ 
+         if (Utilities.isDarkTheme(context)) {

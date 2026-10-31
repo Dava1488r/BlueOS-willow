@@ -1,0 +1,434 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 27 Oct 2026 12:31:22 +0100
+Subject: [PATCH 24/30] =?UTF-8?q?BlueOS:=20SystemUI:=200.7.2=20=E2=80=94?=
+ =?UTF-8?q?=20glass=20player=20without=20a=20cover,=20greeting=20/=20date?=
+ =?UTF-8?q?=20row=20like=20the=20Summary=20widget=20(a=20choice),=20Plana?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Media player: a track without a cover took the colours of the app's icon (a near-black icon made a black
+player); now it gets the home widgets' glass (blurred wallpaper, see-through Monet card, edge, text and
+buttons in the system palette) — BlueOSMediaGlass, ColorSchemeTransition.blueOSGlass. With a cover: as before.
+Lock screen lines under the clock: «Как в Android» (as before) or «Как в «Сводке»» — the greeting semibold
+with «Сэнсэй» in the clock's colour, the date row medium with the weather in that colour
+(blueos_lock_greeting_style, blueos_lock_date_style). Arona or Plana on the lock screen (blueos_character).
+
+Change-Id: I11bd91fbd447621c29fe8f46b5ab824851b2d18d
+---
+ .../SystemUI/res/values-ru/blueos_strings.xml |   2 +
+ .../SystemUI/res/values/blueos_strings.xml    |   3 +
+ .../android/keyguard/KeyguardSliceView.java   |  60 +++++++-
+ .../lockscreen/BlueOSCharacterSection.kt      |   7 +-
+ .../systemui/blueos/media/BlueOSMediaGlass.kt | 138 ++++++++++++++++++
+ .../keyguard/KeyguardSliceProvider.java       |   5 +-
+ .../ui/animation/ColorSchemeTransition.kt     |  29 ++--
+ .../ui/controller/MediaControlPanel.java      |  12 ++
+ 8 files changed, 243 insertions(+), 13 deletions(-)
+ create mode 100644 packages/SystemUI/src/com/android/systemui/blueos/media/BlueOSMediaGlass.kt
+
+diff --git a/packages/SystemUI/res/values-ru/blueos_strings.xml b/packages/SystemUI/res/values-ru/blueos_strings.xml
+index de1a8950d147..4cbbbe273c0f 100644
+--- a/packages/SystemUI/res/values-ru/blueos_strings.xml
++++ b/packages/SystemUI/res/values-ru/blueos_strings.xml
+@@ -9,4 +9,6 @@
+     <string name="blueos_slice_alarm">Будильник <xliff:g id="time" example="08:30" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%1$s</xliff:g></string>
+     <string name="blueos_slice_event_now">Сейчас, до <xliff:g id="time" example="19:00" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%1$s</xliff:g></string>
+     <string name="blueos_slice_event_tomorrow">Завтра, <xliff:g id="time" example="10:00" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%1$s</xliff:g></string>
++    <!-- BlueOS 0.7.2 -->
++    <string name="blueos_sensei">Сэнсэй</string>
+ </resources>
+diff --git a/packages/SystemUI/res/values/blueos_strings.xml b/packages/SystemUI/res/values/blueos_strings.xml
+index e36244de1d90..8cf3ee5a05af 100644
+--- a/packages/SystemUI/res/values/blueos_strings.xml
++++ b/packages/SystemUI/res/values/blueos_strings.xml
+@@ -16,4 +16,7 @@
+     <string name="blueos_slice_event_now">Now, until <xliff:g id="time" example="19:00" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%1$s</xliff:g></string>
+     <!-- "What's next" card: an event tomorrow; when it starts -->
+     <string name="blueos_slice_event_tomorrow">Tomorrow, <xliff:g id="time" example="10:00" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%1$s</xliff:g></string>
++    <!-- BlueOS 0.7.2 -->
++    <string name="blueos_sensei">Sensei</string>
++    <item type="id" name="blueos_slice_typeface"/>
+ </resources>
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java
+index 0fdad6f092d6..e9a03bd95856 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java
+@@ -92,6 +92,9 @@ public class KeyguardSliceView extends LinearLayout {
+     private View mCard;
+     private View mCardBar;
+     private LinearLayout mCardItems;
++    // BlueOS 0.7.2: greeting / date row «like the Summary widget» (a choice; 0 = Android's look as before)
++    private CharSequence mGreetingText;
++    private android.graphics.Typeface mTitleTypeface;
+ 
+     public KeyguardSliceView(Context context, AttributeSet attrs) {
+         super(context, attrs);
+@@ -121,6 +124,54 @@ public class KeyguardSliceView extends LinearLayout {
+         mIconSize = (int) mContext.getResources().getDimension(R.dimen.widget_icon_size);
+         mIconSizeWithHeader = (int) mContext.getResources().getDimension(R.dimen.header_icon_size);
+         mTitle.setBreakStrategy(LineBreaker.BREAK_STRATEGY_BALANCED);
++        mTitleTypeface = mTitle.getTypeface();
++    }
++
++    private int blueOSStyle(String key) {
++        return org.blueos.arona.BlueOSSettings.getInt(mContext.getContentResolver(), key);
++    }
++
++    /** The clock's colour (Monet), fading to white with the text on AOD. */
++    private int blueOSAccent() {
++        final boolean lightText = Color.luminance(mTextColor) > 0.5f;
++        final int accent = mContext.getColor(lightText
++                ? android.R.color.system_accent1_100 : android.R.color.system_accent1_600);
++        return ColorUtils.blendARGB(accent, Color.WHITE, mDarkAmount);
++    }
++
++    /** 0.7.2: «Добрый день, Сэнсэй» semibold with «Сэнсэй» in the clock's colour, like the Summary widget. */
++    private void bindGreeting() {
++        final CharSequence text = mGreetingText;
++        if (!mHasGreeting || text == null
++                || blueOSStyle(org.blueos.arona.BlueOSSettings.LOCK_GREETING_STYLE) == 0) {
++            mTitle.setTypeface(mTitleTypeface);
++            mTitle.setText(text);
++            return;
++        }
++        mTitle.setTypeface(android.graphics.Typeface.create(mTitleTypeface, 600, false));
++        final SpannableStringBuilder s = new SpannableStringBuilder(text);
++        final String name = mContext.getString(R.string.blueos_sensei);
++        final int at = text.toString().lastIndexOf(name);
++        if (at >= 0) {
++            s.setSpan(new android.text.style.ForegroundColorSpan(blueOSAccent()), at, at + name.length(),
++                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
++        }
++        mTitle.setText(s);
++    }
++
++    private static boolean isWeather(View v) {
++        return Uri.parse(KeyguardSliceProvider.KEYGUARD_WEATHER_URI).equals(v.getTag());
++    }
++
++    /** 0.7.2: the date row like the Summary widget — medium weight, the weather in the clock's colour. */
++    private void styleRowItem(TextView v, int blendedColor) {
++        final boolean summary = blueOSStyle(org.blueos.arona.BlueOSSettings.LOCK_DATE_STYLE) != 0;
++        final Object saved = v.getTag(R.id.blueos_slice_typeface);
++        final android.graphics.Typeface base = saved instanceof android.graphics.Typeface
++                ? (android.graphics.Typeface) saved : v.getTypeface();
++        v.setTag(R.id.blueos_slice_typeface, base);
++        v.setTypeface(summary ? android.graphics.Typeface.create(base, 500, false) : base);
++        v.setTextColor(summary && isWeather(v) ? blueOSAccent() : blendedColor);
+     }
+ 
+     @Override
+@@ -161,7 +212,8 @@ public class KeyguardSliceView extends LinearLayout {
+ 
+             SliceItem mainTitle = header.getTitleItem();
+             CharSequence title = mainTitle != null ? mainTitle.getText() : null;
+-            mTitle.setText(title);
++            mGreetingText = title;
++            bindGreeting();
+             if (header.getPrimaryAction() != null
+                     && header.getPrimaryAction().getAction() != null) {
+                 clickActions.put(mTitle, header.getPrimaryAction().getAction());
+@@ -232,6 +284,7 @@ public class KeyguardSliceView extends LinearLayout {
+                 }
+             }
+             button.setCompoundDrawablesRelative(iconDrawable, null, null, null);
++            styleRowItem(button, blendedColor);
+             button.setOnClickListener(mOnClickListener);
+             button.setClickable(pendingIntent != null);
+         }
+@@ -271,11 +324,14 @@ public class KeyguardSliceView extends LinearLayout {
+     private void updateTextColors() {
+         final int blendedColor = getTextColor();
+         mTitle.setTextColor(blendedColor);
++        if (mHasGreeting) {
++            bindGreeting();                                  // BlueOS 0.7.2: «Сэнсэй» follows the clock's colour
++        }
+         int childCount = mRow.getChildCount();
+         for (int i = 0; i < childCount; i++) {
+             View v = mRow.getChildAt(i);
+             if (v instanceof TextView) {
+-                ((TextView) v).setTextColor(blendedColor);
++                styleRowItem((TextView) v, blendedColor);
+             }
+         }
+         updateCardColors();
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt b/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt
+index 5811b2b09f46..2105bc7fe456 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt
+@@ -36,6 +36,7 @@ import org.blueos.arona.AronaTouch
+ import org.blueos.arona.AronaView
+ import org.blueos.arona.BlueOSMotion
+ import org.blueos.arona.BlueOSSettings as K
++import org.blueos.arona.Character
+ import org.blueos.arona.ReplyChip
+ 
+ /** BlueOS 0.7.1: lock screen state other parts of SystemUI follow. */
+@@ -169,9 +170,13 @@ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.L
+     init {
+         clipChildren = false
+         addView(arona, LayoutParams(0, 0))
++        arona.character = Character.current(cr)                         // 0.7.2: Arona or Plana
+         arona.tilt = { if (K.on(cr, K.ARONA_TILT)) BlueOSMotion.tilt else null }
+         arona.onReady = { update() }
+-        unobserve = K.observe(context, listOf(K.ARONA_SHOW, K.ARONA_MODE, K.ARONA_CUSTOM, K.ARONA_SLEEP, K.ARONA_AOD)) {
++        unobserve = K.observe(context, listOf(K.ARONA_SHOW, K.ARONA_MODE, K.ARONA_CUSTOM, K.ARONA_SLEEP, K.ARONA_AOD,
++            K.CHARACTER)) {
++            val c = Character.current(cr)
++            if (c != arona.character) { arona.character = c; layoutArona(shown) }    // her own proportions
+             setLevel(0); update()
+         }
+         // 0.7.1: she looks where Sensei touches the lock screen, not only at touches on her
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/media/BlueOSMediaGlass.kt b/packages/SystemUI/src/com/android/systemui/blueos/media/BlueOSMediaGlass.kt
+new file mode 100644
+index 000000000000..e00607b3c8f8
+--- /dev/null
++++ b/packages/SystemUI/src/com/android/systemui/blueos/media/BlueOSMediaGlass.kt
+@@ -0,0 +1,138 @@
++package com.android.systemui.blueos.media
++
++import android.content.Context
++import android.content.res.ColorStateList
++import android.content.res.Configuration
++import android.graphics.Color
++import android.graphics.drawable.Drawable
++import android.graphics.drawable.GradientDrawable
++import android.graphics.drawable.LayerDrawable
++import android.view.View
++import android.widget.ImageView
++import android.widget.TextView
++import com.android.systemui.media.controls.ui.view.MediaViewHolder
++import com.android.systemui.res.R
++import java.util.WeakHashMap
++import org.blueos.arona.BlueOSSettings as K
++
++/**
++ * BlueOS 0.7.2: a track without a cover gets the home widgets' glass — the wallpaper blurred under the card,
++ * a see-through card of the Monet surface colour (the widgets' transparency slider), a thin edge, text and
++ * buttons in the system palette. Before, Android took the colours of the app's icon, and the near-black icon of
++ * «Музыка» made a black player. With a cover nothing changes (the cover and its colours, as before).
++ */
++object BlueOSMediaGlass {
++    class Colors(
++        val fill: Int, val edge: Int, val fg: Int, val fg2: Int, val primary: Int, val onPrimary: Int,
++        val chip: Int, val onChip: Int, val rest: Int,
++    )
++
++    private fun dark(c: Context) =
++        (c.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
++    private fun alpha(color: Int, a: Float) = (color and 0x00ffffff) or ((a.coerceIn(0f, 1f) * 255).toInt() shl 24)
++
++    @JvmStatic
++    fun colors(c: Context): Colors {
++        val d = dark(c)
++        fun col(light: Int, dark: Int) = c.getColor(if (d) dark else light)
++        val opacity = 1f - K.int(c.contentResolver, K.WIDGET_TRANSPARENCY).coerceIn(0, 100) / 100f
++        val card = col(android.R.color.system_surface_container_light, android.R.color.system_surface_container_dark)
++        val onS = col(android.R.color.system_on_surface_light, android.R.color.system_on_surface_dark)
++        val onSV = col(android.R.color.system_on_surface_variant_light, android.R.color.system_on_surface_variant_dark)
++        return Colors(
++            fill = alpha(card, 0.65f * opacity),                     // = the widgets' glass
++            edge = alpha(onS, 0.16f),
++            fg = onS, fg2 = onSV,
++            primary = col(android.R.color.system_primary_light, android.R.color.system_primary_dark),
++            onPrimary = col(android.R.color.system_on_primary_light, android.R.color.system_on_primary_dark),
++            chip = col(android.R.color.system_secondary_container_light, android.R.color.system_secondary_container_dark),
++            onChip = col(android.R.color.system_on_secondary_container_light,
++                android.R.color.system_on_secondary_container_dark),
++            rest = alpha(onSV, 0.3f),
++        )
++    }
++
++    /** What the views had before the glass, to give it back when a cover arrives. */
++    private class Original(
++        val title: ColorStateList?, val artist: ColorStateList?, val elapsed: ColorStateList?, val total: ColorStateList?,
++        val actions: List<ColorStateList?>, val progress: ColorStateList?, val thumb: ColorStateList?,
++        val playerBg: Drawable?, val albumFg: Drawable?,
++    )
++    private val originals = WeakHashMap<View, Original>()
++
++    private fun actions(h: MediaViewHolder): List<ImageView> =
++        listOf(h.actionPrev, h.actionNext, h.action0, h.action1, h.action2, h.action3, h.action4)
++
++    /**
++     * Dresses the player for [g] (a track without a cover) or gives back its own look (null). Called on the main
++     * thread after the colour scheme was updated; the blur needs the window, so it waits for the attach.
++     */
++    @JvmStatic
++    fun apply(h: MediaViewHolder, g: Colors?) {
++        val player: View = h.player
++        val texts = listOf(h.titleText, h.artistText, h.scrubbingElapsedTimeView, h.scrubbingTotalTimeView)
++        if (g == null) {
++            val o = originals.remove(player) ?: return
++            listOf(o.title, o.artist, o.elapsed, o.total).forEachIndexed { i, c -> c?.let { texts[i].setTextColor(it) } }
++            actions(h).forEachIndexed { i, b -> b.imageTintList = o.actions[i] }
++            h.seekBar.progressTintList = o.progress
++            h.seekBar.thumbTintList = o.thumb
++            player.background = o.playerBg
++            h.albumView.foreground = o.albumFg
++            return
++        }
++        if (!originals.containsKey(player)) {
++            originals[player] = Original(
++                h.titleText.textColors, h.artistText.textColors,
++                h.scrubbingElapsedTimeView.textColors, h.scrubbingTotalTimeView.textColors,
++                actions(h).map { it.imageTintList }, h.seekBar.progressTintList, h.seekBar.thumbTintList,
++                player.background, h.albumView.foreground)
++        }
++        val c = player.context
++        h.titleText.setTextColor(g.fg)
++        h.artistText.setTextColor(g.fg2)
++        h.scrubbingElapsedTimeView.setTextColor(g.fg2)
++        h.scrubbingTotalTimeView.setTextColor(g.fg2)
++        val buttons = ColorStateList(
++            arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()),
++            intArrayOf(alpha(g.fg, 0.38f), g.fg))
++        actions(h).forEach { it.imageTintList = buttons }
++        h.seekBar.progressTintList = ColorStateList.valueOf(g.primary)
++        h.seekBar.thumbTintList = ColorStateList.valueOf(g.primary)
++        val r = c.resources.getDimension(R.dimen.notification_corner_radius)
++        h.albumView.foreground = GradientDrawable().apply {
++            cornerRadius = r
++            setColor(Color.TRANSPARENT)
++            setStroke(c.resources.displayMetrics.density.toInt().coerceAtLeast(1), g.edge)
++        }
++        val base = originals[player]?.playerBg
++        fun blur() {
++            val d = blurDrawable(player, r) ?: return
++            player.background = if (base == null) d else LayerDrawable(arrayOf(d, base))
++        }
++        if (player.isAttachedToWindow) blur()
++        else player.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
++            override fun onViewAttachedToWindow(v: View) {
++                v.removeOnAttachStateChangeListener(this)
++                if (originals.containsKey(v)) blur()
++            }
++            override fun onViewDetachedFromWindow(v: View) {}
++        })
++    }
++
++    /** The widgets' blur: «Размытие под виджетами», glass always a little (BlueOSMaterial.blurRadius). */
++    private fun blurDrawable(view: View, cornerRadius: Float): Drawable? {
++        val c = view.context
++        val p = maxOf(K.int(c.contentResolver, K.WIDGET_BLUR).coerceIn(0, 100), 15)
++        val radius = (p / 100f * 50f * c.resources.displayMetrics.density).toInt()
++        return try {
++            view.viewRootImpl?.createBackgroundBlurDrawable()?.apply {
++                setBlurRadius(radius)
++                setCornerRadius(cornerRadius)
++                setColor(Color.TRANSPARENT)
++            }
++        } catch (t: Throwable) {
++            null
++        }
++    }
++}
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardSliceProvider.java b/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardSliceProvider.java
+index ac95804efdbb..ff9d37706702 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardSliceProvider.java
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardSliceProvider.java
+@@ -543,7 +543,10 @@ public class KeyguardSliceProvider extends SliceProvider implements
+         }
+         for (String key : new String[] {org.blueos.arona.BlueOSSettings.WEATHER,
+                 org.blueos.arona.BlueOSSettings.WEATHER_LOCK,
+-                org.blueos.arona.BlueOSSettings.WEATHER_F}) {
++                org.blueos.arona.BlueOSSettings.WEATHER_F,
++                // 0.7.2: the style of the greeting / date row is applied when the slice is shown again
++                org.blueos.arona.BlueOSSettings.LOCK_GREETING_STYLE,
++                org.blueos.arona.BlueOSSettings.LOCK_DATE_STYLE}) {
+             mContentResolver.registerContentObserver(Settings.Secure.getUriFor(key),
+                     false, mWeatherObserver);
+         }
+diff --git a/packages/SystemUI/src/com/android/systemui/media/controls/ui/animation/ColorSchemeTransition.kt b/packages/SystemUI/src/com/android/systemui/media/controls/ui/animation/ColorSchemeTransition.kt
+index fac02fec531b..e27ec45ff21e 100644
+--- a/packages/SystemUI/src/com/android/systemui/media/controls/ui/animation/ColorSchemeTransition.kt
++++ b/packages/SystemUI/src/com/android/systemui/media/controls/ui/animation/ColorSchemeTransition.kt
+@@ -132,31 +132,42 @@ internal constructor(
+     private val onPrimaryDefault = context.getColor(R.color.system_on_primary_dark)
+     private val outlineDefault = context.getColor(R.color.system_outline_dark)
+ 
++    /**
++     * BlueOS 0.7.2: set for a track without a cover — the widgets' glass in the system palette instead of the
++     * colours of the app's icon (com.android.systemui.blueos.media.BlueOSMediaGlass); null = as before.
++     */
++    @JvmField var blueOSGlass: com.android.systemui.blueos.media.BlueOSMediaGlass.Colors? = null
++
+     private val backgroundColor: AnimatingColorTransition by lazy {
+-        animatingColorTransitionFactory(backgroundDefault, ::backgroundFromScheme) { color ->
++        animatingColorTransitionFactory(backgroundDefault, { blueOSGlass?.fill ?: backgroundFromScheme(it) }) { color ->
+             mediaViewHolder.albumView.backgroundTintList = ColorStateList.valueOf(color)
+         }
+     }
+ 
+     private val primaryColor: AnimatingColorTransition by lazy {
+-        animatingColorTransitionFactory(primaryDefault, ::primaryFromScheme) { primaryColor ->
++        animatingColorTransitionFactory(primaryDefault, { blueOSGlass?.primary ?: primaryFromScheme(it) }) { primaryColor ->
+             val primaryColorList = ColorStateList.valueOf(primaryColor)
++            val g = blueOSGlass
++            val chipList = if (g != null) ColorStateList.valueOf(g.chip) else primaryColorList
+             mediaViewHolder.actionPlayPause.backgroundTintList = primaryColorList
+-            mediaViewHolder.seamlessButton.backgroundTintList = primaryColorList
++            mediaViewHolder.seamlessButton.backgroundTintList = chipList
+             (mediaViewHolder.seamlessButton.background as? RippleDrawable)?.let {
+-                it.setColor(primaryColorList)
+-                it.effectColor = primaryColorList
++                it.setColor(chipList)
++                it.effectColor = chipList
+             }
+-            mediaViewHolder.seekBar.progressBackgroundTintList = primaryColorList
++            mediaViewHolder.seekBar.progressBackgroundTintList =
++                if (g != null) ColorStateList.valueOf(g.rest) else primaryColorList
+         }
+     }
+ 
+     private val onPrimaryColor: AnimatingColorTransition by lazy {
+-        animatingColorTransitionFactory(onPrimaryDefault, ::onPrimaryFromScheme) { onPrimaryColor ->
++        animatingColorTransitionFactory(onPrimaryDefault, { blueOSGlass?.onPrimary ?: onPrimaryFromScheme(it) }) {
++            onPrimaryColor ->
+             val onPrimaryColorList = ColorStateList.valueOf(onPrimaryColor)
++            val onChip = blueOSGlass?.onChip ?: onPrimaryColor
+             mediaViewHolder.actionPlayPause.imageTintList = onPrimaryColorList
+-            mediaViewHolder.seamlessText.setTextColor(onPrimaryColor)
+-            mediaViewHolder.seamlessIcon.imageTintList = onPrimaryColorList
++            mediaViewHolder.seamlessText.setTextColor(onChip)
++            mediaViewHolder.seamlessIcon.imageTintList = ColorStateList.valueOf(onChip)
+         }
+     }
+ 
+diff --git a/packages/SystemUI/src/com/android/systemui/media/controls/ui/controller/MediaControlPanel.java b/packages/SystemUI/src/com/android/systemui/media/controls/ui/controller/MediaControlPanel.java
+index b5763f1a01eb..139057e6a86c 100644
+--- a/packages/SystemUI/src/com/android/systemui/media/controls/ui/controller/MediaControlPanel.java
++++ b/packages/SystemUI/src/com/android/systemui/media/controls/ui/controller/MediaControlPanel.java
+@@ -905,9 +905,16 @@ public class MediaControlPanel {
+                 } catch (PackageManager.NameNotFoundException e) {
+                     Log.w(TAG, "Cannot find icon for package " + data.getPackageName(), e);
+                 }
++                // BlueOS 0.7.2: the player's colours come from the glass (BlueOSMediaGlass) then; a scheme is
++                // still needed for the colour transitions to run
++                if (mutableColorScheme == null) {
++                    mutableColorScheme = new ColorScheme(
++                            mContext.getColor(android.R.color.system_accent1_500), darkTheme);
++                }
+             }
+ 
+             final ColorScheme colorScheme = mutableColorScheme;
++            final boolean blueOSGlass = !isArtworkBound;
+             mMainExecutor.execute(() -> {
+                 // Cancel the request if a later one arrived first
+                 if (reqId < mArtworkBoundId) {
+@@ -917,8 +924,13 @@ public class MediaControlPanel {
+                 mArtworkBoundId = reqId;
+ 
+                 // Transition Colors to current color scheme
++                // BlueOS 0.7.2: no cover → the widgets' glass in the system palette (was: the app icon's colours)
++                mColorSchemeTransition.blueOSGlass = blueOSGlass
++                        ? com.android.systemui.blueos.media.BlueOSMediaGlass.colors(mContext) : null;
+                 boolean colorSchemeChanged;
+                 colorSchemeChanged = mColorSchemeTransition.updateColorScheme(colorScheme);
++                com.android.systemui.blueos.media.BlueOSMediaGlass.apply(
++                        mMediaViewHolder, mColorSchemeTransition.blueOSGlass);
+ 
+                 // Bind the album view to the artwork or a transition drawable
+                 ImageView albumView = mMediaViewHolder.getAlbumView();

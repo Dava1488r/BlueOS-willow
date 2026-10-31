@@ -1,0 +1,231 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sat, 24 Oct 2026 23:59:40 +0200
+Subject: [PATCH 02/12] BlueOS: ThemePicker: "Bright colors" switch in the
+ palette sheet
+
+A switch under "Dark theme" previews and applies the VIBRANT variant of the
+chosen color (wallpaper colors and presets); off = TONAL_SPOT. It stays as set
+when another color is picked; options with a style of their own (monochrome,
+neutral, expressive) reset it and disable the switch. Without the updated color
+picker flag, Apply now also applies the overriding style.
+
+Change-Id: I558b641d42e614b701f334fde0dbba8793859dc8
+---
+ res/layout/floating_sheet_colors.xml          | 14 ++++
+ res/values-ru/blueos_strings.xml              |  4 ++
+ res/values/blueos_strings.xml                 |  6 ++
+ .../ui/binder/ColorsFloatingSheetBinder.kt    | 29 ++++++++
+ .../ui/viewmodel/ColorPickerViewModel.kt      | 70 ++++++++++++++-----
+ 5 files changed, 105 insertions(+), 18 deletions(-)
+ create mode 100644 res/values-ru/blueos_strings.xml
+ create mode 100644 res/values/blueos_strings.xml
+
+diff --git a/res/layout/floating_sheet_colors.xml b/res/layout/floating_sheet_colors.xml
+index 4c0efc72..40163ec6 100644
+--- a/res/layout/floating_sheet_colors.xml
++++ b/res/layout/floating_sheet_colors.xml
+@@ -61,6 +61,20 @@
+             android:text="@string/mode_title"
+             android:textAppearance="@style/SwitchSectionTitleTextStyle"
+             android:theme="@style/Theme.Material3.DynamicColors.DayNight" />
++
++        <!-- BlueOS: bright (vibrant) variant of the chosen palette -->
++        <com.google.android.material.materialswitch.MaterialSwitch
++            style="@style/SettingslibSwitchStyle.Expressive"
++            android:id="@+id/blueos_bright_colors_toggle"
++            android:layout_width="match_parent"
++            android:layout_height="wrap_content"
++            android:layout_marginHorizontal="@dimen/floating_sheet_content_horizontal_padding"
++            android:background="@null"
++            android:focusable="true"
++            android:minHeight="@dimen/accessibility_min_height"
++            android:text="@string/blueos_bright_colors_title"
++            android:textAppearance="@style/SwitchSectionTitleTextStyle"
++            android:theme="@style/Theme.Material3.DynamicColors.DayNight" />
+     </LinearLayout>
+ 
+     <com.android.wallpaper.picker.customization.ui.view.FloatingToolbar
+diff --git a/res/values-ru/blueos_strings.xml b/res/values-ru/blueos_strings.xml
+new file mode 100644
+index 00000000..ec978eec
+--- /dev/null
++++ b/res/values-ru/blueos_strings.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <string name="blueos_bright_colors_title">Яркие цвета</string>
++</resources>
+diff --git a/res/values/blueos_strings.xml b/res/values/blueos_strings.xml
+new file mode 100644
+index 00000000..5832b630
+--- /dev/null
++++ b/res/values/blueos_strings.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS: Wallpaper & style -->
++<resources>
++    <!-- Switch under "Dark theme" in the palette sheet: the vibrant variant of the chosen colors -->
++    <string name="blueos_bright_colors_title">Bright colors</string>
++</resources>
+diff --git a/src/com/android/customization/picker/color/ui/binder/ColorsFloatingSheetBinder.kt b/src/com/android/customization/picker/color/ui/binder/ColorsFloatingSheetBinder.kt
+index 86e0cf94..9d5d9896 100644
+--- a/src/com/android/customization/picker/color/ui/binder/ColorsFloatingSheetBinder.kt
++++ b/src/com/android/customization/picker/color/ui/binder/ColorsFloatingSheetBinder.kt
+@@ -30,6 +30,7 @@ import com.android.customization.picker.color.ui.view.ColorOptionIconView
+ import com.android.customization.picker.color.ui.viewmodel.ColorOptionIconViewModel
+ import com.android.customization.picker.mode.ui.binder.DarkModeBinder
+ import com.android.themepicker.R
++import com.android.wallpaper.customization.ui.binder.SwitchColorBinder
+ import com.android.wallpaper.customization.ui.util.ThemePickerCustomizationOptionUtil.ThemePickerHomeCustomizationOption.COLORS
+ import com.android.wallpaper.customization.ui.viewmodel.ThemePickerCustomizationOptionsViewModel
+ import com.android.wallpaper.picker.customization.ui.binder.ColorUpdateBinder
+@@ -37,6 +38,7 @@ import com.android.wallpaper.picker.customization.ui.view.FloatingToolbar
+ import com.android.wallpaper.picker.customization.ui.view.adapter.FloatingToolbarTabAdapter
+ import com.android.wallpaper.picker.customization.ui.viewmodel.ColorUpdateViewModel
+ import com.android.wallpaper.picker.option.ui.adapter.OptionItemAdapter2
++import com.google.android.material.materialswitch.MaterialSwitch
+ import java.lang.ref.WeakReference
+ import kotlinx.coroutines.DisposableHandle
+ import kotlinx.coroutines.launch
+@@ -121,8 +123,35 @@ object ColorsFloatingSheetBinder {
+             lifecycleOwner = lifecycleOwner,
+         )
+ 
++        val brightColorsToggle =
++            view.requireViewById<MaterialSwitch>(R.id.blueos_bright_colors_toggle)
++        // As for dark mode: a click listener, so system updates of isChecked don't feed back
++        brightColorsToggle.setOnClickListener { colorsViewModel.toggleBrightColors() }
++
+         lifecycleOwner.lifecycleScope.launch {
+             lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
++                launch {
++                    colorsViewModel.isBrightColorsToggleEnabled.collect {
++                        brightColorsToggle.isEnabled = it
++                    }
++                }
++
++                launch {
++                    var binding: SwitchColorBinder.Binding? = null
++                    colorsViewModel.previewingIsBright.collect {
++                        brightColorsToggle.isChecked = it
++                        binding?.destroy()
++                        binding =
++                            SwitchColorBinder.bind(
++                                switch = brightColorsToggle,
++                                isChecked = it,
++                                colorUpdateViewModel = colorUpdateViewModel,
++                                shouldAnimateColor = isFloatingSheetActive,
++                                lifecycleOwner = lifecycleOwner,
++                            )
++                    }
++                }
++
+                 launch { colorsViewModel.colorTypeTabs.collect { tabAdapter.submitList(it) } }
+ 
+                 launch { colorsViewModel.colorTypeTabSubheader.collect { subhead.text = it } }
+diff --git a/src/com/android/customization/picker/color/ui/viewmodel/ColorPickerViewModel.kt b/src/com/android/customization/picker/color/ui/viewmodel/ColorPickerViewModel.kt
+index 7bf38864..53ef1da3 100644
+--- a/src/com/android/customization/picker/color/ui/viewmodel/ColorPickerViewModel.kt
++++ b/src/com/android/customization/picker/color/ui/viewmodel/ColorPickerViewModel.kt
+@@ -43,6 +43,7 @@ import kotlinx.coroutines.TimeoutCancellationException
+ import kotlinx.coroutines.coroutineScope
+ import kotlinx.coroutines.flow.Flow
+ import kotlinx.coroutines.flow.MutableStateFlow
++import kotlinx.coroutines.flow.SharingStarted
+ import kotlinx.coroutines.flow.StateFlow
+ import kotlinx.coroutines.flow.asStateFlow
+ import kotlinx.coroutines.flow.combine
+@@ -203,6 +204,31 @@ constructor(
+         _tempOverridingStyle.value = null
+     }
+ 
++    // BlueOS: "Bright colors" switch. On = VIBRANT, off = TONAL_SPOT; options with another style of
++    // their own (monochrome, neutral, expressive) keep it and the switch is disabled for them.
++    private val previewingStyleState =
++        previewingStyle.stateIn(viewModelScope, SharingStarted.Eagerly, null)
++    val previewingIsBright: Flow<Boolean> =
++        previewingStyleState.map { it == ThemeStyle.VIBRANT }.distinctUntilChanged()
++    val isBrightColorsToggleEnabled: Flow<Boolean> =
++        previewingStyleState
++            .map { it == ThemeStyle.TONAL_SPOT || it == ThemeStyle.VIBRANT }
++            .distinctUntilChanged()
++
++    fun toggleBrightColors() {
++        _overridingStyle.value =
++            if (previewingStyleState.value == ThemeStyle.VIBRANT) ThemeStyle.TONAL_SPOT
++            else ThemeStyle.VIBRANT
++    }
++
++    /** Called when another color option is picked: keeps the bright-colors switch as it was. */
++    private fun keepBrightColorsFor(colorOption: ColorOption, wasBright: Boolean) {
++        when {
++            colorOption.style != ThemeStyle.TONAL_SPOT -> resetStyleOptionSelection()
++            wasBright -> _overridingStyle.value = ThemeStyle.VIBRANT
++        }
++    }
++
+     val colorSeedOptions =
+         interactor.colorOptions.map { colorOptions ->
+             colorOptions.map { colorTypeToOptions ->
+@@ -322,8 +348,11 @@ constructor(
+                                     } else {
+                                         {
+                                             viewModelScope.launch {
++                                                val wasBright =
++                                                    previewingStyleState.value == ThemeStyle.VIBRANT
+                                                 _overridingColorOption.value = colorOption
+                                                 _overridingColorOptionIndex.value = index
++                                                keepBrightColorsFor(colorOption, wasBright)
+                                             }
+                                         }
+                                     }
+@@ -367,25 +396,30 @@ constructor(
+                 } else null
+             }
+         } else {
+-            combine(overridingColorOption, selectedColorOption) { previewing, selected ->
+-                previewing?.let {
+-                    if (previewing.isEquivalent(selected)) {
+-                        null
+-                    } else {
+-                        {
+-                            applyAndWaitForColorUpdate(
+-                                apply = { interactor.apply(it) },
+-                                onSuccess = {
+-                                    logger.logThemeColorApplied(
+-                                        it.sourceForLogging,
+-                                        it.styleForLogging,
+-                                        it.seedColor,
+-                                    )
+-                                },
+-                            )
+-                        }
++            // BlueOS: the bright-colors switch overrides the style here too
++            combine(overridingColorOption, selectedColorOption, selectedStyle, overridingStyle) {
++                previewing,
++                selected,
++                selectedStyle,
++                overridingStyle ->
++                val colorNeedsUpdate = previewing != null && !previewing.isEquivalent(selected)
++                val styleNeedsUpdate = overridingStyle != null && overridingStyle != selectedStyle
++                val colorOption = previewing ?: selected
++                if ((colorNeedsUpdate || styleNeedsUpdate) && colorOption != null) {
++                    val style = overridingStyle ?: colorOption.style
++                    {
++                        applyAndWaitForColorUpdate(
++                            apply = { interactor.apply(colorOption, style) },
++                            onSuccess = {
++                                logger.logThemeColorApplied(
++                                    colorOption.sourceForLogging,
++                                    colorOption.styleForLogging,
++                                    colorOption.seedColor,
++                                )
++                            },
++                        )
+                     }
+-                }
++                } else null
+             }
+         }
+ 

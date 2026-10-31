@@ -1,0 +1,458 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sun, 25 Oct 2026 09:53:34 +0100
+Subject: [PATCH 3/5] BlueOS: Etar: Widgets 0.6.1
+
+- Cards keep an 8 dp margin inside their cells; the countdown uses the
+  normal card with the number in the accent color.
+- The countdown is placed right away and set up by a tap
+  (configuration_optional).
+
+Change-Id: Ib00333a8762374459ae2d418cab8ee6e1d5406a8
+---
+ .../res/layout/blueos_countdown_widget.xml    | 102 +++----
+ .../main/res/layout/blueos_date_widget.xml    | 264 +++++++++---------
+ .../res/xml/blueos_countdown_widget_info.xml  |   2 +-
+ 3 files changed, 192 insertions(+), 176 deletions(-)
+
+diff --git a/app/src/main/res/layout/blueos_countdown_widget.xml b/app/src/main/res/layout/blueos_countdown_widget.xml
+index cf366d89..3e6f40ae 100644
+--- a/app/src/main/res/layout/blueos_countdown_widget.xml
++++ b/app/src/main/res/layout/blueos_countdown_widget.xml
+@@ -1,61 +1,69 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <!-- BlueOS countdown widget: days until a date the user picked, on the accent card -->
+ <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@drawable/blueos_widget_outline"
+-    android:clipToOutline="true">
++    android:padding="8dp">
+ 
+-    <ImageView
+-        android:id="@+id/blueos_widget_bg"
++    <!-- The card keeps 8 dp inside the widget's cells: widgets never touch each other or the
++         screen edge, whatever the grid -->
++    <FrameLayout
++        android:id="@android:id/background"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+-        android:contentDescription="@null"
+-        android:scaleType="fitXY"
+-        android:src="@drawable/blueos_widget_card_accent" />
++        android:background="@drawable/blueos_widget_outline"
++        android:clipToOutline="true">
+ 
+-    <LinearLayout
+-        android:layout_width="match_parent"
+-        android:layout_height="match_parent"
+-        android:gravity="center_vertical"
+-        android:orientation="vertical"
+-        android:paddingHorizontal="16dp"
+-        android:paddingVertical="10dp">
++        <ImageView
++            android:id="@+id/blueos_widget_bg"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitXY"
++            android:src="@drawable/blueos_widget_card" />
+ 
+-        <TextView
+-            android:id="@+id/blueos_countdown_title"
++        <LinearLayout
+             android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:alpha="0.8"
+-            android:ellipsize="end"
+-            android:fontFamily="google-sans-text"
+-            android:maxLines="2"
+-            android:textColor="@color/blueos_widget_on_primary_container"
+-            android:textSize="13sp" />
++            android:layout_height="match_parent"
++            android:gravity="center_vertical"
++            android:orientation="vertical"
++            android:paddingHorizontal="16dp"
++            android:paddingVertical="10dp">
+ 
+-        <TextView
+-            android:id="@+id/blueos_countdown_number"
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="4dp"
+-            android:fontFamily="blueos-clock"
+-            android:fontVariationSettings="'wght' 600"
+-            android:includeFontPadding="false"
+-            android:singleLine="true"
+-            android:textColor="@color/blueos_widget_on_primary_container"
+-            android:textSize="44sp" />
++            <TextView
++                android:id="@+id/blueos_countdown_title"
++                android:layout_width="match_parent"
++                android:layout_height="wrap_content"
++                android:alpha="0.8"
++                android:ellipsize="end"
++                android:fontFamily="google-sans-text"
++                android:maxLines="2"
++                android:textColor="@color/blueos_widget_on_surface_variant"
++                android:textSize="13sp" />
+ 
+-        <TextView
+-            android:id="@+id/blueos_countdown_caption"
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="2dp"
+-            android:alpha="0.8"
+-            android:ellipsize="end"
+-            android:fontFamily="google-sans-text"
+-            android:singleLine="true"
+-            android:textColor="@color/blueos_widget_on_primary_container"
+-            android:textSize="13sp" />
+-    </LinearLayout>
++            <TextView
++                android:id="@+id/blueos_countdown_number"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_marginTop="4dp"
++                android:fontFamily="blueos-clock"
++                android:fontVariationSettings="'wght' 600"
++                android:includeFontPadding="false"
++                android:singleLine="true"
++                android:textColor="@color/blueos_widget_primary"
++                android:textSize="44sp" />
++
++            <TextView
++                android:id="@+id/blueos_countdown_caption"
++                android:layout_width="match_parent"
++                android:layout_height="wrap_content"
++                android:layout_marginTop="2dp"
++                android:alpha="0.8"
++                android:ellipsize="end"
++                android:fontFamily="google-sans-text"
++                android:singleLine="true"
++                android:textColor="@color/blueos_widget_on_surface_variant"
++                android:textSize="13sp" />
++        </LinearLayout>
++    </FrameLayout>
+ </FrameLayout>
+diff --git a/app/src/main/res/layout/blueos_date_widget.xml b/app/src/main/res/layout/blueos_date_widget.xml
+index 9fb22e5c..bbbf4c33 100644
+--- a/app/src/main/res/layout/blueos_date_widget.xml
++++ b/app/src/main/res/layout/blueos_date_widget.xml
+@@ -1,169 +1,177 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <!-- BlueOS "Date and calendar" widget: big date in the accent color, the next events -->
+ <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@drawable/blueos_widget_outline"
+-    android:clipToOutline="true">
++    android:padding="8dp">
+ 
+-    <ImageView
+-        android:id="@+id/blueos_widget_bg"
++    <!-- The card keeps 8 dp inside the widget's cells: widgets never touch each other or the
++         screen edge, whatever the grid -->
++    <FrameLayout
++        android:id="@android:id/background"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+-        android:contentDescription="@null"
+-        android:scaleType="fitXY"
+-        android:src="@drawable/blueos_widget_card" />
++        android:background="@drawable/blueos_widget_outline"
++        android:clipToOutline="true">
+ 
+-    <LinearLayout
+-        android:layout_width="match_parent"
+-        android:layout_height="match_parent"
+-        android:gravity="center_vertical"
+-        android:orientation="vertical"
+-        android:padding="14dp">
++        <ImageView
++            android:id="@+id/blueos_widget_bg"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitXY"
++            android:src="@drawable/blueos_widget_card" />
+ 
+         <LinearLayout
+             android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
++            android:layout_height="match_parent"
+             android:gravity="center_vertical"
+-            android:orientation="horizontal">
+-
+-            <TextClock
+-                android:id="@+id/blueos_day"
+-                android:layout_width="wrap_content"
+-                android:layout_height="wrap_content"
+-                android:fontFamily="blueos-clock"
+-                android:fontVariationSettings="'wght' 600"
+-                android:includeFontPadding="false"
+-                android:singleLine="true"
+-                android:textColor="@color/blueos_widget_primary"
+-                android:textSize="40sp" />
++            android:orientation="vertical"
++            android:padding="14dp">
+ 
+             <LinearLayout
+                 android:layout_width="match_parent"
+                 android:layout_height="wrap_content"
+-                android:layout_marginStart="10dp"
+-                android:orientation="vertical">
++                android:gravity="center_vertical"
++                android:orientation="horizontal">
+ 
+                 <TextClock
+-                    android:id="@+id/blueos_weekday"
+-                    android:layout_width="match_parent"
++                    android:id="@+id/blueos_day"
++                    android:layout_width="wrap_content"
+                     android:layout_height="wrap_content"
+-                    android:ellipsize="end"
++                    android:fontFamily="blueos-clock"
++                    android:fontVariationSettings="'wght' 600"
++                    android:includeFontPadding="false"
+                     android:singleLine="true"
+-                    android:fontFamily="google-sans-text"
+-                    android:textColor="@color/blueos_widget_on_surface"
+-                    android:textSize="13sp" />
++                    android:textColor="@color/blueos_widget_primary"
++                    android:textSize="40sp" />
+ 
+-                <TextClock
+-                    android:id="@+id/blueos_month"
++                <LinearLayout
+                     android:layout_width="match_parent"
+                     android:layout_height="wrap_content"
+-                    android:ellipsize="end"
+-                    android:singleLine="true"
+-                    android:fontFamily="google-sans-text"
+-                    android:textColor="@color/blueos_widget_on_surface_variant"
+-                    android:textSize="13sp" />
++                    android:layout_marginStart="10dp"
++                    android:orientation="vertical">
++
++                    <TextClock
++                        android:id="@+id/blueos_weekday"
++                        android:layout_width="match_parent"
++                        android:layout_height="wrap_content"
++                        android:ellipsize="end"
++                        android:singleLine="true"
++                        android:fontFamily="google-sans-text"
++                        android:textColor="@color/blueos_widget_on_surface"
++                        android:textSize="13sp" />
++
++                    <TextClock
++                        android:id="@+id/blueos_month"
++                        android:layout_width="match_parent"
++                        android:layout_height="wrap_content"
++                        android:ellipsize="end"
++                        android:singleLine="true"
++                        android:fontFamily="google-sans-text"
++                        android:textColor="@color/blueos_widget_on_surface_variant"
++                        android:textSize="13sp" />
++                </LinearLayout>
+             </LinearLayout>
+-        </LinearLayout>
+-
+-        <LinearLayout
+-            android:id="@+id/blueos_event1"
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="10dp"
+-            android:orientation="horizontal"
+-            android:visibility="gone">
+-
+-            <ImageView
+-                android:layout_width="3dp"
+-                android:layout_height="match_parent"
+-                android:contentDescription="@null"
+-                android:scaleType="fitXY"
+-                android:src="@drawable/blueos_widget_event_bar"
+-                android:tint="@color/blueos_widget_primary" />
+ 
+             <LinearLayout
++                android:id="@+id/blueos_event1"
+                 android:layout_width="match_parent"
+                 android:layout_height="wrap_content"
+-                android:layout_marginStart="8dp"
+-                android:orientation="vertical">
+-
+-                <TextView
+-                    android:id="@+id/blueos_event1_title"
+-                    android:layout_width="match_parent"
+-                    android:layout_height="wrap_content"
+-                    android:ellipsize="end"
+-                    android:singleLine="true"
+-                    android:fontFamily="google-sans-text"
+-                    android:textColor="@color/blueos_widget_on_surface"
+-                    android:textSize="13sp" />
+-
+-                <TextView
+-                    android:id="@+id/blueos_event1_time"
++                android:layout_marginTop="10dp"
++                android:orientation="horizontal"
++                android:visibility="gone">
++
++                <ImageView
++                    android:layout_width="3dp"
++                    android:layout_height="match_parent"
++                    android:contentDescription="@null"
++                    android:scaleType="fitXY"
++                    android:src="@drawable/blueos_widget_event_bar"
++                    android:tint="@color/blueos_widget_primary" />
++
++                <LinearLayout
+                     android:layout_width="match_parent"
+                     android:layout_height="wrap_content"
+-                    android:ellipsize="end"
+-                    android:singleLine="true"
+-                    android:fontFamily="google-sans-text"
+-                    android:textColor="@color/blueos_widget_on_surface_variant"
+-                    android:textSize="12sp" />
++                    android:layout_marginStart="8dp"
++                    android:orientation="vertical">
++
++                    <TextView
++                        android:id="@+id/blueos_event1_title"
++                        android:layout_width="match_parent"
++                        android:layout_height="wrap_content"
++                        android:ellipsize="end"
++                        android:singleLine="true"
++                        android:fontFamily="google-sans-text"
++                        android:textColor="@color/blueos_widget_on_surface"
++                        android:textSize="13sp" />
++
++                    <TextView
++                        android:id="@+id/blueos_event1_time"
++                        android:layout_width="match_parent"
++                        android:layout_height="wrap_content"
++                        android:ellipsize="end"
++                        android:singleLine="true"
++                        android:fontFamily="google-sans-text"
++                        android:textColor="@color/blueos_widget_on_surface_variant"
++                        android:textSize="12sp" />
++                </LinearLayout>
+             </LinearLayout>
+-        </LinearLayout>
+-
+-        <LinearLayout
+-            android:id="@+id/blueos_event2"
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="6dp"
+-            android:orientation="horizontal"
+-            android:visibility="gone">
+-
+-            <ImageView
+-                android:layout_width="3dp"
+-                android:layout_height="match_parent"
+-                android:contentDescription="@null"
+-                android:scaleType="fitXY"
+-                android:src="@drawable/blueos_widget_event_bar"
+-                android:tint="@color/blueos_widget_primary_container" />
+ 
+             <LinearLayout
++                android:id="@+id/blueos_event2"
+                 android:layout_width="match_parent"
+                 android:layout_height="wrap_content"
+-                android:layout_marginStart="8dp"
+-                android:orientation="vertical">
+-
+-                <TextView
+-                    android:id="@+id/blueos_event2_title"
+-                    android:layout_width="match_parent"
+-                    android:layout_height="wrap_content"
+-                    android:ellipsize="end"
+-                    android:singleLine="true"
+-                    android:fontFamily="google-sans-text"
+-                    android:textColor="@color/blueos_widget_on_surface"
+-                    android:textSize="13sp" />
+-
+-                <TextView
+-                    android:id="@+id/blueos_event2_time"
++                android:layout_marginTop="6dp"
++                android:orientation="horizontal"
++                android:visibility="gone">
++
++                <ImageView
++                    android:layout_width="3dp"
++                    android:layout_height="match_parent"
++                    android:contentDescription="@null"
++                    android:scaleType="fitXY"
++                    android:src="@drawable/blueos_widget_event_bar"
++                    android:tint="@color/blueos_widget_primary_container" />
++
++                <LinearLayout
+                     android:layout_width="match_parent"
+                     android:layout_height="wrap_content"
+-                    android:ellipsize="end"
+-                    android:singleLine="true"
+-                    android:fontFamily="google-sans-text"
+-                    android:textColor="@color/blueos_widget_on_surface_variant"
+-                    android:textSize="12sp" />
++                    android:layout_marginStart="8dp"
++                    android:orientation="vertical">
++
++                    <TextView
++                        android:id="@+id/blueos_event2_title"
++                        android:layout_width="match_parent"
++                        android:layout_height="wrap_content"
++                        android:ellipsize="end"
++                        android:singleLine="true"
++                        android:fontFamily="google-sans-text"
++                        android:textColor="@color/blueos_widget_on_surface"
++                        android:textSize="13sp" />
++
++                    <TextView
++                        android:id="@+id/blueos_event2_time"
++                        android:layout_width="match_parent"
++                        android:layout_height="wrap_content"
++                        android:ellipsize="end"
++                        android:singleLine="true"
++                        android:fontFamily="google-sans-text"
++                        android:textColor="@color/blueos_widget_on_surface_variant"
++                        android:textSize="12sp" />
++                </LinearLayout>
+             </LinearLayout>
+-        </LinearLayout>
+ 
+-        <TextView
+-            android:id="@+id/blueos_no_events"
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="10dp"
+-            android:maxLines="2"
+-            android:text="@string/blueos_date_widget_no_events"
+-            android:fontFamily="google-sans-text"
+-            android:textColor="@color/blueos_widget_on_surface_variant"
+-            android:textSize="12sp" />
+-    </LinearLayout>
++            <TextView
++                android:id="@+id/blueos_no_events"
++                android:layout_width="match_parent"
++                android:layout_height="wrap_content"
++                android:layout_marginTop="10dp"
++                android:maxLines="2"
++                android:text="@string/blueos_date_widget_no_events"
++                android:fontFamily="google-sans-text"
++                android:textColor="@color/blueos_widget_on_surface_variant"
++                android:textSize="12sp" />
++        </LinearLayout>
++    </FrameLayout>
+ </FrameLayout>
+diff --git a/app/src/main/res/xml/blueos_countdown_widget_info.xml b/app/src/main/res/xml/blueos_countdown_widget_info.xml
+index 0ce1e280..f450654e 100644
+--- a/app/src/main/res/xml/blueos_countdown_widget_info.xml
++++ b/app/src/main/res/xml/blueos_countdown_widget_info.xml
+@@ -14,4 +14,4 @@
+     android:targetCellHeight="1"
+     android:updatePeriodMillis="0"
+     android:widgetCategory="home_screen"
+-    android:widgetFeatures="reconfigurable" />
++    android:widgetFeatures="reconfigurable|configuration_optional" />

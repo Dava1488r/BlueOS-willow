@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The statistics really go to the LineageOS project, so say so instead of "BlueOS". -->
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="services_help_improve_cm">Help improve LineageOS</string>
+    <string name="services_metrics_label"><xliff:g id="name" example="Help improve LineageOS">%1$s</xliff:g> by automatically sending anonymous usage statistics to the LineageOS project, which BlueOS is based on.</string>
+</resources>

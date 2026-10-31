@@ -1,0 +1,6 @@
+# Boot animation style chosen in Settings > Display
+# (auto | light | dark | classic_light | classic_dark)
+system_internal_prop(blueos_bootanim_prop)
+
+# System font chosen in Settings > Display > Font (read by SystemFonts at boot)
+system_internal_prop(blueos_font_prop)

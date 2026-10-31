@@ -1,0 +1,103 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sun, 25 Oct 2026 09:53:34 +0100
+Subject: [PATCH 2/3] BlueOS: Glimpse: Photo widgets 0.6.1
+
+- Placed right away and set up by a tap (configuration_optional): the
+  launcher dropped the widget when the setup came back after the photo
+  picker.
+- An 8 dp margin around the picture, like the other BlueOS widgets.
+
+Change-Id: Ic6129785881746235ee32ea4f3d5079985c03746
+---
+ app/src/main/res/layout/blueos_photo_widget_circle.xml  | 3 ++-
+ app/src/main/res/layout/blueos_photo_widget_rounded.xml | 3 ++-
+ app/src/main/res/layout/blueos_photo_widget_sticker.xml | 3 ++-
+ app/src/main/res/xml/blueos_photo_widget_portrait.xml   | 2 +-
+ app/src/main/res/xml/blueos_photo_widget_small.xml      | 2 +-
+ app/src/main/res/xml/blueos_photo_widget_square.xml     | 2 +-
+ app/src/main/res/xml/blueos_photo_widget_wide.xml       | 2 +-
+ 7 files changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/app/src/main/res/layout/blueos_photo_widget_circle.xml b/app/src/main/res/layout/blueos_photo_widget_circle.xml
+index 825d170..0e8ed80 100644
+--- a/app/src/main/res/layout/blueos_photo_widget_circle.xml
++++ b/app/src/main/res/layout/blueos_photo_widget_circle.xml
+@@ -7,7 +7,8 @@
+ <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+     android:id="@android:id/background"
+     android:layout_width="match_parent"
+-    android:layout_height="match_parent">
++    android:layout_height="match_parent"
++    android:padding="8dp">
+ 
+     <ImageView
+         android:id="@+id/blueos_photo"
+diff --git a/app/src/main/res/layout/blueos_photo_widget_rounded.xml b/app/src/main/res/layout/blueos_photo_widget_rounded.xml
+index d0f2175..30f2f6d 100644
+--- a/app/src/main/res/layout/blueos_photo_widget_rounded.xml
++++ b/app/src/main/res/layout/blueos_photo_widget_rounded.xml
+@@ -7,7 +7,8 @@
+ <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+     android:id="@android:id/background"
+     android:layout_width="match_parent"
+-    android:layout_height="match_parent">
++    android:layout_height="match_parent"
++    android:padding="8dp">
+ 
+     <ImageView
+         android:id="@+id/blueos_photo"
+diff --git a/app/src/main/res/layout/blueos_photo_widget_sticker.xml b/app/src/main/res/layout/blueos_photo_widget_sticker.xml
+index 96b2edc..612a011 100644
+--- a/app/src/main/res/layout/blueos_photo_widget_sticker.xml
++++ b/app/src/main/res/layout/blueos_photo_widget_sticker.xml
+@@ -7,7 +7,8 @@
+ <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+     android:id="@android:id/background"
+     android:layout_width="match_parent"
+-    android:layout_height="match_parent">
++    android:layout_height="match_parent"
++    android:padding="8dp">
+ 
+     <ImageView
+         android:id="@+id/blueos_photo"
+diff --git a/app/src/main/res/xml/blueos_photo_widget_portrait.xml b/app/src/main/res/xml/blueos_photo_widget_portrait.xml
+index b23ff65..2c12cf2 100644
+--- a/app/src/main/res/xml/blueos_photo_widget_portrait.xml
++++ b/app/src/main/res/xml/blueos_photo_widget_portrait.xml
+@@ -18,4 +18,4 @@
+     android:targetCellHeight="2"
+     android:updatePeriodMillis="0"
+     android:widgetCategory="home_screen"
+-    android:widgetFeatures="reconfigurable" />
++    android:widgetFeatures="reconfigurable|configuration_optional" />
+diff --git a/app/src/main/res/xml/blueos_photo_widget_small.xml b/app/src/main/res/xml/blueos_photo_widget_small.xml
+index fd234c0..4b0c579 100644
+--- a/app/src/main/res/xml/blueos_photo_widget_small.xml
++++ b/app/src/main/res/xml/blueos_photo_widget_small.xml
+@@ -18,4 +18,4 @@
+     android:targetCellHeight="1"
+     android:updatePeriodMillis="0"
+     android:widgetCategory="home_screen"
+-    android:widgetFeatures="reconfigurable" />
++    android:widgetFeatures="reconfigurable|configuration_optional" />
+diff --git a/app/src/main/res/xml/blueos_photo_widget_square.xml b/app/src/main/res/xml/blueos_photo_widget_square.xml
+index d0c3a59..350c90d 100644
+--- a/app/src/main/res/xml/blueos_photo_widget_square.xml
++++ b/app/src/main/res/xml/blueos_photo_widget_square.xml
+@@ -18,4 +18,4 @@
+     android:targetCellHeight="1"
+     android:updatePeriodMillis="0"
+     android:widgetCategory="home_screen"
+-    android:widgetFeatures="reconfigurable" />
++    android:widgetFeatures="reconfigurable|configuration_optional" />
+diff --git a/app/src/main/res/xml/blueos_photo_widget_wide.xml b/app/src/main/res/xml/blueos_photo_widget_wide.xml
+index bc74d7e..08da490 100644
+--- a/app/src/main/res/xml/blueos_photo_widget_wide.xml
++++ b/app/src/main/res/xml/blueos_photo_widget_wide.xml
+@@ -18,4 +18,4 @@
+     android:targetCellHeight="2"
+     android:updatePeriodMillis="0"
+     android:widgetCategory="home_screen"
+-    android:widgetFeatures="reconfigurable" />
++    android:widgetFeatures="reconfigurable|configuration_optional" />

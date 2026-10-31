@@ -1,0 +1,172 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Fri, 30 Oct 2026 11:33:45 +0100
+Subject: [PATCH 11/12] =?UTF-8?q?BlueOS:=20=C2=AB=D0=AD=D0=BA=D0=B2=D0=B0?=
+ =?UTF-8?q?=D0=BB=D0=B0=D0=B9=D0=B7=D0=B5=D1=80=20=D0=BD=D0=B0=20=D0=BE?=
+ =?UTF-8?q?=D0=B1=D0=BE=D1=8F=D1=85=C2=BB=20settings?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: Iba7fa1012abd748918e248cd3cb0c50bbc5e9797
+---
+ res/values-ru/blueos_08_strings.xml           | 31 ++++++++++++++++
+ res/values/blueos_08_strings.xml              | 31 ++++++++++++++++
+ .../blueos/BlueOSSettingsActivity.kt          | 37 +++++++++++++++++++
+ 3 files changed, 99 insertions(+)
+
+diff --git a/res/values-ru/blueos_08_strings.xml b/res/values-ru/blueos_08_strings.xml
+index 549084ce..2cb424e8 100644
+--- a/res/values-ru/blueos_08_strings.xml
++++ b/res/values-ru/blueos_08_strings.xml
+@@ -64,5 +64,36 @@
+     <string name="blueos_s_c_eqp_style">Анимация музыки</string>
+     <string name="blueos_s_eqp_bars">Столбики</string>
+     <string name="blueos_s_eqp_wave">Волна</string>
++    <string name="blueos_s_h_wall">Обои</string>
++    <string name="blueos_s_wall_blur_home">Размытие обоев на рабочем столе</string>
++    <string name="blueos_s_wall_dim_home">Затемнение обоев на рабочем столе</string>
++    <string name="blueos_s_wall_blur_lock">Размытие обоев на экране блокировки</string>
++    <string name="blueos_s_wall_off">Выключено</string>
++    <string name="blueos_s_c_minutes">Минуты часов</string>
++    <string name="blueos_s_minutes_same">Как часы</string>
++    <string name="blueos_s_c_wall_blur_mode">Когда размывать</string>
++    <string name="blueos_s_wall_blur_home_only">Только на рабочем столе — для экрана блокировки свой ползунок ниже</string>
++    <string name="blueos_s_wall_blur_always">Всегда — экран блокировки размыт так же, как рабочий стол</string>
++    <string name="blueos_s_h_wall_wx">Погода на обоях</string>
++    <string name="blueos_s_wall_wx">Живая погода на обоях</string>
++    <string name="blueos_s_wall_wx_d">Дождь, снег, туман, облака, солнце и гроза прямо на обоях — на экране блокировки и рабочем столе, по погоде из виджета</string>
++    <string name="blueos_s_wall_wx_str">Сила эффекта</string>
++    <string name="blueos_s_wall_pct">%1$d %%</string>
+     <string name="blueos_s_imat_exact">Точно как у виджетов — тот же цвет, прозрачность и размытие обоев</string>
++    <string name="blueos_s_h_weq">Эквалайзер на обоях</string>
++    <string name="blueos_s_c_weq">Где показывать</string>
++    <string name="blueos_s_weq_off">Выключен</string>
++    <string name="blueos_s_weq_home">На рабочем столе — пока играет музыка</string>
++    <string name="blueos_s_weq_lock">На экране блокировки — пока играет музыка</string>
++    <string name="blueos_s_weq_both">На рабочем столе и экране блокировки — пока играет музыка</string>
++    <string name="blueos_s_c_weq_style">Как выглядит</string>
++    <string name="blueos_s_weq_bars">Столбики внизу экрана</string>
++    <string name="blueos_s_weq_wave">Волна внизу экрана</string>
++    <string name="blueos_s_weq_glow">Свечение снизу</string>
++    <string name="blueos_s_c_weq_lock">На экране блокировки</string>
++    <string name="blueos_s_weq_lock_bottom">Внизу экрана, как на рабочем столе</string>
++    <string name="blueos_s_weq_lock_clock">Волна прямо под часами</string>
++    <string name="blueos_s_weq_str">Высота и яркость</string>
++    <string name="blueos_s_halo_beat">Нимб в такт музыке</string>
++    <string name="blueos_s_halo_beat_d">Пока играет музыка, нимб над часами на экране блокировки чуть увеличивается и вспыхивает на каждом ударе</string>
+ </resources>
+diff --git a/res/values/blueos_08_strings.xml b/res/values/blueos_08_strings.xml
+index b982e649..90f238a9 100644
+--- a/res/values/blueos_08_strings.xml
++++ b/res/values/blueos_08_strings.xml
+@@ -64,5 +64,36 @@
+     <string name="blueos_s_c_eqp_style">Music animation</string>
+     <string name="blueos_s_eqp_bars">Bars</string>
+     <string name="blueos_s_eqp_wave">Wave</string>
++    <string name="blueos_s_h_wall">Wallpaper</string>
++    <string name="blueos_s_wall_blur_home">Wallpaper blur on the home screen</string>
++    <string name="blueos_s_wall_dim_home">Wallpaper dimming on the home screen</string>
++    <string name="blueos_s_wall_blur_lock">Wallpaper blur on the lock screen</string>
++    <string name="blueos_s_wall_off">Off</string>
++    <string name="blueos_s_c_minutes">Clock minutes</string>
++    <string name="blueos_s_minutes_same">Like the hours</string>
++    <string name="blueos_s_c_wall_blur_mode">When to blur</string>
++    <string name="blueos_s_wall_blur_home_only">Home screen only — the lock screen has its own slider below</string>
++    <string name="blueos_s_wall_blur_always">Always — the lock screen as blurred as the home screen</string>
++    <string name="blueos_s_h_wall_wx">Weather on the wallpaper</string>
++    <string name="blueos_s_wall_wx">Live weather on the wallpaper</string>
++    <string name="blueos_s_wall_wx_d">Rain, snow, fog, clouds, sun and storms right on the wallpaper — lock screen and home screen, from the widget\'s weather</string>
++    <string name="blueos_s_wall_wx_str">Effect strength</string>
++    <string name="blueos_s_wall_pct">%1$d %%</string>
+     <string name="blueos_s_imat_exact">Exactly like the widgets — same color, transparency and wallpaper blur</string>
++    <string name="blueos_s_h_weq">Equalizer on the wallpaper</string>
++    <string name="blueos_s_c_weq">Where to show it</string>
++    <string name="blueos_s_weq_off">Off</string>
++    <string name="blueos_s_weq_home">Home screen — while music plays</string>
++    <string name="blueos_s_weq_lock">Lock screen — while music plays</string>
++    <string name="blueos_s_weq_both">Home and lock screen — while music plays</string>
++    <string name="blueos_s_c_weq_style">How it looks</string>
++    <string name="blueos_s_weq_bars">Bars along the bottom of the screen</string>
++    <string name="blueos_s_weq_wave">A wave along the bottom of the screen</string>
++    <string name="blueos_s_weq_glow">A glow rising from below</string>
++    <string name="blueos_s_c_weq_lock">On the lock screen</string>
++    <string name="blueos_s_weq_lock_bottom">At the bottom, like on the home screen</string>
++    <string name="blueos_s_weq_lock_clock">A wave right under the clock</string>
++    <string name="blueos_s_weq_str">Height and brightness</string>
++    <string name="blueos_s_halo_beat">Halo to the beat</string>
++    <string name="blueos_s_halo_beat_d">While music plays, the halo over the lock screen clock grows a little and glows on every beat</string>
+ </resources>
+diff --git a/src/com/android/customization/blueos/BlueOSSettingsActivity.kt b/src/com/android/customization/blueos/BlueOSSettingsActivity.kt
+index 2b9d0ab2..9f2ee7e3 100644
+--- a/src/com/android/customization/blueos/BlueOSSettingsActivity.kt
++++ b/src/com/android/customization/blueos/BlueOSSettingsActivity.kt
+@@ -187,6 +187,21 @@ class BlueOSSettingsActivity : Activity() {
+             Item.Sw(K.EQ_PLAYER_SKIP, R.string.blueos_s_eqp_skip, R.string.blueos_s_eqp_skip_d),
+             Item.Choice(K.EQ_PLAYER_STYLE, R.string.blueos_s_c_eqp_style, listOf(
+                 R.string.blueos_s_eqp_bars to 0, R.string.blueos_s_eqp_wave to 1)),
++            // 0.8: the equalizer on the wallpaper itself, not a widget (off by default); the halo's pulse with it
++            Item.Header(R.string.blueos_s_h_weq),
++            Item.Choice(K.WALL_EQ, R.string.blueos_s_c_weq, listOf(
++                R.string.blueos_s_weq_off to 0, R.string.blueos_s_weq_home to 1,
++                R.string.blueos_s_weq_lock to 2, R.string.blueos_s_weq_both to 3)),
++            Item.Choice(K.WALL_EQ_STYLE, R.string.blueos_s_c_weq_style, listOf(
++                R.string.blueos_s_weq_bars to 0, R.string.blueos_s_weq_wave to 1, R.string.blueos_s_weq_glow to 2),
++                sub = true, dep = { int(K.WALL_EQ) != 0 }),
++            Item.Choice(K.WALL_EQ_LOCK_POS, R.string.blueos_s_c_weq_lock, listOf(
++                R.string.blueos_s_weq_lock_bottom to 0, R.string.blueos_s_weq_lock_clock to 1),
++                sub = true, dep = { (int(K.WALL_EQ) and 2) != 0 }),
++            Item.Slider(K.WALL_EQ_STR, R.string.blueos_s_weq_str, sub = true, min = 20, dep = { int(K.WALL_EQ) != 0 }) { v ->
++                getString(R.string.blueos_s_wall_pct, v)
++            },
++            Item.Sw(K.HALO_BEAT, R.string.blueos_s_halo_beat, R.string.blueos_s_halo_beat_d),
+             Item.Header(R.string.blueos_s_h_icons),
+             Item.Slider(K.ICON_ROUNDNESS, R.string.blueos_s_iround) { v ->
+                 when { v >= 100 -> getString(R.string.blueos_s_iround_circle); v <= 0 -> getString(R.string.blueos_s_iround_square)
+@@ -274,6 +289,12 @@ class BlueOSSettingsActivity : Activity() {
+         Item.Header(R.string.blueos_s_h_wx_live),
+         Item.Sw(K.WEATHER_LIVE, R.string.blueos_s_wx_live, R.string.blueos_s_wx_live_d),
+         Item.Sw(K.WEATHER_TALK, R.string.blueos_s_wx_talk, R.string.blueos_s_wx_talk_d),
++        // 0.8: the weather in the wallpaper itself, on the lock screen and the home screen
++        Item.Header(R.string.blueos_s_h_wall_wx),
++        Item.Sw(K.WALL_WEATHER, R.string.blueos_s_wall_wx, R.string.blueos_s_wall_wx_d),
++        Item.Slider(K.WALL_WEATHER_STR, R.string.blueos_s_wall_wx_str, sub = true, min = 10, dep = { on(K.WALL_WEATHER) }) { v ->
++            getString(R.string.blueos_s_wall_pct, v)
++        },
+     )
+ 
+     // 0.8 «Цвета»: a role per element (BlueOSColorRoles decides the colour — the same rule everywhere)
+@@ -289,6 +310,8 @@ class BlueOSSettingsActivity : Activity() {
+         else -> sys(android.R.color.system_primary_light, android.R.color.system_primary_dark)
+     }
+ 
++    private fun wallPct(v: Int) = if (v == 0) getString(R.string.blueos_s_wall_off) else getString(R.string.blueos_s_wall_pct, v)
++
+     private fun colorsPage(): List<Item> {
+         val halo = { on(K.HALO_LIVE) && on(K.HALO_GLOW) }
+         return listOf(
+@@ -303,9 +326,23 @@ class BlueOSSettingsActivity : Activity() {
+             },
+             Item.Choice(K.LOCK_TEXT_COLOR, R.string.blueos_s_c_textcolor, listOf(
+                 R.string.blueos_s_tc_light to 2, R.string.blueos_s_tc_theme to 0, R.string.blueos_s_tc_wall to 1)),
++            // 0.8: the wallpaper itself blurred / dimmed (0 = as before); the lock screen is dimmed by
++            // «Защита читаемости» above, so there it's the blur only
++            Item.Header(R.string.blueos_s_h_wall),
++            Item.Slider(K.HOME_WALL_BLUR, R.string.blueos_s_wall_blur_home) { v -> wallPct(v) },
++            Item.Choice(K.HOME_WALL_BLUR_MODE, R.string.blueos_s_c_wall_blur_mode, listOf(
++                R.string.blueos_s_wall_blur_home_only to 0, R.string.blueos_s_wall_blur_always to 1),
++                sub = true, dep = { int(K.HOME_WALL_BLUR) > 0 }),
++            Item.Slider(K.HOME_WALL_DIM, R.string.blueos_s_wall_dim_home, max = 80) { v -> wallPct(v) },
++            Item.Slider(K.LOCK_WALL_BLUR, R.string.blueos_s_wall_blur_lock) { v -> wallPct(v) },
+             Item.Header(R.string.blueos_s_h_c_lock),
+             Item.Choice(K.COLOR_LOCK_DIGITS, R.string.blueos_s_c_digits, roles(C.TINT, C.TEXT, C.ACCENT, C.SECOND, C.THIRD, C.CUSTOM),
+                 dot = ::lockDot),
++            // 0.8: the minutes their own colour, like everywhere in BlueOS; «Как часы» = as before
++            Item.Choice(K.COLOR_LOCK_MINUTES, R.string.blueos_s_c_minutes,
++                roles(C.ACCENT, C.TINT, C.TEXT, C.SECOND, C.THIRD, C.CUSTOM) +
++                    (R.string.blueos_s_minutes_same to C.SAME_AS_HOURS),
++                dot = { if (it == C.SAME_AS_HOURS) C.lockDigits(this) else lockDot(it) }),
+             Item.Choice(K.COLOR_LOCK_HALO, R.string.blueos_s_c_halo, roles(C.ACCENT, C.TINT, C.TEXT, C.SECOND, C.THIRD, C.CUSTOM),
+                 dot = ::lockDot),
+             Item.Choice(K.COLOR_GLOW, R.string.blueos_s_c_glow, roles(C.ACCENT, C.SECOND, C.THIRD, C.TEXT), sub = true, dep = halo,

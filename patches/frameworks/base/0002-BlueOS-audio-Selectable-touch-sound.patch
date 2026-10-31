@@ -1,0 +1,56 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BlueOS <blueos@localhost>
+Date: Sat, 24 Oct 2026 03:52:56 +0200
+Subject: [PATCH 02/30] BlueOS: audio: Selectable touch sound
+
+Settings.Global blueos_touch_sound replaces Effect_Tick.ogg (file path, or android for stock).
+
+Change-Id: I28c518351d06df688eeed6ecc3d98cc460e047b5
+---
+ .../server/audio/SoundEffectsHelper.java      | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/services/core/java/com/android/server/audio/SoundEffectsHelper.java b/services/core/java/com/android/server/audio/SoundEffectsHelper.java
+index 8c4efbae0a7c..a98d913d68f8 100644
+--- a/services/core/java/com/android/server/audio/SoundEffectsHelper.java
++++ b/services/core/java/com/android/server/audio/SoundEffectsHelper.java
+@@ -31,6 +31,7 @@ import android.os.Environment;
+ import android.os.Handler;
+ import android.os.Looper;
+ import android.os.Message;
++import android.provider.Settings;
+ import android.util.Log;
+ import android.util.PrintWriterPrinter;
+ 
+@@ -66,6 +67,14 @@ class SoundEffectsHelper {
+     /* Sound effect file names  */
+     private static final String SOUND_EFFECTS_PATH = "/media/audio/ui/";
+ 
++    // BlueOS: touch sound chosen in Settings > Sound > Touch sound. Holds a file path, or
++    // "android" for the stock tick; unset means the BlueOS default.
++    private static final String BLUEOS_TOUCH_SOUND = "blueos_touch_sound";
++    private static final String BLUEOS_TOUCH_SOUND_STOCK = "android";
++    private static final String BLUEOS_TOUCH_SOUND_DEFAULT =
++            "/product/media/audio/ui/BlueOS_Touch.ogg";
++    private static final String TOUCH_SOUND_FILE = "Effect_Tick.ogg";
++
+     private static final int EFFECT_NOT_IN_SOUND_POOL = 0; // SoundPool sample IDs > 0
+ 
+     private static final int MSG_LOAD_EFFECTS = 0;
+@@ -324,6 +333,16 @@ class SoundEffectsHelper {
+     private static final int SOUND_EFFECTS_LOAD_TIMEOUT_MS = 15000;
+ 
+     private String getResourceFilePath(Resource res) {
++        if (TOUCH_SOUND_FILE.equals(res.mFileName)) {
++            String touchSound = Settings.Global.getString(mContext.getContentResolver(),
++                    BLUEOS_TOUCH_SOUND);
++            if (touchSound == null) {
++                touchSound = BLUEOS_TOUCH_SOUND_DEFAULT;
++            }
++            if (!BLUEOS_TOUCH_SOUND_STOCK.equals(touchSound) && new File(touchSound).isFile()) {
++                return touchSound;
++            }
++        }
+         String filePath = Environment.getProductDirectory() + SOUND_EFFECTS_PATH + res.mFileName;
+         if (!new File(filePath).isFile()) {
+             filePath = Environment.getRootDirectory() + SOUND_EFFECTS_PATH + res.mFileName;

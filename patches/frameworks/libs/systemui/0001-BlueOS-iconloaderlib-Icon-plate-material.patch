@@ -1,0 +1,62 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 27 Oct 2026 03:49:42 +0100
+Subject: [PATCH 1/3] BlueOS: iconloaderlib: Icon plate material
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Themed icon background by Settings.Secure blueos_icon_material (or the widget material): solid, glass, outline, accent — Monet colours.
+
+Change-Id: Iaac164114a371345536bd105254e2625d5e01430
+---
+ .../icons/mono/ThemedIconDelegate.kt          | 31 ++++++++++++++++++-
+ 1 file changed, 30 insertions(+), 1 deletion(-)
+
+diff --git a/iconloaderlib/src/com/android/launcher3/icons/mono/ThemedIconDelegate.kt b/iconloaderlib/src/com/android/launcher3/icons/mono/ThemedIconDelegate.kt
+index 5d10f63..017931b 100644
+--- a/iconloaderlib/src/com/android/launcher3/icons/mono/ThemedIconDelegate.kt
++++ b/iconloaderlib/src/com/android/launcher3/icons/mono/ThemedIconDelegate.kt
+@@ -83,12 +83,41 @@ class ThemedIconDelegate(
+     companion object {
+         const val TAG: String = "ThemedIconDrawable"
+ 
++        /**
++         * BlueOS 0.7: the icon plate material (Обои и стиль → Рабочий стол → Значки приложений):
++         * -1 like the widgets, 0/2 solid (as before), 1 glass (see-through), 3 outline (barely there),
++         * 4 accent. Monet colours only, so it follows any wallpaper.
++         */
++        private fun blueOSPlate(context: Context, base: Int): Int {
++            val cr = context.contentResolver
++            var m = android.provider.Settings.Secure.getInt(cr, "blueos_icon_material", -1)
++            if (m == -1) m = android.provider.Settings.Secure.getInt(cr, "blueos_widget_material", 0)
++            fun alpha(a: Float) = (base and 0x00ffffff) or ((a * android.graphics.Color.alpha(base)).toInt() shl 24)
++            return when (m) {
++                1 -> alpha(0.38f)
++                3 -> alpha(0.12f)
++                4 -> {
++                    val dark = (context.resources.configuration.uiMode and
++                        android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
++                        android.content.res.Configuration.UI_MODE_NIGHT_YES
++                    val acc = context.getColor(
++                        if (dark) android.R.color.system_accent1_300 else android.R.color.system_accent1_200)
++                    android.graphics.Color.rgb(
++                        (android.graphics.Color.red(acc) * 0.38f + android.graphics.Color.red(base) * 0.62f).toInt(),
++                        (android.graphics.Color.green(acc) * 0.38f + android.graphics.Color.green(base) * 0.62f).toInt(),
++                        (android.graphics.Color.blue(acc) * 0.38f + android.graphics.Color.blue(base) * 0.62f).toInt())
++                }
++                else -> base
++            }
++        }
++
+         /** Get an int array representing background and foreground colors for themed icons */
+         @JvmStatic
+         fun getColors(context: Context): ColorList {
+             val res = context.resources
+             return ColorList(
+-                iconBackgroundColor = res.getColor(R.color.themed_icon_background_color),
++                iconBackgroundColor =
++                    blueOSPlate(context, res.getColor(R.color.themed_icon_background_color)),
+                 iconForegroundColor = res.getColor(R.color.themed_icon_color),
+                 iconAdaptiveBackgroundColor =
+                     res.getColor(R.color.themed_icon_adaptive_background_color),

@@ -1,0 +1,413 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 27 Oct 2026 12:31:22 +0100
+Subject: [PATCH 4/9] =?UTF-8?q?BlueOS:=20Launcher3:=200.7.2=20=E2=80=94=20?=
+ =?UTF-8?q?transparency=20for=20every=20material,=20icon=20plate=20transpa?=
+ =?UTF-8?q?rency,=20Plana,=20Arona=20at=20her=20desk?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The transparency slider now works for glass / outline / accent too (was fixed at 55/45 %), solid stays opaque.
+Icon plates: their own transparency; the icon theme reloads when it changes. Arona widget: Arona or Plana
+(her name, her phrases); left alone 90 s, Arona sits down on her desk (the game's work page, the desk in the
+palette's colours) and swings her legs, asleep at it at night; a tap and she stands up.
+
+Change-Id: Ib6faafd0852fe35f7b6184b6b76de0be50a42ff0
+---
+ res/values-ru/blueos_strings.xml              |  29 ++++
+ res/values/blueos_strings.xml                 |  29 ++++
+ .../launcher3/blueos/BlueOSAronaWidget.kt     | 150 +++++++++++++++---
+ .../android/launcher3/blueos/BlueOSIcons.kt   |  11 +-
+ .../launcher3/blueos/BlueOSWidgetDecorator.kt |  17 +-
+ 5 files changed, 204 insertions(+), 32 deletions(-)
+
+diff --git a/res/values-ru/blueos_strings.xml b/res/values-ru/blueos_strings.xml
+index ae73216b2f..37e362ade3 100644
+--- a/res/values-ru/blueos_strings.xml
++++ b/res/values-ru/blueos_strings.xml
+@@ -41,4 +41,33 @@
+         <item>Слушает ♪|хорошая песня!</item>
+         <item>Покачивается ♪|не в такт, зато от души</item>
+     </string-array>
++    <!-- BlueOS 0.7.2 -->
++    <string name="blueos_widget_plana">Плана</string>
++    <string name="blueos_arona_desk">Сидит на парте</string>
++    <string name="blueos_arona_desk_hint">болтает ногами</string>
++    <string-array name="blueos_plana_phr_morning">
++        <item>Доброе утро, Сэнсэй|система в норме</item>
++        <item>Подключение подтверждено|готова к работе</item>
++        <item>Ожидает указаний|с чего начнём?</item>
++    </string-array>
++    <string-array name="blueos_plana_phr_day">
++        <item>Ожидает|нажмите на меня</item>
++        <item>Анализирует задачи|их много</item>
++        <item>Наблюдает|…чувствую взгляд</item>
++        <item>Проверяет расписание|всё по плану</item>
++    </string-array>
++    <string-array name="blueos_plana_phr_evening">
++        <item>Ожидает|как прошёл день?</item>
++        <item>Отдыхает|можно погладить</item>
++        <item>Составляет отчёт|почти готово</item>
++    </string-array>
++    <string-array name="blueos_plana_phr_night">
++        <item>Спит|тсс…</item>
++        <item>В режиме сна|не будите её</item>
++        <item>Дремлет|…</item>
++    </string-array>
++    <string-array name="blueos_plana_phr_music">
++        <item>Слушает ♪|анализ мелодии…</item>
++        <item>Покачивается ♪|ритм распознан</item>
++    </string-array>
+ </resources>
+diff --git a/res/values/blueos_strings.xml b/res/values/blueos_strings.xml
+index 0dba839c5c..afde364abc 100644
+--- a/res/values/blueos_strings.xml
++++ b/res/values/blueos_strings.xml
+@@ -45,4 +45,33 @@
+         <item>Listening ♪|nice song!</item>
+         <item>Swaying ♪|off the beat, but with feeling</item>
+     </string-array>
++    <!-- BlueOS 0.7.2 -->
++    <string name="blueos_widget_plana">Plana</string>
++    <string name="blueos_arona_desk">At her desk</string>
++    <string name="blueos_arona_desk_hint">swinging her legs</string>
++    <string-array name="blueos_plana_phr_morning">
++        <item>Good morning, Sensei|all systems normal</item>
++        <item>Connection confirmed|ready to work</item>
++        <item>Awaiting orders|where do we start?</item>
++    </string-array>
++    <string-array name="blueos_plana_phr_day">
++        <item>Standing by|tap me</item>
++        <item>Analyzing tasks|there are many</item>
++        <item>Watching|…I sense a gaze</item>
++        <item>Checking the schedule|all on track</item>
++    </string-array>
++    <string-array name="blueos_plana_phr_evening">
++        <item>Standing by|how was your day?</item>
++        <item>Resting|you may pat me</item>
++        <item>Writing a report|almost done</item>
++    </string-array>
++    <string-array name="blueos_plana_phr_night">
++        <item>Asleep|shh…</item>
++        <item>Sleep mode|do not wake her</item>
++        <item>Dozing|…</item>
++    </string-array>
++    <string-array name="blueos_plana_phr_music">
++        <item>Listening ♪|analyzing the melody…</item>
++        <item>Swaying ♪|rhythm recognized</item>
++    </string-array>
+ </resources>
+diff --git a/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt b/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt
+index b1bd5df856..cc9d7b157e 100644
+--- a/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt
++++ b/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt
+@@ -24,13 +24,16 @@ import com.android.launcher3.views.ActivityContext
+ import com.android.launcher3.widget.LauncherAppWidgetHostView
+ import com.android.launcher3.widget.LauncherAppWidgetProviderInfo
+ import com.android.launcher3.widget.custom.CustomWidget
++import android.os.SystemClock
+ import java.util.Calendar
++import org.blueos.arona.AronaDeskView
+ import org.blueos.arona.AronaGaze
+ import org.blueos.arona.AronaReplies
+ import org.blueos.arona.AronaTouch
+ import org.blueos.arona.AronaView
+ import org.blueos.arona.BlueOSMotion
+ import org.blueos.arona.BlueOSSettings as K
++import org.blueos.arona.Character
+ import org.blueos.arona.ReplyChip
+ 
+ /** BlueOS 0.7: the launcher's own "Арона" widget, 2×1 (resizable). */
+@@ -59,6 +62,8 @@ object BlueOSAronaWidget : CustomWidget {
+  * 0.7.1: her reply floats above the card (in the drag layer — it used to be cut by the card and crashed the
+  * launcher when it didn't fit), she can be patted (the pager / long press no longer take the finger), she looks
+  * where Sensei touches the home screen; the text can be full / status only / none, with phrases over the day.
++ * 0.7.2: Arona or Plana («Персонаж»); left alone for a while, Arona sits down on her desk (the game's work page
++ * pose, the desk in the palette's colours) and swings her legs — asleep at it at night; a tap and she's back.
+  */
+ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(context),
+     BlueOSMotion.Listener, Choreographer.FrameCallback {
+@@ -67,7 +72,11 @@ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(contex
+     private val handler = Handler(Looper.getMainLooper())
+     private val card = FrameLayout(context)
+     private val content = FrameLayout(context)
+-    private val arona = AronaView(context).apply { viewport = AronaView.UPPER_BODY }
++    private val arona = AronaView(context).apply { character = Character.current(cr); viewport = character.upperBody }
++    /** 0.7.2: made when she first sits down (the desk model is loaded only then). */
++    private var desk: AronaDeskView? = null
++    private var seated = false
++    private var lastTouch = SystemClock.uptimeMillis()
+     private val chip = ReplyChip(context)
+     private val texts = LinearLayout(context)
+     private val title = text(12f, false)
+@@ -107,12 +116,103 @@ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(contex
+         })
+         content.addView(arona, FrameLayout.LayoutParams(0, 0, Gravity.END or Gravity.BOTTOM).apply { marginEnd = (6 * dp).toInt() })
+         content.setOnTouchListener { _, e -> onAronaTouch(e) }
+-        title.text = context.getString(R.string.blueos_widget_arona)
++        title.text = context.getString(nameRes())
+         arona.tilt = { if (K.on(cr, K.HOME_TILT) && K.on(cr, K.TILT_ARONA)) BlueOSMotion.tilt else null }
++        arona.onReady = { layoutCharacter() }
+         applyColors()
+     }
+ 
++    private fun nameRes() = if (arona.character == Character.PLANA) R.string.blueos_widget_plana else R.string.blueos_widget_arona
++
++    /** 0.7.2: «Персонаж» changed — the other model, her name, her phrases. */
++    private fun applyCharacter() {
++        val c = Character.current(cr)
++        if (c != arona.character) {
++            if (seated) standUp(say = false)
++            arona.character = c
++            title.text = context.getString(nameRes())
++            layoutCharacter()
++            tick.run()
++        }
++    }
++
++    // ---------------------------------------------------------------- 0.7.2: at her desk
++
++    private fun deskWanted() = arona.character.hasDesk && K.on(cr, K.ARONA_DESK) && K.on(cr, K.LIVE_WIDGETS)
++
++    private fun sitDown() {
++        val d = desk ?: AronaDeskView(context).also {
++            desk = it
++            it.alpha = 0f
++            it.visibility = INVISIBLE
++            it.onReady = { if (seated) showDesk() }
++            content.addView(it, FrameLayout.LayoutParams(0, 0, (arona.layoutParams as FrameLayout.LayoutParams).gravity)
++                .apply { marginEnd = (6 * dp).toInt() })
++        }
++        seated = true
++        d.asleep = night()
++        d.deskTint = context.getColor(if (BlueOSColors.dark(context)) android.R.color.system_accent1_300
++            else android.R.color.system_accent1_200)
++        layoutCharacter()
++        if (d.isReady) showDesk()
++    }
++
++    private fun showDesk() {
++        val d = desk ?: return
++        d.visibility = VISIBLE
++        d.animate().alpha(1f).setDuration(350).start()
++        arona.animate().alpha(0f).setDuration(350).withEndAction { if (seated) arona.visibility = INVISIBLE }.start()
++        // she says what she's humming — a chip only: nothing she does by herself ever makes a sound
++        if (!d.asleep) handler.postDelayed({ if (seated) touch.say(AronaReplies.Kind.SIT, silent = true, at = d) }, 900)
++    }
++
++    private fun standUp(say: Boolean) {
++        val d = desk ?: return
++        if (!seated) return
++        seated = false
++        lastTouch = SystemClock.uptimeMillis()
++        val wasAsleep = d.asleep
++        arona.visibility = VISIBLE
++        arona.animate().alpha(1f).setDuration(300).start()
++        d.animate().alpha(0f).setDuration(300).withEndAction { if (!seated) d.visibility = INVISIBLE }.start()
++        if (say) handler.postDelayed({
++            touch.say(if (wasAsleep) AronaReplies.Kind.SLEEP_WAKE else AronaReplies.Kind.SIT_EXIT)
++        }, 250)
++    }
++
++    /** Sizes both views to the card (her pose's proportions) — the desk's legs stand on the card's bottom edge. */
++    private fun layoutCharacter() {
++        val ch = card.height
++        if (ch == 0) return
++        val vp = arona.viewport
++        arona.layoutParams = (arona.layoutParams as FrameLayout.LayoutParams).apply {
++            height = (ch * 0.96f).toInt()
++            width = (height * vp.w / vp.h).toInt()
++        }
++        var widest = arona.layoutParams.width
++        desk?.let { d ->
++            val dv = d.viewport
++            d.layoutParams = (d.layoutParams as FrameLayout.LayoutParams).apply {
++                height = ch
++                width = (height * dv.w / dv.h).toInt()
++                gravity = (arona.layoutParams as FrameLayout.LayoutParams).gravity
++            }
++            if (seated) widest = maxOf(widest, d.layoutParams.width)
++        }
++        // the text never runs under her
++        texts.layoutParams = (texts.layoutParams as FrameLayout.LayoutParams).apply {
++            width = (card.width - widest - (28 * dp).toInt()).coerceAtLeast(0)
++        }
++    }
++
+     private fun onAronaTouch(e: MotionEvent): Boolean {
++        lastTouch = SystemClock.uptimeMillis()
++        if (seated) {
++            // at her desk: a tap anywhere on her brings her back
++            if (e.actionMasked == MotionEvent.ACTION_DOWN) return desk?.let { e.x >= it.left && e.x <= it.right } == true
++            if (e.actionMasked == MotionEvent.ACTION_UP) standUp(say = true)
++            return true
++        }
+         val local = MotionEvent.obtain(e)
+         local.offsetLocation(-arona.left.toFloat() - arona.translationX, -arona.top.toFloat() - arona.translationY)
+         val handled = touch.onTouch(local)
+@@ -154,25 +254,14 @@ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(contex
+         title.visibility = if (mode == 0) VISIBLE else GONE
+         (arona.layoutParams as FrameLayout.LayoutParams).let {
+             val g = if (mode == 2) Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM else Gravity.END or Gravity.BOTTOM
+-            if (it.gravity != g) { it.gravity = g; arona.layoutParams = it }
++            if (it.gravity != g) { it.gravity = g; arona.layoutParams = it; layoutCharacter() }
+         }
+         tick.run()
+     }
+ 
+     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+         super.onSizeChanged(w, h, oldw, oldh)
+-        post {
+-            val ch = card.height
+-            val vp = arona.viewport
+-            arona.layoutParams = (arona.layoutParams as FrameLayout.LayoutParams).apply {
+-                height = (ch * 0.96f).toInt()
+-                width = (height * vp.w / vp.h).toInt()
+-            }
+-            // the text never runs under her
+-            texts.layoutParams = (texts.layoutParams as FrameLayout.LayoutParams).apply {
+-                width = (card.width - arona.layoutParams.width - (28 * dp).toInt()).coerceAtLeast(0)
+-            }
+-        }
++        post { layoutCharacter() }
+     }
+ 
+     override fun onAttachedToWindow() {
+@@ -180,7 +269,11 @@ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(contex
+         applyColors()                                          // glass needs the window for the blur
+         dragLayer?.let { if (chip.parent == null) it.addView(chip) }
+         unobserve = K.observe(context, listOf(K.WIDGET_MATERIAL, K.WIDGET_BLUR, K.ARONA_SLEEP, K.ARONA_WIDGET_TEXT,
+-            K.ARONA_WIDGET_PHRASES, "blueos_widget_transparency")) { applyColors(); applyLayout() }
++            K.ARONA_WIDGET_PHRASES, "blueos_widget_transparency", K.CHARACTER, K.ARONA_DESK)) {
++            applyCharacter(); applyColors(); applyLayout()
++            if (seated && !deskWanted()) standUp(say = false)
++        }
++        applyCharacter()
+         unGaze = AronaGaze.add { a, x, y -> if (isShown) touch.gaze(a, x, y) }
+         motion = BlueOSMotion.acquire(context, this)
+         Choreographer.getInstance().postFrameCallback(this)
+@@ -199,6 +292,9 @@ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(contex
+ 
+     /** One status: from the phrases of the time of day (changes every 20 min), or the three fixed ones. */
+     private fun phrase(asleep: Boolean, playing: Boolean): Pair<String, String> {
++        if (seated && !asleep) {
++            return context.getString(R.string.blueos_arona_desk) to context.getString(R.string.blueos_arona_desk_hint)
++        }
+         if (!K.on(cr, K.ARONA_WIDGET_PHRASES)) return when {
+             asleep -> context.getString(R.string.blueos_arona_sleeping) to context.getString(R.string.blueos_arona_shh)
+             playing -> context.getString(R.string.blueos_arona_listening) to ""
+@@ -206,12 +302,13 @@ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(contex
+         }
+         val c = Calendar.getInstance()
+         val h = c.get(Calendar.HOUR_OF_DAY)
++        val plana = arona.character == Character.PLANA
+         val pool = when {
+-            asleep -> R.array.blueos_arona_phr_night
+-            playing -> R.array.blueos_arona_phr_music
+-            h in 7..10 -> R.array.blueos_arona_phr_morning
+-            h in 11..17 -> R.array.blueos_arona_phr_day
+-            else -> R.array.blueos_arona_phr_evening
++            asleep -> if (plana) R.array.blueos_plana_phr_night else R.array.blueos_arona_phr_night
++            playing -> if (plana) R.array.blueos_plana_phr_music else R.array.blueos_arona_phr_music
++            h in 7..10 -> if (plana) R.array.blueos_plana_phr_morning else R.array.blueos_arona_phr_morning
++            h in 11..17 -> if (plana) R.array.blueos_plana_phr_day else R.array.blueos_arona_phr_day
++            else -> if (plana) R.array.blueos_plana_phr_evening else R.array.blueos_arona_phr_evening
+         }
+         val all = resources.getStringArray(pool)
+         val line = all[(h * 3 + c.get(Calendar.MINUTE) / 20) % all.size].split('|')
+@@ -226,6 +323,10 @@ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(contex
+             if (arona.sleeping != asleep) arona.setSleeping(asleep)
+             val playing = context.getSystemService(AudioManager::class.java).isMusicActive
+             arona.music = playing && K.on(cr, K.LIVE_WIDGETS) && K.on(cr, K.ARONA_MUSIC)
++            // 0.7.2: left alone (not while music plays — she sways to it standing), she sits down on her desk
++            if (!seated && deskWanted() && !arona.music && arona.touchMode == AronaView.NONE &&
++                SystemClock.uptimeMillis() - lastTouch > DESK_AFTER_MS && isShown) sitDown()
++            if (seated && desk?.asleep != asleep) { desk?.asleep = asleep; layoutCharacter() }
+             val (s, hint) = phrase(asleep, playing)
+             if (status.text != s) status.text = s
+             if (sub.text != hint) sub.text = hint
+@@ -244,13 +345,20 @@ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(contex
+ 
+     override fun onShake() {
+         if (!K.on(cr, K.SHAKE_ARONA) || !isShown) return
++        standUp(say = false)                                    // shaken off her desk
+         arona.dizzy()
+         handler.postDelayed({ touch.say(AronaReplies.Kind.SHAKE) }, 600)
+     }
+ 
+     override fun onFall() {
+         if (!K.on(cr, K.FALL_ARONA) || !isShown) return
++        standUp(say = false)
+         arona.startle()
+         handler.postDelayed({ touch.say(AronaReplies.Kind.FALL) }, 250)
+     }
++
++    companion object {
++        /** How long without a touch before she sits down on her desk. */
++        private const val DESK_AFTER_MS = 90_000L
++    }
+ }
+diff --git a/src/com/android/launcher3/blueos/BlueOSIcons.kt b/src/com/android/launcher3/blueos/BlueOSIcons.kt
+index 895f423c96..f9d558789a 100644
+--- a/src/com/android/launcher3/blueos/BlueOSIcons.kt
++++ b/src/com/android/launcher3/blueos/BlueOSIcons.kt
+@@ -25,12 +25,15 @@ object BlueOSIcons {
+     /** The icon mask to use, or null to keep the picked shape. */
+     fun mask(context: Context): String? = roundness(context).let { if (it >= 100) null else roundedPath(it) }
+ 
+-    val KEYS = listOf(K.ICON_ROUNDNESS, K.ICON_MATERIAL, K.WIDGET_MATERIAL)
++    val KEYS = listOf(K.ICON_ROUNDNESS, K.ICON_MATERIAL, K.WIDGET_MATERIAL, K.ICON_TRANSPARENCY)
+ 
+-    /** The plate material the icons really use: their own, or the widgets' («как у виджетов», -1). */
+-    fun plate(context: Context): Int {
++    /**
++     * The plate the icons really use: their own material or the widgets' («как у виджетов», -1), and its
++     * transparency (0.7.2) — the icon theme reloads only when this changes.
++     */
++    fun plate(context: Context): String {
+         val cr = context.contentResolver
+         val m = K.int(cr, K.ICON_MATERIAL)
+-        return if (m == -1) K.int(cr, K.WIDGET_MATERIAL) else m
++        return "${if (m == -1) K.int(cr, K.WIDGET_MATERIAL) else m}/${K.int(cr, K.ICON_TRANSPARENCY)}"
+     }
+ }
+diff --git a/src/com/android/launcher3/blueos/BlueOSWidgetDecorator.kt b/src/com/android/launcher3/blueos/BlueOSWidgetDecorator.kt
+index 4a91b82965..64bd5cd039 100644
+--- a/src/com/android/launcher3/blueos/BlueOSWidgetDecorator.kt
++++ b/src/com/android/launcher3/blueos/BlueOSWidgetDecorator.kt
+@@ -53,11 +53,11 @@ object BlueOSColors {
+         (Color.red(a) * f + Color.red(b) * (1 - f)).toInt(),
+         (Color.green(a) * f + Color.green(b) * (1 - f)).toInt(),
+         (Color.blue(a) * f + Color.blue(b) * (1 - f)).toInt())
+-    /** The widgets' transparency slider (Обои и стиль → Палитра), 0…1 opacity of the card. */
+-    fun cardOpacity(c: Context) = 1f - Settings.Secure.getInt(c.contentResolver, "blueos_widget_transparency", 15) / 100f
++    /** The widgets' transparency slider (Виджеты и значки, also Обои и стиль → Палитра), 0…1 opacity of the card. */
++    fun cardOpacity(c: Context) = 1f - K.int(c.contentResolver, K.WIDGET_TRANSPARENCY).coerceIn(0, 100) / 100f
+     /** The card's image alpha exactly as the widget providers set it (BlueOSWidgetStyle.cardAlpha). */
+     fun cardAlpha(c: Context) =
+-        (255 * (100 - Settings.Secure.getInt(c.contentResolver, "blueos_widget_transparency", 10).coerceIn(0, 100)) + 50) / 100
++        (255 * (100 - K.int(c.contentResolver, K.WIDGET_TRANSPARENCY).coerceIn(0, 100)) + 50) / 100
+     fun radius(c: Context) = c.resources.getDimension(android.R.dimen.system_app_widget_background_radius)
+ }
+ 
+@@ -88,12 +88,15 @@ object BlueOSMaterial {
+             if (stroke != 0) setStroke(strokeW.toInt().coerceAtLeast(1), stroke)
+         }
+         val dp = c.resources.displayMetrics.density
++        // 0.7.2: the transparency slider works for every material but solid (glass/outline were fixed at 55/45 %);
++        // at the default 15 % they look exactly as in 0.7.1, at 100 % only the blur and the edge are left
++        val o = BlueOSColors.cardOpacity(c)
+         val content = when (material) {
+-            1 -> shape(BlueOSColors.withAlpha(card, 0.55f), BlueOSColors.withAlpha(onS, 0.16f), dp)
++            1 -> shape(BlueOSColors.withAlpha(card, 0.65f * o), BlueOSColors.withAlpha(onS, 0.16f), dp)
+             2 -> return shape(card)
+-            3 -> shape(BlueOSColors.withAlpha(card, 0.45f), BlueOSColors.withAlpha(onS, 0.32f), 1.5f * dp)
+-            4 -> shape(BlueOSColors.withAlpha(BlueOSColors.mix(BlueOSColors.accent(c), card, 0.26f), BlueOSColors.cardOpacity(c)))
+-            else -> shape(BlueOSColors.withAlpha(card, BlueOSColors.cardOpacity(c)))
++            3 -> shape(BlueOSColors.withAlpha(card, 0.53f * o), BlueOSColors.withAlpha(onS, 0.32f), 1.5f * dp)
++            4 -> shape(BlueOSColors.withAlpha(BlueOSColors.mix(BlueOSColors.accent(c), card, 0.26f), o))
++            else -> shape(BlueOSColors.withAlpha(card, o))
+         }
+         return withBlur(root, content, blurRadius(c, material))
+     }

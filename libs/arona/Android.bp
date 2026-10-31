@@ -1,0 +1,19 @@
+//
+// BlueOS live Arona: the Spine character view, her replies, the reply chip and the motion
+// sensors (tilt, inertia, shake, fall). Shared by SystemUI (lock screen) and Launcher3 (widget).
+//
+
+android_library {
+    name: "BlueOSAronaLib",
+    srcs: ["src/**/*.kt"],
+    resource_dirs: ["res"],
+    manifest: "AndroidManifest.xml",
+    static_libs: [
+        "blueos-spine-android",
+        "androidx.core_core-ktx",
+    ],
+    // public APIs only, so every launcher flavour (some are sdk_version "current") can link it
+    sdk_version: "current",
+    min_sdk_version: "31",
+    kotlincflags: ["-Xjvm-default=all"],
+}

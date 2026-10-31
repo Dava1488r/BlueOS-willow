@@ -1,0 +1,80 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Fri, 30 Oct 2026 22:08:24 +0100
+Subject: [PATCH 30/30] BlueOS: sounds: LineageOS defaults for unplugging, a
+ full battery and touch
+
+Unset unplug sound plays the plug-in sound as LineageOS does, a full battery
+is silent, the unset touch sound is the stock tick.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: Idceeadccb2195f482a6a78bf1c24144f2ff97d17
+---
+ .../server/audio/SoundEffectsHelper.java      |  5 ++---
+ .../com/android/server/power/Notifier.java    | 22 ++++++++++---------
+ 2 files changed, 14 insertions(+), 13 deletions(-)
+
+diff --git a/services/core/java/com/android/server/audio/SoundEffectsHelper.java b/services/core/java/com/android/server/audio/SoundEffectsHelper.java
+index a98d913d68f8..32853b182497 100644
+--- a/services/core/java/com/android/server/audio/SoundEffectsHelper.java
++++ b/services/core/java/com/android/server/audio/SoundEffectsHelper.java
+@@ -68,11 +68,10 @@ class SoundEffectsHelper {
+     private static final String SOUND_EFFECTS_PATH = "/media/audio/ui/";
+ 
+     // BlueOS: touch sound chosen in Settings > Sound > Touch sound. Holds a file path, or
+-    // "android" for the stock tick; unset means the BlueOS default.
++    // "android" for the stock tick; unset means the stock tick too (LineageOS' default).
+     private static final String BLUEOS_TOUCH_SOUND = "blueos_touch_sound";
+     private static final String BLUEOS_TOUCH_SOUND_STOCK = "android";
+-    private static final String BLUEOS_TOUCH_SOUND_DEFAULT =
+-            "/product/media/audio/ui/BlueOS_Touch.ogg";
++    private static final String BLUEOS_TOUCH_SOUND_DEFAULT = BLUEOS_TOUCH_SOUND_STOCK;
+     private static final String TOUCH_SOUND_FILE = "Effect_Tick.ogg";
+ 
+     private static final int EFFECT_NOT_IN_SOUND_POOL = 0; // SoundPool sample IDs > 0
+diff --git a/services/core/java/com/android/server/power/Notifier.java b/services/core/java/com/android/server/power/Notifier.java
+index bfb55934a153..a4e4b494ca18 100644
+--- a/services/core/java/com/android/server/power/Notifier.java
++++ b/services/core/java/com/android/server/power/Notifier.java
+@@ -131,13 +131,10 @@ public class Notifier {
+     private static final int MSG_BATTERY_FULL = 10;
+ 
+     // BlueOS: own sounds for unplugging and for a full battery (Settings.Global, a file path or
+-    // "silent"; chosen in Settings > Sound > Charging sounds)
++    // "silent"; chosen in Settings > Sound > Charging sounds). Unset = as in LineageOS: unplugging
++    // plays the plug-in sound, a full battery is silent.
+     private static final String BLUEOS_CHARGING_STOPPED_SOUND = "blueos_charging_stopped_sound";
+     private static final String BLUEOS_BATTERY_FULL_SOUND = "blueos_battery_full_sound";
+-    private static final String BLUEOS_DEFAULT_CHARGING_STOPPED_SOUND =
+-            "/product/media/audio/notifications/Emoticon_Sweat.ogg";
+-    private static final String BLUEOS_DEFAULT_BATTERY_FULL_SOUND =
+-            "/product/media/audio/notifications/Emoticon_Steam.ogg";
+ 
+     private static final long[] CHARGING_VIBRATION_TIME = {
+             40, 40, 40, 40, 40, 40, 40, 40, 40, // ramp-up sampling rate = 40ms
+@@ -1390,15 +1387,20 @@ public class Notifier {
+     }
+ 
+     private void showChargingStopped(@UserIdInt int userId, boolean wireless) {
+-        // BlueOS: a sound of its own instead of the "charging started" one
+-        playChargingFeedback(userId, BLUEOS_CHARGING_STOPPED_SOUND,
+-                BLUEOS_DEFAULT_CHARGING_STOPPED_SOUND, true /* vibrate */, "Charging stopped");
++        // BlueOS: a sound of its own instead of the "charging started" one, if one is chosen
++        if (TextUtils.isEmpty(Settings.Global.getString(mContext.getContentResolver(),
++                BLUEOS_CHARGING_STOPPED_SOUND))) {
++            playChargingStartedFeedback(userId, wireless);
++        } else {
++            playChargingFeedback(userId, BLUEOS_CHARGING_STOPPED_SOUND, null /* default */,
++                    true /* vibrate */, "Charging stopped");
++        }
+         mSuspendBlocker.release();
+     }
+ 
+     private void showBatteryFull(@UserIdInt int userId) {
+-        playChargingFeedback(userId, BLUEOS_BATTERY_FULL_SOUND,
+-                BLUEOS_DEFAULT_BATTERY_FULL_SOUND, false /* vibrate */, "Battery full");
++        playChargingFeedback(userId, BLUEOS_BATTERY_FULL_SOUND, null /* silent */,
++                false /* vibrate */, "Battery full");
+         mSuspendBlocker.release();
+     }
+ 

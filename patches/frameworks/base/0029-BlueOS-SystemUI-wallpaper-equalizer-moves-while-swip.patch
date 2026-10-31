@@ -1,0 +1,156 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Fri, 30 Oct 2026 12:38:01 +0100
+Subject: [PATCH 29/30] BlueOS: SystemUI: wallpaper equalizer moves while
+ swiping, lock weather icon colour
+
+- While the home screen moves the weather holds its frame (for the GPU);
+  the equalizer froze with it. Now the held weather is one snapshot
+  (a hardware bitmap) and the equalizer keeps moving over it; without
+  weather the equalizer isn't held at all.
+- The lock screen's weather icon turned dark now and then: vector icons
+  from one resource share their tint state, another slice row tinted it
+  with its own text colour. Each row mutates its icon; a ColorStateList
+  text colour recolours it too.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: I524a6291fbea585a06ba82aca318576a0c59cf6f
+---
+ .../android/keyguard/KeyguardSliceView.java   | 11 ++-
+ .../wallpaper/BlueOSWallpaperWeather.kt       | 69 +++++++++++++++++--
+ 2 files changed, 73 insertions(+), 7 deletions(-)
+
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java
+index a7273986743b..8cc0ccb31884 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java
+@@ -690,10 +690,19 @@ public class KeyguardSliceView extends LinearLayout {
+             updateDrawableColors();
+         }
+ 
++        // BlueOS 0.8: every way of changing the text colour recolours the icon too
++        @Override
++        public void setTextColor(android.content.res.ColorStateList colors) {
++            super.setTextColor(colors);
++            updateDrawableColors();
++        }
++
+         @Override
+         public void setCompoundDrawablesRelative(Drawable start, Drawable top, Drawable end,
+                 Drawable bottom) {
+-            super.setCompoundDrawablesRelative(start, top, end, bottom);
++            // BlueOS 0.8: an icon of its own — vector icons loaded from one resource share their tint, so another
++            // row with the same weather icon (and a dark default text colour) turned the lock screen's cloud dark
++            super.setCompoundDrawablesRelative(start == null ? null : start.mutate(), top, end, bottom);
+             updateDrawableColors();
+             updatePadding();
+         }
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/wallpaper/BlueOSWallpaperWeather.kt b/packages/SystemUI/src/com/android/systemui/blueos/wallpaper/BlueOSWallpaperWeather.kt
+index 9a745f43300c..331d56052f45 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/wallpaper/BlueOSWallpaperWeather.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/wallpaper/BlueOSWallpaperWeather.kt
+@@ -445,16 +445,38 @@ class BlueOSWallpaperWeather(
+ 
+     @Volatile private var calmAt = 0L
+ 
++    /**
++     * 0.8: the weather's last frame while it's held (the equalizer keeps moving over it: it froze with the weather and
++     * looked broken while swiping pages). Made once per hold — the weather's shader isn't run again until it's calm.
++     */
++    private var held: Bitmap? = null
++
+     override fun doFrame(frameTimeNanos: Long) {
+         if (!running) return
+         val c = choreographer ?: return
+         val fading = synchronized(lock) { fadeFrom != null }
+         if (!fading && SystemClock.uptimeMillis() < calmAt) {
+-            // held still: the time doesn't run either, it goes on from the same frame afterwards
+-            lastFrame = frameTimeNanos
++            // held still: the weather's time doesn't run either, it goes on from the same frame afterwards
++            val eq = synchronized(lock) { eqHere() && beat.visible }
++            val dtMs = if (lastFrame == 0L) FRAME_MS_FAST else (frameTimeNanos - lastFrame) / 1_000_000L
++            if (eq && dtMs >= FRAME_MS_FAST) {
++                // the equalizer on the held weather (or on the plain picture — that is cheap anyway)
++                val noWeather = synchronized(lock) { effect == null }
++                if (noWeather) {
++                    render(::drawFrame)
++                } else {
++                    if (held == null) held = snapshot()
++                    val h = held
++                    if (h != null) render { cv -> synchronized(lock) { dst.set(0, 0, cv.width, cv.height); cv.drawBitmap(h, null, dst, picPaint); drawEq(cv) } }
++                }
++                lastFrame = frameTimeNanos
++            } else if (!eq) {
++                lastFrame = frameTimeNanos
++            }
+             c.postFrameCallback(this)
+             return
+         }
++        held = null                                  // (the last posted frame may still use it: no recycle())
+         // a lock ↔ home fade at the full frame rate; then rain / snow ~30 fps, the slow ones ~15 fps
+         val minMs = synchronized(lock) {
+             when {
+@@ -485,7 +507,43 @@ class BlueOSWallpaperWeather(
+      * mixes the two looks; with weather the effect switches its picture halfway, so the weather never blinks out.
+      */
+     private fun drawFrame(canvas: Canvas) = synchronized(lock) {
+-        val cur = shown ?: sharp ?: return@synchronized
++        if (drawScene(canvas) && eqHere()) drawEq(canvas)
++    }
++
++    /** The weather's current frame (no equalizer) as a hardware bitmap, or null; see [held]. */
++    private fun snapshot(): Bitmap? = try {
++        val w = size.width.toInt()
++        val h = size.height.toInt()
++        if (w <= 0 || h <= 0) null else {
++            val buffer = HardwareBuffer.create(w, h, HardwareBuffer.RGBA_8888, 1,
++                HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE or HardwareBuffer.USAGE_GPU_COLOR_OUTPUT)
++            val renderer = HardwareBufferRenderer(buffer)
++            val node = RenderNode("BlueOSWallHeld").apply { setPosition(0, 0, w, h) }
++            renderer.setContentRoot(node)
++            val c = node.beginRecording()
++            synchronized(lock) { drawScene(c) }
++            node.endRecording()
++            val done = CountDownLatch(1)
++            var ok = false
++            renderer.obtainRenderRequest().setColorSpace(SRGB).draw(Executor { it.run() }) { result ->
++                ok = result.status == HardwareBufferRenderer.RenderResult.SUCCESS &&
++                    result.fence.await(Duration.ofSeconds(1))
++                done.countDown()
++            }
++            done.await(2, TimeUnit.SECONDS)
++            renderer.close()
++            val bmp = if (ok) Bitmap.wrapHardwareBuffer(buffer, SRGB) else null
++            buffer.close()
++            bmp
++        }
++    } catch (e: Throwable) {
++        Log.w(TAG, "held frame failed", e)
++        null
++    }
++
++    /** Everything but the equalizer; false when there's nothing to draw yet. Under [lock]. */
++    private fun drawScene(canvas: Canvas): Boolean {
++        val cur = shown ?: sharp ?: return false
+         val from = fadeFrom
+         val k = if (from == null) 1f else ((SystemClock.uptimeMillis() - fadeStart) / FADE_MS.toFloat()).coerceIn(0f, 1f)
+         val fading = from != null && k < 1f
+@@ -501,8 +559,7 @@ class BlueOSWallpaperWeather(
+             } else {
+                 canvas.drawBitmap(cur, null, dst, picPaint)
+             }
+-            if (eqHere()) drawEq(canvas)
+-            return@synchronized
++            return true
+         }
+         foreground?.let { e.setBitmaps(it, if (fading && k < .5f) from!! else cur) }
+         e.draw(canvas)
+@@ -515,7 +572,7 @@ class BlueOSWallpaperWeather(
+             if (p.shafts) shafts(canvas, p.intensity / .55f)
+             if (p.storm) flash(canvas, p.intensity)
+         }
+-        if (eqHere()) drawEq(canvas)
++        return true
+     }
+ 
+     // ------------------------------------------------------------- «Эквалайзер на обоях»

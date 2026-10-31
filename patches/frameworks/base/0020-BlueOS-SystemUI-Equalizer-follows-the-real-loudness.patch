@@ -1,0 +1,94 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sun, 25 Oct 2026 10:40:27 +0100
+Subject: [PATCH 20/30] BlueOS: SystemUI: Equalizer follows the real loudness
+
+The normalized FFT blew quiet talk up to full height, and a silent track
+(all-zero spectrum while "playing") made the widget fall back to its
+made-up animation. Now the spectrum only gives the shape; the height
+follows the RMS of the output (-55 dBFS = resting, +40 dB = full), and a
+small floor keeps real silence as resting bars. Debug: setprop
+log.tag.BlueOSVisualizer DEBUG logs the loudness every 2 s.
+
+Change-Id: Ic8afc19935d50a91b90084703875357a87327c3d
+---
+ .../blueos/widgets/BlueOSVisualizerService.kt | 32 ++++++++++++++++---
+ 1 file changed, 28 insertions(+), 4 deletions(-)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSVisualizerService.kt b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSVisualizerService.kt
+index 70b2e47844bd..4f4f53c4dd9a 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSVisualizerService.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSVisualizerService.kt
+@@ -52,6 +52,8 @@ class BlueOSVisualizerService : Service() {
+     private val clients = mutableSetOf<IBinder>()
+     private val levels = FloatArray(BlueOSVisualizerView.BANDS)
+     private var sequence = 0
++    private var logTicks = 0
++    private val peakRms = Visualizer.MeasurementPeakRms()
+ 
+     private val poll =
+         object : Runnable {
+@@ -176,9 +178,10 @@ class BlueOSVisualizerService : Service() {
+                 // The setters return status codes, so no Kotlin property syntax here
+                 v.setEnabled(false)
+                 v.setCaptureSize(Visualizer.getCaptureSizeRange()[1].coerceAtMost(1024))
+-                // Normalized: the bars move the same at any volume
++                // Normalized FFT for the spectrum's shape; how high the bars go comes from the
++                // real loudness (RMS), else quiet talk would jump as high as loud music
+                 v.setScalingMode(Visualizer.SCALING_MODE_NORMALIZED)
+-                v.setMeasurementMode(Visualizer.MEASUREMENT_MODE_NONE)
++                v.setMeasurementMode(Visualizer.MEASUREMENT_MODE_PEAK_RMS)
+                 v.setEnabled(true)
+                 fft = ByteArray(v.captureSize)
+                 samplingRateHz = v.samplingRate / 1000f
+@@ -207,6 +210,13 @@ class BlueOSVisualizerService : Service() {
+         if (runCatching { v.getFft(fft) }.getOrDefault(Visualizer.ERROR) != Visualizer.SUCCESS) {
+             return
+         }
++        val rmsDb =
++            if (runCatching { v.getMeasurementPeakRms(peakRms) }.getOrDefault(Visualizer.ERROR) ==
++                    Visualizer.SUCCESS) {
++                peakRms.mRms / 100f // millibels, -96 dB is silence
++            } else SILENCE_DB
++        val loudness = ((rmsDb - SILENCE_DB) / LOUDNESS_RANGE_DB).coerceIn(0f, 1f)
++        logLoudness(rmsDb, loudness)
+         val bins = fft.size / 2
+         val binHz = samplingRateHz / fft.size
+         val bands = BlueOSVisualizerView.BANDS
+@@ -222,14 +232,24 @@ class BlueOSVisualizerService : Service() {
+                 val im = fft[2 * k + 1].toFloat()
+                 peak = maxOf(peak, hypot(re, im))
+             }
+-            // dB above the 8-bit noise floor, scaled to 0..1; highs get a little lift
++            // The band's shape: dB above the 8-bit noise floor, 0..1; highs get a little lift
+             val db = if (peak > 0f) 20f * log10(peak) else 0f
+             val lift = 1f + 0.6f * band / bands
+-            levels[band] = ((db - FLOOR_DB) / RANGE_DB * lift).coerceIn(0f, 1f)
++            val shape = ((db - FLOOR_DB) / RANGE_DB * lift).coerceIn(0f, 1f)
++            // A small floor: real silence shows resting bars. (A spectrum of exact zeros would
++            // make the widget think it can't hear the player and animate on its own.)
++            levels[band] = REST_LEVEL + (1f - REST_LEVEL) * shape * loudness
+         }
+         writeLevels(0)
+     }
+ 
++    /** setprop log.tag.BlueOSVisualizer DEBUG: the loudness every 2 s, to tune the ranges. */
++    private fun logLoudness(rmsDb: Float, loudness: Float) {
++        if (!Log.isLoggable(TAG, Log.DEBUG)) return
++        if (++logTicks % (2000 / POLL_MILLIS).toInt() != 0) return
++        Log.d(TAG, "rms=%.1f dB loudness=%.2f".format(rmsDb, loudness))
++    }
++
+     private fun writeLevels(flags: Int) {
+         val b = buffer ?: return
+         for (i in levels.indices) {
+@@ -247,5 +267,9 @@ class BlueOSVisualizerService : Service() {
+         const val MAX_HZ = 16_000f
+         const val FLOOR_DB = 6f
+         const val RANGE_DB = 36f
++        /** RMS (dBFS) at which the bars start to rise, and how many dB up to full height. */
++        const val SILENCE_DB = -55f
++        const val LOUDNESS_RANGE_DB = 40f
++        const val REST_LEVEL = 0.03f
+     }
+ }

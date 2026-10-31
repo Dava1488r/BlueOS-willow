@@ -1,0 +1,2064 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sun, 25 Oct 2026 09:53:34 +0100
+Subject: [PATCH 18/30] BlueOS: SystemUI: Widgets 0.6.1
+
+- Every widget keeps an 8 dp margin inside its cells (the card sat edge
+  to edge, so widgets touched each other and the screen edge on any grid).
+- Summary is centered in whatever size it is stretched to.
+- One card material: music and the player equalizer no longer use an
+  accent-colored card; the accent stays on the details.
+- No widget updates before the user unlocks: AppWidgetManager threw at
+  boot (wallpaper colors change while locked) and SystemUI crashed.
+
+Change-Id: I41fccb694b7ce0cf8ed01d6e77dbc6bfe014f750
+---
+ .../layout/blueos_battery_widget_large.xml    | 150 +++++-----
+ .../layout/blueos_battery_widget_medium.xml   | 138 ++++-----
+ .../layout/blueos_battery_widget_small.xml    |  64 +++--
+ .../res/layout/blueos_eq_widget_bars.xml      |  34 ++-
+ .../res/layout/blueos_eq_widget_full.xml      | 166 +++++------
+ .../res/layout/blueos_eq_widget_ring.xml      |  34 ++-
+ .../res/layout/blueos_eq_widget_wave.xml      |  68 +++--
+ .../res/layout/blueos_media_widget_large.xml  | 268 +++++++++---------
+ .../res/layout/blueos_media_widget_small.xml  | 120 ++++----
+ .../res/layout/blueos_media_widget_square.xml | 128 +++++----
+ .../res/layout/blueos_media_widget_wide.xml   | 186 ++++++------
+ .../blueos_summary_widget_dark_text.xml       |   9 +-
+ .../blueos_summary_widget_light_text.xml      |   9 +-
+ .../res/layout/blueos_toggles_widget.xml      | 186 ++++++------
+ .../widgets/BlueOSBatteryWidgetProvider.kt    |   1 +
+ .../widgets/BlueOSMediaWidgetProvider.kt      |  12 +-
+ .../widgets/BlueOSSummaryWidgetProvider.kt    |   1 +
+ .../widgets/BlueOSTogglesWidgetProvider.kt    |   1 +
+ .../blueos/widgets/BlueOSWidgetStyle.kt       |  10 +
+ 19 files changed, 843 insertions(+), 742 deletions(-)
+
+diff --git a/packages/SystemUI/res/layout/blueos_battery_widget_large.xml b/packages/SystemUI/res/layout/blueos_battery_widget_large.xml
+index ad9ad593b13a..4c66ee015128 100644
+--- a/packages/SystemUI/res/layout/blueos_battery_widget_large.xml
++++ b/packages/SystemUI/res/layout/blueos_battery_widget_large.xml
+@@ -1,103 +1,111 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <!-- BlueOS battery widget, 2x2: big ring with the percentage, charging time, headphones -->
+ <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@drawable/blueos_widget_outline"
+-    android:clipToOutline="true">
++    android:padding="8dp">
+ 
+-    <ImageView
+-        android:id="@+id/blueos_widget_bg"
++    <!-- The card keeps 8 dp inside the widget's cells: widgets never touch each other or the
++         screen edge, whatever the grid -->
++    <FrameLayout
++        android:id="@android:id/background"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+-        android:contentDescription="@null"
+-        android:scaleType="fitXY"
+-        android:src="@drawable/blueos_widget_card" />
++        android:background="@drawable/blueos_widget_outline"
++        android:clipToOutline="true">
+ 
+-    <LinearLayout
+-        android:layout_width="match_parent"
+-        android:layout_height="match_parent"
+-        android:gravity="center"
+-        android:orientation="vertical"
+-        android:padding="10dp">
+-
+-        <FrameLayout
+-            android:layout_width="92dp"
+-            android:layout_height="92dp">
+-
+-            <ProgressBar
+-                android:id="@+id/blueos_battery_ring"
+-                style="?android:attr/progressBarStyleHorizontal"
+-                android:layout_width="match_parent"
+-                android:layout_height="match_parent"
+-                android:indeterminate="false"
+-                android:max="100"
+-                android:progressDrawable="@drawable/blueos_battery_ring" />
+-
+-            <TextView
+-                android:id="@+id/blueos_battery_level"
+-                android:layout_width="wrap_content"
+-                android:layout_height="wrap_content"
+-                android:layout_gravity="center"
+-                android:fontFamily="blueos-clock"
+-                android:fontVariationSettings="'wght' 600"
+-                android:includeFontPadding="false"
+-                android:singleLine="true"
+-                android:textColor="@color/blueos_widget_on_surface"
+-                android:textSize="20sp" />
+-        </FrameLayout>
++        <ImageView
++            android:id="@+id/blueos_widget_bg"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitXY"
++            android:src="@drawable/blueos_widget_card" />
+ 
+         <LinearLayout
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="8dp"
+-            android:gravity="center_vertical"
+-            android:orientation="horizontal">
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:gravity="center"
++            android:orientation="vertical"
++            android:padding="10dp">
+ 
+-            <ImageView
+-                android:id="@+id/blueos_battery_charging"
+-                android:layout_width="14dp"
+-                android:layout_height="14dp"
+-                android:contentDescription="@string/blueos_battery_widget_charging"
+-                android:src="@drawable/blueos_ic_bolt"
+-                android:visibility="gone" />
++            <FrameLayout
++                android:layout_width="92dp"
++                android:layout_height="92dp">
+ 
+-            <TextView
+-                android:id="@+id/blueos_battery_status"
+-                android:layout_width="wrap_content"
+-                android:layout_height="wrap_content"
+-                android:layout_marginEnd="10dp"
+-                android:fontFamily="google-sans-text"
+-                android:singleLine="true"
+-                android:textColor="@color/blueos_widget_on_surface_variant"
+-                android:textSize="12sp"
+-                android:visibility="gone" />
++                <ProgressBar
++                    android:id="@+id/blueos_battery_ring"
++                    style="?android:attr/progressBarStyleHorizontal"
++                    android:layout_width="match_parent"
++                    android:layout_height="match_parent"
++                    android:indeterminate="false"
++                    android:max="100"
++                    android:progressDrawable="@drawable/blueos_battery_ring" />
++
++                <TextView
++                    android:id="@+id/blueos_battery_level"
++                    android:layout_width="wrap_content"
++                    android:layout_height="wrap_content"
++                    android:layout_gravity="center"
++                    android:fontFamily="blueos-clock"
++                    android:fontVariationSettings="'wght' 600"
++                    android:includeFontPadding="false"
++                    android:singleLine="true"
++                    android:textColor="@color/blueos_widget_on_surface"
++                    android:textSize="20sp" />
++            </FrameLayout>
+ 
+             <LinearLayout
+-                android:id="@+id/blueos_headset"
+                 android:layout_width="wrap_content"
+                 android:layout_height="wrap_content"
++                android:layout_marginTop="8dp"
+                 android:gravity="center_vertical"
+-                android:orientation="horizontal"
+-                android:visibility="gone">
++                android:orientation="horizontal">
+ 
+                 <ImageView
++                    android:id="@+id/blueos_battery_charging"
+                     android:layout_width="14dp"
+                     android:layout_height="14dp"
+-                    android:contentDescription="@string/blueos_battery_widget_headphones"
+-                    android:src="@drawable/blueos_ic_headphones" />
++                    android:contentDescription="@string/blueos_battery_widget_charging"
++                    android:src="@drawable/blueos_ic_bolt"
++                    android:visibility="gone" />
+ 
+                 <TextView
+-                    android:id="@+id/blueos_headset_level"
++                    android:id="@+id/blueos_battery_status"
+                     android:layout_width="wrap_content"
+                     android:layout_height="wrap_content"
+-                    android:layout_marginStart="3dp"
++                    android:layout_marginEnd="10dp"
+                     android:fontFamily="google-sans-text"
+                     android:singleLine="true"
+                     android:textColor="@color/blueos_widget_on_surface_variant"
+-                    android:textSize="12sp" />
++                    android:textSize="12sp"
++                    android:visibility="gone" />
++
++                <LinearLayout
++                    android:id="@+id/blueos_headset"
++                    android:layout_width="wrap_content"
++                    android:layout_height="wrap_content"
++                    android:gravity="center_vertical"
++                    android:orientation="horizontal"
++                    android:visibility="gone">
++
++                    <ImageView
++                        android:layout_width="14dp"
++                        android:layout_height="14dp"
++                        android:contentDescription="@string/blueos_battery_widget_headphones"
++                        android:src="@drawable/blueos_ic_headphones" />
++
++                    <TextView
++                        android:id="@+id/blueos_headset_level"
++                        android:layout_width="wrap_content"
++                        android:layout_height="wrap_content"
++                        android:layout_marginStart="3dp"
++                        android:fontFamily="google-sans-text"
++                        android:singleLine="true"
++                        android:textColor="@color/blueos_widget_on_surface_variant"
++                        android:textSize="12sp" />
++                </LinearLayout>
+             </LinearLayout>
+         </LinearLayout>
+-    </LinearLayout>
++    </FrameLayout>
+ </FrameLayout>
+diff --git a/packages/SystemUI/res/layout/blueos_battery_widget_medium.xml b/packages/SystemUI/res/layout/blueos_battery_widget_medium.xml
+index 365f8219bd65..b48449091732 100644
+--- a/packages/SystemUI/res/layout/blueos_battery_widget_medium.xml
++++ b/packages/SystemUI/res/layout/blueos_battery_widget_medium.xml
+@@ -1,105 +1,113 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <!-- BlueOS battery widget, 2x1: ring, percentage, charging time or headphones -->
+ <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@drawable/blueos_widget_outline"
+-    android:clipToOutline="true">
++    android:padding="8dp">
+ 
+-    <ImageView
+-        android:id="@+id/blueos_widget_bg"
++    <!-- The card keeps 8 dp inside the widget's cells: widgets never touch each other or the
++         screen edge, whatever the grid -->
++    <FrameLayout
++        android:id="@android:id/background"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+-        android:contentDescription="@null"
+-        android:scaleType="fitXY"
+-        android:src="@drawable/blueos_widget_card" />
++        android:background="@drawable/blueos_widget_outline"
++        android:clipToOutline="true">
+ 
+-    <LinearLayout
+-        android:layout_width="match_parent"
+-        android:layout_height="match_parent"
+-        android:gravity="center_vertical"
+-        android:orientation="horizontal"
+-        android:paddingHorizontal="14dp">
+-
+-        <ProgressBar
+-            android:id="@+id/blueos_battery_ring"
+-            style="?android:attr/progressBarStyleHorizontal"
+-            android:layout_width="44dp"
+-            android:layout_height="44dp"
+-            android:indeterminate="false"
+-            android:max="100"
+-            android:progressDrawable="@drawable/blueos_battery_ring" />
++        <ImageView
++            android:id="@+id/blueos_widget_bg"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitXY"
++            android:src="@drawable/blueos_widget_card" />
+ 
+         <LinearLayout
+-            android:layout_width="0dp"
+-            android:layout_height="wrap_content"
+-            android:layout_marginStart="12dp"
+-            android:layout_weight="1"
+-            android:orientation="vertical">
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:gravity="center_vertical"
++            android:orientation="horizontal"
++            android:paddingHorizontal="14dp">
+ 
+-            <TextView
+-                android:id="@+id/blueos_battery_level"
+-                android:layout_width="wrap_content"
+-                android:layout_height="wrap_content"
+-                android:fontFamily="blueos-clock"
+-                android:fontVariationSettings="'wght' 600"
+-                android:includeFontPadding="false"
+-                android:singleLine="true"
+-                android:textColor="@color/blueos_widget_on_surface"
+-                android:textSize="22sp" />
++            <ProgressBar
++                android:id="@+id/blueos_battery_ring"
++                style="?android:attr/progressBarStyleHorizontal"
++                android:layout_width="44dp"
++                android:layout_height="44dp"
++                android:indeterminate="false"
++                android:max="100"
++                android:progressDrawable="@drawable/blueos_battery_ring" />
+ 
+             <LinearLayout
+-                android:layout_width="wrap_content"
++                android:layout_width="0dp"
+                 android:layout_height="wrap_content"
+-                android:layout_marginTop="2dp"
+-                android:gravity="center_vertical"
+-                android:orientation="horizontal">
+-
+-                <ImageView
+-                    android:id="@+id/blueos_battery_charging"
+-                    android:layout_width="13dp"
+-                    android:layout_height="13dp"
+-                    android:contentDescription="@string/blueos_battery_widget_charging"
+-                    android:src="@drawable/blueos_ic_bolt"
+-                    android:visibility="gone" />
++                android:layout_marginStart="12dp"
++                android:layout_weight="1"
++                android:orientation="vertical">
+ 
+                 <TextView
+-                    android:id="@+id/blueos_battery_status"
++                    android:id="@+id/blueos_battery_level"
+                     android:layout_width="wrap_content"
+                     android:layout_height="wrap_content"
+-                    android:layout_marginEnd="8dp"
+-                    android:fontFamily="google-sans-text"
++                    android:fontFamily="blueos-clock"
++                    android:fontVariationSettings="'wght' 600"
++                    android:includeFontPadding="false"
+                     android:singleLine="true"
+-                    android:textColor="@color/blueos_widget_on_surface_variant"
+-                    android:textSize="12sp"
+-                    android:visibility="gone" />
++                    android:textColor="@color/blueos_widget_on_surface"
++                    android:textSize="22sp" />
+ 
+                 <LinearLayout
+-                    android:id="@+id/blueos_headset"
+                     android:layout_width="wrap_content"
+                     android:layout_height="wrap_content"
++                    android:layout_marginTop="2dp"
+                     android:gravity="center_vertical"
+-                    android:orientation="horizontal"
+-                    android:visibility="gone">
++                    android:orientation="horizontal">
+ 
+                     <ImageView
++                        android:id="@+id/blueos_battery_charging"
+                         android:layout_width="13dp"
+                         android:layout_height="13dp"
+-                        android:contentDescription="@string/blueos_battery_widget_headphones"
+-                        android:src="@drawable/blueos_ic_headphones" />
++                        android:contentDescription="@string/blueos_battery_widget_charging"
++                        android:src="@drawable/blueos_ic_bolt"
++                        android:visibility="gone" />
+ 
+                     <TextView
+-                        android:id="@+id/blueos_headset_level"
++                        android:id="@+id/blueos_battery_status"
+                         android:layout_width="wrap_content"
+                         android:layout_height="wrap_content"
+-                        android:layout_marginStart="3dp"
++                        android:layout_marginEnd="8dp"
+                         android:fontFamily="google-sans-text"
+                         android:singleLine="true"
+                         android:textColor="@color/blueos_widget_on_surface_variant"
+-                        android:textSize="12sp" />
++                        android:textSize="12sp"
++                        android:visibility="gone" />
++
++                    <LinearLayout
++                        android:id="@+id/blueos_headset"
++                        android:layout_width="wrap_content"
++                        android:layout_height="wrap_content"
++                        android:gravity="center_vertical"
++                        android:orientation="horizontal"
++                        android:visibility="gone">
++
++                        <ImageView
++                            android:layout_width="13dp"
++                            android:layout_height="13dp"
++                            android:contentDescription="@string/blueos_battery_widget_headphones"
++                            android:src="@drawable/blueos_ic_headphones" />
++
++                        <TextView
++                            android:id="@+id/blueos_headset_level"
++                            android:layout_width="wrap_content"
++                            android:layout_height="wrap_content"
++                            android:layout_marginStart="3dp"
++                            android:fontFamily="google-sans-text"
++                            android:singleLine="true"
++                            android:textColor="@color/blueos_widget_on_surface_variant"
++                            android:textSize="12sp" />
++                    </LinearLayout>
+                 </LinearLayout>
+             </LinearLayout>
+         </LinearLayout>
+-    </LinearLayout>
++    </FrameLayout>
+ </FrameLayout>
+diff --git a/packages/SystemUI/res/layout/blueos_battery_widget_small.xml b/packages/SystemUI/res/layout/blueos_battery_widget_small.xml
+index ac7e85b6eda5..f32bc9aa7d5a 100644
+--- a/packages/SystemUI/res/layout/blueos_battery_widget_small.xml
++++ b/packages/SystemUI/res/layout/blueos_battery_widget_small.xml
+@@ -1,39 +1,47 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <!-- BlueOS battery widget, 1x1: the ring and the percentage -->
+ <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@drawable/blueos_widget_outline"
+-    android:clipToOutline="true">
++    android:padding="8dp">
+ 
+-    <ImageView
+-        android:id="@+id/blueos_widget_bg"
++    <!-- The card keeps 8 dp inside the widget's cells: widgets never touch each other or the
++         screen edge, whatever the grid -->
++    <FrameLayout
++        android:id="@android:id/background"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+-        android:contentDescription="@null"
+-        android:scaleType="fitXY"
+-        android:src="@drawable/blueos_widget_card" />
++        android:background="@drawable/blueos_widget_outline"
++        android:clipToOutline="true">
+ 
+-    <ProgressBar
+-        android:id="@+id/blueos_battery_ring"
+-        style="?android:attr/progressBarStyleHorizontal"
+-        android:layout_width="64dp"
+-        android:layout_height="64dp"
+-        android:layout_gravity="center"
+-        android:indeterminate="false"
+-        android:max="100"
+-        android:progressDrawable="@drawable/blueos_battery_ring" />
++        <ImageView
++            android:id="@+id/blueos_widget_bg"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitXY"
++            android:src="@drawable/blueos_widget_card" />
+ 
+-    <TextView
+-        android:id="@+id/blueos_battery_level"
+-        android:layout_width="wrap_content"
+-        android:layout_height="wrap_content"
+-        android:layout_gravity="center"
+-        android:fontFamily="blueos-clock"
+-        android:fontVariationSettings="'wght' 600"
+-        android:includeFontPadding="false"
+-        android:singleLine="true"
+-        android:textColor="@color/blueos_widget_on_surface"
+-        android:textSize="14sp" />
++        <ProgressBar
++            android:id="@+id/blueos_battery_ring"
++            style="?android:attr/progressBarStyleHorizontal"
++            android:layout_width="64dp"
++            android:layout_height="64dp"
++            android:layout_gravity="center"
++            android:indeterminate="false"
++            android:max="100"
++            android:progressDrawable="@drawable/blueos_battery_ring" />
++
++        <TextView
++            android:id="@+id/blueos_battery_level"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_gravity="center"
++            android:fontFamily="blueos-clock"
++            android:fontVariationSettings="'wght' 600"
++            android:includeFontPadding="false"
++            android:singleLine="true"
++            android:textColor="@color/blueos_widget_on_surface"
++            android:textSize="14sp" />
++    </FrameLayout>
+ </FrameLayout>
+diff --git a/packages/SystemUI/res/layout/blueos_eq_widget_bars.xml b/packages/SystemUI/res/layout/blueos_eq_widget_bars.xml
+index fbeeffc37b8f..68895fc828dc 100644
+--- a/packages/SystemUI/res/layout/blueos_eq_widget_bars.xml
++++ b/packages/SystemUI/res/layout/blueos_eq_widget_bars.xml
+@@ -1,23 +1,31 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <!-- BlueOS equalizer widget: bars. BlueOSVisualizerView draws itself in the launcher. -->
+ <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@drawable/blueos_widget_outline"
+-    android:clipToOutline="true">
++    android:padding="8dp">
+ 
+-    <ImageView
+-        android:id="@+id/blueos_widget_bg"
++    <!-- The card keeps 8 dp inside the widget's cells: widgets never touch each other or the
++         screen edge, whatever the grid -->
++    <FrameLayout
++        android:id="@android:id/background"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+-        android:contentDescription="@null"
+-        android:scaleType="fitXY"
+-        android:src="@drawable/blueos_widget_card" />
++        android:background="@drawable/blueos_widget_outline"
++        android:clipToOutline="true">
+ 
+-    <android.widget.BlueOSVisualizerView
+-        android:id="@+id/blueos_eq_view"
+-        android:layout_width="match_parent"
+-        android:layout_height="match_parent"
+-        android:padding="16dp" />
++        <ImageView
++            android:id="@+id/blueos_widget_bg"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitXY"
++            android:src="@drawable/blueos_widget_card" />
++
++        <android.widget.BlueOSVisualizerView
++            android:id="@+id/blueos_eq_view"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:padding="16dp" />
++    </FrameLayout>
+ </FrameLayout>
+diff --git a/packages/SystemUI/res/layout/blueos_eq_widget_full.xml b/packages/SystemUI/res/layout/blueos_eq_widget_full.xml
+index dd8097537249..bc3cfd5a7556 100644
+--- a/packages/SystemUI/res/layout/blueos_eq_widget_full.xml
++++ b/packages/SystemUI/res/layout/blueos_eq_widget_full.xml
+@@ -1,102 +1,110 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <!-- BlueOS equalizer widget: the track and bars from the middle line on the accent card -->
+ <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@drawable/blueos_widget_outline"
+-    android:clipToOutline="true">
++    android:padding="8dp">
+ 
+-    <ImageView
+-        android:id="@+id/blueos_widget_bg"
++    <!-- The card keeps 8 dp inside the widget's cells: widgets never touch each other or the
++         screen edge, whatever the grid -->
++    <FrameLayout
++        android:id="@android:id/background"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+-        android:contentDescription="@null"
+-        android:scaleType="fitXY"
+-        android:src="@drawable/blueos_widget_card_accent" />
++        android:background="@drawable/blueos_widget_outline"
++        android:clipToOutline="true">
+ 
+-    <LinearLayout
+-        android:layout_width="match_parent"
+-        android:layout_height="match_parent"
+-        android:orientation="vertical"
+-        android:padding="12dp">
++        <ImageView
++            android:id="@+id/blueos_widget_bg"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitXY"
++            android:src="@drawable/blueos_widget_card" />
+ 
+         <LinearLayout
+             android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:gravity="center_vertical"
+-            android:orientation="horizontal">
++            android:layout_height="match_parent"
++            android:orientation="vertical"
++            android:padding="12dp">
+ 
+-            <FrameLayout
+-                android:layout_width="48dp"
+-                android:layout_height="48dp"
+-                android:background="@drawable/blueos_media_art_bg"
+-                android:clipToOutline="true">
++            <LinearLayout
++                android:layout_width="match_parent"
++                android:layout_height="wrap_content"
++                android:gravity="center_vertical"
++                android:orientation="horizontal">
+ 
+-                <ImageView
+-                    android:id="@+id/blueos_media_placeholder"
+-                    android:layout_width="match_parent"
+-                    android:layout_height="match_parent"
+-                    android:contentDescription="@null"
+-                    android:padding="4dp"
+-                    android:src="@drawable/blueos_ic_music_note" />
++                <FrameLayout
++                    android:layout_width="48dp"
++                    android:layout_height="48dp"
++                    android:background="@drawable/blueos_media_art_bg"
++                    android:clipToOutline="true">
+ 
+-                <ImageView
+-                    android:id="@+id/blueos_media_art"
+-                    android:layout_width="match_parent"
+-                    android:layout_height="match_parent"
+-                    android:contentDescription="@null"
+-                    android:scaleType="centerCrop"
+-                    android:visibility="gone" />
+-            </FrameLayout>
++                    <ImageView
++                        android:id="@+id/blueos_media_placeholder"
++                        android:layout_width="match_parent"
++                        android:layout_height="match_parent"
++                        android:contentDescription="@null"
++                        android:padding="4dp"
++                        android:src="@drawable/blueos_ic_music_note" />
+ 
+-            <LinearLayout
+-                android:layout_width="0dp"
+-                android:layout_height="wrap_content"
+-                android:layout_marginStart="12dp"
+-                android:layout_weight="1"
+-                android:orientation="vertical">
++                    <ImageView
++                        android:id="@+id/blueos_media_art"
++                        android:layout_width="match_parent"
++                        android:layout_height="match_parent"
++                        android:contentDescription="@null"
++                        android:scaleType="centerCrop"
++                        android:visibility="gone" />
++                </FrameLayout>
+ 
+-                <TextView
+-                    android:id="@+id/blueos_media_title"
+-                    android:layout_width="match_parent"
++                <LinearLayout
++                    android:layout_width="0dp"
+                     android:layout_height="wrap_content"
+-                    android:ellipsize="end"
+-                    android:fontFamily="google-sans-text-medium"
+-                    android:singleLine="true"
+-                    android:text="@string/blueos_media_widget_idle"
+-                    android:textColor="@color/blueos_widget_on_primary_container"
+-                    android:textSize="15sp" />
++                    android:layout_marginStart="12dp"
++                    android:layout_weight="1"
++                    android:orientation="vertical">
+ 
+-                <TextView
+-                    android:id="@+id/blueos_media_artist"
+-                    android:layout_width="match_parent"
+-                    android:layout_height="wrap_content"
+-                    android:alpha="0.75"
+-                    android:ellipsize="end"
+-                    android:fontFamily="google-sans-text"
+-                    android:singleLine="true"
+-                    android:textColor="@color/blueos_widget_on_primary_container"
+-                    android:textSize="12sp" />
++                    <TextView
++                        android:id="@+id/blueos_media_title"
++                        android:layout_width="match_parent"
++                        android:layout_height="wrap_content"
++                        android:ellipsize="end"
++                        android:fontFamily="google-sans-text-medium"
++                        android:singleLine="true"
++                        android:text="@string/blueos_media_widget_idle"
++                        android:textColor="@color/blueos_widget_on_surface"
++                        android:textSize="15sp" />
++
++                    <TextView
++                        android:id="@+id/blueos_media_artist"
++                        android:layout_width="match_parent"
++                        android:layout_height="wrap_content"
++                        android:alpha="0.75"
++                        android:ellipsize="end"
++                        android:fontFamily="google-sans-text"
++                        android:singleLine="true"
++                        android:textColor="@color/blueos_widget_on_surface"
++                        android:textSize="12sp" />
++                </LinearLayout>
++
++                <ImageView
++                    android:id="@+id/blueos_media_play_pause"
++                    android:layout_width="40dp"
++                    android:layout_height="40dp"
++                    android:layout_marginStart="8dp"
++                    android:background="@drawable/blueos_media_play_bg"
++                    android:contentDescription="@string/blueos_media_widget_play"
++                    android:padding="9dp"
++                    android:src="@drawable/blueos_ic_play"
++                    android:tint="@color/blueos_widget_on_primary" />
+             </LinearLayout>
+ 
+-            <ImageView
+-                android:id="@+id/blueos_media_play_pause"
+-                android:layout_width="40dp"
+-                android:layout_height="40dp"
+-                android:layout_marginStart="8dp"
+-                android:background="@drawable/blueos_media_play_bg_inverse"
+-                android:contentDescription="@string/blueos_media_widget_play"
+-                android:padding="9dp"
+-                android:src="@drawable/blueos_ic_play"
+-                android:tint="@color/blueos_widget_primary_container" />
++            <android.widget.BlueOSVisualizerView
++                android:id="@+id/blueos_eq_view"
++                android:layout_width="match_parent"
++                android:layout_height="0dp"
++                android:layout_marginTop="10dp"
++                android:layout_weight="1" />
+         </LinearLayout>
+-
+-        <android.widget.BlueOSVisualizerView
+-            android:id="@+id/blueos_eq_view"
+-            android:layout_width="match_parent"
+-            android:layout_height="0dp"
+-            android:layout_marginTop="10dp"
+-            android:layout_weight="1" />
+-    </LinearLayout>
++    </FrameLayout>
+ </FrameLayout>
+diff --git a/packages/SystemUI/res/layout/blueos_eq_widget_ring.xml b/packages/SystemUI/res/layout/blueos_eq_widget_ring.xml
+index 36579b808d02..91cbd0f287ba 100644
+--- a/packages/SystemUI/res/layout/blueos_eq_widget_ring.xml
++++ b/packages/SystemUI/res/layout/blueos_eq_widget_ring.xml
+@@ -1,23 +1,31 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <!-- BlueOS equalizer widget: bars around the album art. BlueOSVisualizerView draws itself in the launcher. -->
+ <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@drawable/blueos_widget_outline"
+-    android:clipToOutline="true">
++    android:padding="8dp">
+ 
+-    <ImageView
+-        android:id="@+id/blueos_widget_bg"
++    <!-- The card keeps 8 dp inside the widget's cells: widgets never touch each other or the
++         screen edge, whatever the grid -->
++    <FrameLayout
++        android:id="@android:id/background"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+-        android:contentDescription="@null"
+-        android:scaleType="fitXY"
+-        android:src="@drawable/blueos_widget_card" />
++        android:background="@drawable/blueos_widget_outline"
++        android:clipToOutline="true">
+ 
+-    <android.widget.BlueOSVisualizerView
+-        android:id="@+id/blueos_eq_view"
+-        android:layout_width="match_parent"
+-        android:layout_height="match_parent"
+-        android:padding="8dp" />
++        <ImageView
++            android:id="@+id/blueos_widget_bg"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitXY"
++            android:src="@drawable/blueos_widget_card" />
++
++        <android.widget.BlueOSVisualizerView
++            android:id="@+id/blueos_eq_view"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:padding="8dp" />
++    </FrameLayout>
+ </FrameLayout>
+diff --git a/packages/SystemUI/res/layout/blueos_eq_widget_wave.xml b/packages/SystemUI/res/layout/blueos_eq_widget_wave.xml
+index fbdedd94b6f1..1f7177687b45 100644
+--- a/packages/SystemUI/res/layout/blueos_eq_widget_wave.xml
++++ b/packages/SystemUI/res/layout/blueos_eq_widget_wave.xml
+@@ -1,43 +1,51 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <!-- BlueOS equalizer widget: two waves and the title. BlueOSVisualizerView draws in the launcher. -->
+ <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@drawable/blueos_widget_outline"
+-    android:clipToOutline="true">
++    android:padding="8dp">
+ 
+-    <ImageView
+-        android:id="@+id/blueos_widget_bg"
++    <!-- The card keeps 8 dp inside the widget's cells: widgets never touch each other or the
++         screen edge, whatever the grid -->
++    <FrameLayout
++        android:id="@android:id/background"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+-        android:contentDescription="@null"
+-        android:scaleType="fitXY"
+-        android:src="@drawable/blueos_widget_card" />
++        android:background="@drawable/blueos_widget_outline"
++        android:clipToOutline="true">
+ 
+-    <LinearLayout
+-        android:layout_width="match_parent"
+-        android:layout_height="match_parent"
+-        android:orientation="vertical"
+-        android:padding="12dp">
+-
+-        <android.widget.BlueOSVisualizerView
+-            android:id="@+id/blueos_eq_view"
++        <ImageView
++            android:id="@+id/blueos_widget_bg"
+             android:layout_width="match_parent"
+-            android:layout_height="0dp"
+-            android:layout_weight="1" />
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitXY"
++            android:src="@drawable/blueos_widget_card" />
+ 
+-        <TextView
+-            android:id="@+id/blueos_media_title"
++        <LinearLayout
+             android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="4dp"
+-            android:ellipsize="end"
+-            android:fontFamily="google-sans-text"
+-            android:gravity="center"
+-            android:singleLine="true"
+-            android:text="@string/blueos_media_widget_idle"
+-            android:textColor="@color/blueos_widget_on_surface_variant"
+-            android:textSize="12sp" />
+-    </LinearLayout>
++            android:layout_height="match_parent"
++            android:orientation="vertical"
++            android:padding="12dp">
++
++            <android.widget.BlueOSVisualizerView
++                android:id="@+id/blueos_eq_view"
++                android:layout_width="match_parent"
++                android:layout_height="0dp"
++                android:layout_weight="1" />
++
++            <TextView
++                android:id="@+id/blueos_media_title"
++                android:layout_width="match_parent"
++                android:layout_height="wrap_content"
++                android:layout_marginTop="4dp"
++                android:ellipsize="end"
++                android:fontFamily="google-sans-text"
++                android:gravity="center"
++                android:singleLine="true"
++                android:text="@string/blueos_media_widget_idle"
++                android:textColor="@color/blueos_widget_on_surface_variant"
++                android:textSize="12sp" />
++        </LinearLayout>
++    </FrameLayout>
+ </FrameLayout>
+diff --git a/packages/SystemUI/res/layout/blueos_media_widget_large.xml b/packages/SystemUI/res/layout/blueos_media_widget_large.xml
+index 093b94f3184d..bfaadc2d2643 100644
+--- a/packages/SystemUI/res/layout/blueos_media_widget_large.xml
++++ b/packages/SystemUI/res/layout/blueos_media_widget_large.xml
+@@ -1,153 +1,161 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <!-- BlueOS music widget, 3x2 and larger: big art, title, artist, progress with times, controls -->
+ <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@drawable/blueos_widget_outline"
+-    android:clipToOutline="true">
++    android:padding="8dp">
+ 
+-    <ImageView
+-        android:id="@+id/blueos_widget_bg"
++    <!-- The card keeps 8 dp inside the widget's cells: widgets never touch each other or the
++         screen edge, whatever the grid -->
++    <FrameLayout
++        android:id="@android:id/background"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+-        android:contentDescription="@null"
+-        android:scaleType="fitXY"
+-        android:src="@drawable/blueos_widget_card_accent" />
++        android:background="@drawable/blueos_widget_outline"
++        android:clipToOutline="true">
+ 
+-    <LinearLayout
+-        android:layout_width="match_parent"
+-        android:layout_height="match_parent"
+-        android:gravity="center_vertical"
+-        android:orientation="horizontal"
+-        android:padding="12dp">
+-
+-        <FrameLayout
+-            android:layout_width="108dp"
+-            android:layout_height="108dp"
+-            android:background="@drawable/blueos_media_art_bg"
+-            android:clipToOutline="true">
+-
+-            <ImageView
+-                android:id="@+id/blueos_media_placeholder"
+-                android:layout_width="match_parent"
+-                android:layout_height="match_parent"
+-                android:contentDescription="@null"
+-                android:padding="24dp"
+-                android:src="@drawable/blueos_ic_music_note" />
+-
+-            <ImageView
+-                android:id="@+id/blueos_media_art"
+-                android:layout_width="match_parent"
+-                android:layout_height="match_parent"
+-                android:contentDescription="@null"
+-                android:scaleType="centerCrop"
+-                android:visibility="gone" />
+-        </FrameLayout>
++        <ImageView
++            android:id="@+id/blueos_widget_bg"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitXY"
++            android:src="@drawable/blueos_widget_card" />
+ 
+         <LinearLayout
+-            android:layout_width="0dp"
+-            android:layout_height="wrap_content"
+-            android:layout_marginStart="14dp"
+-            android:layout_weight="1"
+-            android:orientation="vertical">
+-
+-            <TextView
+-                android:id="@+id/blueos_media_title"
+-                android:layout_width="match_parent"
+-                android:layout_height="wrap_content"
+-                android:ellipsize="end"
+-                android:fontFamily="google-sans-text-medium"
+-                android:singleLine="true"
+-                android:text="@string/blueos_media_widget_idle"
+-                android:textColor="@color/blueos_widget_on_primary_container"
+-                android:textSize="16sp" />
+-
+-            <TextView
+-                android:id="@+id/blueos_media_artist"
+-                android:layout_width="match_parent"
+-                android:layout_height="wrap_content"
+-                android:alpha="0.75"
+-                android:ellipsize="end"
+-                android:fontFamily="google-sans-text"
+-                android:singleLine="true"
+-                android:textColor="@color/blueos_widget_on_primary_container"
+-                android:textSize="13sp" />
+-
+-            <ProgressBar
+-                android:id="@+id/blueos_media_progress"
+-                style="?android:attr/progressBarStyleHorizontal"
+-                android:layout_width="match_parent"
+-                android:layout_height="4dp"
+-                android:layout_marginTop="12dp"
+-                android:indeterminate="false"
+-                android:max="1000"
+-                android:progressDrawable="@drawable/blueos_media_progress_accent" />
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:gravity="center_vertical"
++            android:orientation="horizontal"
++            android:padding="12dp">
++
++            <FrameLayout
++                android:layout_width="108dp"
++                android:layout_height="108dp"
++                android:background="@drawable/blueos_media_art_bg"
++                android:clipToOutline="true">
++
++                <ImageView
++                    android:id="@+id/blueos_media_placeholder"
++                    android:layout_width="match_parent"
++                    android:layout_height="match_parent"
++                    android:contentDescription="@null"
++                    android:padding="24dp"
++                    android:src="@drawable/blueos_ic_music_note" />
++
++                <ImageView
++                    android:id="@+id/blueos_media_art"
++                    android:layout_width="match_parent"
++                    android:layout_height="match_parent"
++                    android:contentDescription="@null"
++                    android:scaleType="centerCrop"
++                    android:visibility="gone" />
++            </FrameLayout>
+ 
+             <LinearLayout
+-                android:layout_width="match_parent"
++                android:layout_width="0dp"
+                 android:layout_height="wrap_content"
+-                android:layout_marginTop="2dp"
+-                android:alpha="0.7"
+-                android:orientation="horizontal">
++                android:layout_marginStart="14dp"
++                android:layout_weight="1"
++                android:orientation="vertical">
+ 
+-                <Chronometer
+-                    android:id="@+id/blueos_media_elapsed"
+-                    android:layout_width="wrap_content"
++                <TextView
++                    android:id="@+id/blueos_media_title"
++                    android:layout_width="match_parent"
+                     android:layout_height="wrap_content"
+-                    android:fontFamily="google-sans-text"
+-                    android:textColor="@color/blueos_widget_on_primary_container"
+-                    android:textSize="11sp" />
++                    android:ellipsize="end"
++                    android:fontFamily="google-sans-text-medium"
++                    android:singleLine="true"
++                    android:text="@string/blueos_media_widget_idle"
++                    android:textColor="@color/blueos_widget_on_surface"
++                    android:textSize="16sp" />
+ 
+                 <TextView
+-                    android:id="@+id/blueos_media_duration"
+-                    android:layout_width="0dp"
++                    android:id="@+id/blueos_media_artist"
++                    android:layout_width="match_parent"
+                     android:layout_height="wrap_content"
+-                    android:layout_weight="1"
++                    android:alpha="0.75"
++                    android:ellipsize="end"
+                     android:fontFamily="google-sans-text"
+-                    android:gravity="end"
+-                    android:textColor="@color/blueos_widget_on_primary_container"
+-                    android:textSize="11sp" />
+-            </LinearLayout>
+-
+-            <LinearLayout
+-                android:layout_width="match_parent"
+-                android:layout_height="wrap_content"
+-                android:layout_marginTop="4dp"
+-                android:gravity="center"
+-                android:orientation="horizontal">
+-
+-                <ImageView
+-                    android:id="@+id/blueos_media_previous"
+-                    android:layout_width="40dp"
+-                    android:layout_height="40dp"
+-                    android:background="?android:attr/selectableItemBackgroundBorderless"
+-                    android:contentDescription="@string/blueos_media_widget_previous"
+-                    android:padding="8dp"
+-                    android:src="@drawable/blueos_ic_skip_previous"
+-                    android:tint="@color/blueos_widget_on_primary_container" />
+-
+-                <ImageView
+-                    android:id="@+id/blueos_media_play_pause"
+-                    android:layout_width="44dp"
+-                    android:layout_height="44dp"
+-                    android:layout_marginHorizontal="20dp"
+-                    android:background="@drawable/blueos_media_play_bg_inverse"
+-                    android:contentDescription="@string/blueos_media_widget_play"
+-                    android:padding="10dp"
+-                    android:src="@drawable/blueos_ic_play"
+-                    android:tint="@color/blueos_widget_primary_container" />
+-
+-                <ImageView
+-                    android:id="@+id/blueos_media_next"
+-                    android:layout_width="40dp"
+-                    android:layout_height="40dp"
+-                    android:background="?android:attr/selectableItemBackgroundBorderless"
+-                    android:contentDescription="@string/blueos_media_widget_next"
+-                    android:padding="8dp"
+-                    android:src="@drawable/blueos_ic_skip_next"
+-                    android:tint="@color/blueos_widget_on_primary_container" />
++                    android:singleLine="true"
++                    android:textColor="@color/blueos_widget_on_surface"
++                    android:textSize="13sp" />
++
++                <ProgressBar
++                    android:id="@+id/blueos_media_progress"
++                    style="?android:attr/progressBarStyleHorizontal"
++                    android:layout_width="match_parent"
++                    android:layout_height="4dp"
++                    android:layout_marginTop="12dp"
++                    android:indeterminate="false"
++                    android:max="1000"
++                    android:progressDrawable="@drawable/blueos_media_progress" />
++
++                <LinearLayout
++                    android:layout_width="match_parent"
++                    android:layout_height="wrap_content"
++                    android:layout_marginTop="2dp"
++                    android:alpha="0.7"
++                    android:orientation="horizontal">
++
++                    <Chronometer
++                        android:id="@+id/blueos_media_elapsed"
++                        android:layout_width="wrap_content"
++                        android:layout_height="wrap_content"
++                        android:fontFamily="google-sans-text"
++                        android:textColor="@color/blueos_widget_on_surface"
++                        android:textSize="11sp" />
++
++                    <TextView
++                        android:id="@+id/blueos_media_duration"
++                        android:layout_width="0dp"
++                        android:layout_height="wrap_content"
++                        android:layout_weight="1"
++                        android:fontFamily="google-sans-text"
++                        android:gravity="end"
++                        android:textColor="@color/blueos_widget_on_surface"
++                        android:textSize="11sp" />
++                </LinearLayout>
++
++                <LinearLayout
++                    android:layout_width="match_parent"
++                    android:layout_height="wrap_content"
++                    android:layout_marginTop="4dp"
++                    android:gravity="center"
++                    android:orientation="horizontal">
++
++                    <ImageView
++                        android:id="@+id/blueos_media_previous"
++                        android:layout_width="40dp"
++                        android:layout_height="40dp"
++                        android:background="?android:attr/selectableItemBackgroundBorderless"
++                        android:contentDescription="@string/blueos_media_widget_previous"
++                        android:padding="8dp"
++                        android:src="@drawable/blueos_ic_skip_previous"
++                        android:tint="@color/blueos_widget_on_surface" />
++
++                    <ImageView
++                        android:id="@+id/blueos_media_play_pause"
++                        android:layout_width="44dp"
++                        android:layout_height="44dp"
++                        android:layout_marginHorizontal="20dp"
++                        android:background="@drawable/blueos_media_play_bg"
++                        android:contentDescription="@string/blueos_media_widget_play"
++                        android:padding="10dp"
++                        android:src="@drawable/blueos_ic_play"
++                        android:tint="@color/blueos_widget_on_primary" />
++
++                    <ImageView
++                        android:id="@+id/blueos_media_next"
++                        android:layout_width="40dp"
++                        android:layout_height="40dp"
++                        android:background="?android:attr/selectableItemBackgroundBorderless"
++                        android:contentDescription="@string/blueos_media_widget_next"
++                        android:padding="8dp"
++                        android:src="@drawable/blueos_ic_skip_next"
++                        android:tint="@color/blueos_widget_on_surface" />
++                </LinearLayout>
+             </LinearLayout>
+         </LinearLayout>
+-    </LinearLayout>
++    </FrameLayout>
+ </FrameLayout>
+diff --git a/packages/SystemUI/res/layout/blueos_media_widget_small.xml b/packages/SystemUI/res/layout/blueos_media_widget_small.xml
+index 2d0156b8bca4..188a25f92280 100644
+--- a/packages/SystemUI/res/layout/blueos_media_widget_small.xml
++++ b/packages/SystemUI/res/layout/blueos_media_widget_small.xml
+@@ -1,71 +1,79 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <!-- BlueOS music widget, 2x1: art, title, play / pause -->
+ <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@drawable/blueos_widget_outline"
+-    android:clipToOutline="true">
++    android:padding="8dp">
+ 
+-    <ImageView
+-        android:id="@+id/blueos_widget_bg"
++    <!-- The card keeps 8 dp inside the widget's cells: widgets never touch each other or the
++         screen edge, whatever the grid -->
++    <FrameLayout
++        android:id="@android:id/background"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+-        android:contentDescription="@null"
+-        android:scaleType="fitXY"
+-        android:src="@drawable/blueos_widget_card" />
++        android:background="@drawable/blueos_widget_outline"
++        android:clipToOutline="true">
+ 
+-    <LinearLayout
+-        android:layout_width="match_parent"
+-        android:layout_height="match_parent"
+-        android:gravity="center_vertical"
+-        android:orientation="horizontal"
+-        android:paddingHorizontal="10dp">
++        <ImageView
++            android:id="@+id/blueos_widget_bg"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitXY"
++            android:src="@drawable/blueos_widget_card" />
+ 
+-        <FrameLayout
+-            android:layout_width="44dp"
+-            android:layout_height="44dp"
+-            android:background="@drawable/blueos_media_art_bg"
+-            android:clipToOutline="true">
++        <LinearLayout
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:gravity="center_vertical"
++            android:orientation="horizontal"
++            android:paddingHorizontal="10dp">
+ 
+-            <ImageView
+-                android:id="@+id/blueos_media_placeholder"
+-                android:layout_width="match_parent"
+-                android:layout_height="match_parent"
+-                android:contentDescription="@null"
+-                android:padding="2dp"
+-                android:src="@drawable/blueos_ic_music_note" />
++            <FrameLayout
++                android:layout_width="44dp"
++                android:layout_height="44dp"
++                android:background="@drawable/blueos_media_art_bg"
++                android:clipToOutline="true">
+ 
+-            <ImageView
+-                android:id="@+id/blueos_media_art"
+-                android:layout_width="match_parent"
+-                android:layout_height="match_parent"
+-                android:contentDescription="@null"
+-                android:scaleType="centerCrop"
+-                android:visibility="gone" />
+-        </FrameLayout>
++                <ImageView
++                    android:id="@+id/blueos_media_placeholder"
++                    android:layout_width="match_parent"
++                    android:layout_height="match_parent"
++                    android:contentDescription="@null"
++                    android:padding="2dp"
++                    android:src="@drawable/blueos_ic_music_note" />
+ 
+-        <TextView
+-            android:id="@+id/blueos_media_title"
+-            android:layout_width="0dp"
+-            android:layout_height="wrap_content"
+-            android:layout_marginHorizontal="10dp"
+-            android:layout_weight="1"
+-            android:ellipsize="end"
+-            android:fontFamily="google-sans-text-medium"
+-            android:maxLines="2"
+-            android:text="@string/blueos_media_widget_idle"
+-            android:textColor="@color/blueos_widget_on_surface"
+-            android:textSize="13sp" />
++                <ImageView
++                    android:id="@+id/blueos_media_art"
++                    android:layout_width="match_parent"
++                    android:layout_height="match_parent"
++                    android:contentDescription="@null"
++                    android:scaleType="centerCrop"
++                    android:visibility="gone" />
++            </FrameLayout>
+ 
+-        <ImageView
+-            android:id="@+id/blueos_media_play_pause"
+-            android:layout_width="40dp"
+-            android:layout_height="40dp"
+-            android:background="@drawable/blueos_media_play_bg"
+-            android:contentDescription="@string/blueos_media_widget_play"
+-            android:padding="9dp"
+-            android:src="@drawable/blueos_ic_play"
+-            android:tint="@color/blueos_widget_on_primary" />
+-    </LinearLayout>
++            <TextView
++                android:id="@+id/blueos_media_title"
++                android:layout_width="0dp"
++                android:layout_height="wrap_content"
++                android:layout_marginHorizontal="10dp"
++                android:layout_weight="1"
++                android:ellipsize="end"
++                android:fontFamily="google-sans-text-medium"
++                android:maxLines="2"
++                android:text="@string/blueos_media_widget_idle"
++                android:textColor="@color/blueos_widget_on_surface"
++                android:textSize="13sp" />
++
++            <ImageView
++                android:id="@+id/blueos_media_play_pause"
++                android:layout_width="40dp"
++                android:layout_height="40dp"
++                android:background="@drawable/blueos_media_play_bg"
++                android:contentDescription="@string/blueos_media_widget_play"
++                android:padding="9dp"
++                android:src="@drawable/blueos_ic_play"
++                android:tint="@color/blueos_widget_on_primary" />
++        </LinearLayout>
++    </FrameLayout>
+ </FrameLayout>
+diff --git a/packages/SystemUI/res/layout/blueos_media_widget_square.xml b/packages/SystemUI/res/layout/blueos_media_widget_square.xml
+index da22fb4f0f81..fe90b1727407 100644
+--- a/packages/SystemUI/res/layout/blueos_media_widget_square.xml
++++ b/packages/SystemUI/res/layout/blueos_media_widget_square.xml
+@@ -1,76 +1,84 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <!-- BlueOS music widget, 2x2: the art fills it, the title on a scrim, play / pause in a corner -->
+ <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@drawable/blueos_widget_outline"
+-    android:clipToOutline="true">
++    android:padding="8dp">
+ 
+-    <ImageView
+-        android:id="@+id/blueos_widget_bg"
++    <!-- The card keeps 8 dp inside the widget's cells: widgets never touch each other or the
++         screen edge, whatever the grid -->
++    <FrameLayout
++        android:id="@android:id/background"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+-        android:contentDescription="@null"
+-        android:scaleType="fitXY"
+-        android:src="@drawable/blueos_widget_card_accent" />
++        android:background="@drawable/blueos_widget_outline"
++        android:clipToOutline="true">
+ 
+-    <ImageView
+-        android:id="@+id/blueos_media_placeholder"
+-        android:layout_width="56dp"
+-        android:layout_height="56dp"
+-        android:layout_gravity="center"
+-        android:layout_marginBottom="16dp"
+-        android:contentDescription="@null"
+-        android:src="@drawable/blueos_ic_music_note" />
++        <ImageView
++            android:id="@+id/blueos_widget_bg"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitXY"
++            android:src="@drawable/blueos_widget_card" />
+ 
+-    <ImageView
+-        android:id="@+id/blueos_media_art"
+-        android:layout_width="match_parent"
+-        android:layout_height="match_parent"
+-        android:contentDescription="@null"
+-        android:scaleType="centerCrop"
+-        android:visibility="gone" />
++        <ImageView
++            android:id="@+id/blueos_media_placeholder"
++            android:layout_width="56dp"
++            android:layout_height="56dp"
++            android:layout_gravity="center"
++            android:layout_marginBottom="16dp"
++            android:contentDescription="@null"
++            android:src="@drawable/blueos_ic_music_note" />
+ 
+-    <ImageView
+-        android:id="@+id/blueos_media_scrim"
+-        android:layout_width="match_parent"
+-        android:layout_height="72dp"
+-        android:layout_gravity="bottom"
+-        android:contentDescription="@null"
+-        android:scaleType="fitXY"
+-        android:src="@drawable/blueos_media_scrim"
+-        android:visibility="gone" />
++        <ImageView
++            android:id="@+id/blueos_media_art"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="centerCrop"
++            android:visibility="gone" />
+ 
+-    <LinearLayout
+-        android:layout_width="match_parent"
+-        android:layout_height="wrap_content"
+-        android:layout_gravity="bottom"
+-        android:gravity="center_vertical"
+-        android:orientation="horizontal"
+-        android:padding="10dp">
++        <ImageView
++            android:id="@+id/blueos_media_scrim"
++            android:layout_width="match_parent"
++            android:layout_height="72dp"
++            android:layout_gravity="bottom"
++            android:contentDescription="@null"
++            android:scaleType="fitXY"
++            android:src="@drawable/blueos_media_scrim"
++            android:visibility="gone" />
+ 
+-        <TextView
+-            android:id="@+id/blueos_media_title"
+-            android:layout_width="0dp"
++        <LinearLayout
++            android:layout_width="match_parent"
+             android:layout_height="wrap_content"
+-            android:layout_weight="1"
+-            android:ellipsize="end"
+-            android:fontFamily="google-sans-text-medium"
+-            android:maxLines="2"
+-            android:text="@string/blueos_media_widget_idle"
+-            android:textColor="@color/blueos_widget_on_primary_container"
+-            android:textSize="13sp" />
++            android:layout_gravity="bottom"
++            android:gravity="center_vertical"
++            android:orientation="horizontal"
++            android:padding="10dp">
+ 
+-        <ImageView
+-            android:id="@+id/blueos_media_play_pause"
+-            android:layout_width="44dp"
+-            android:layout_height="44dp"
+-            android:layout_marginStart="8dp"
+-            android:background="@drawable/blueos_media_play_bg"
+-            android:contentDescription="@string/blueos_media_widget_play"
+-            android:padding="10dp"
+-            android:src="@drawable/blueos_ic_play"
+-            android:tint="@color/blueos_widget_on_primary" />
+-    </LinearLayout>
++            <TextView
++                android:id="@+id/blueos_media_title"
++                android:layout_width="0dp"
++                android:layout_height="wrap_content"
++                android:layout_weight="1"
++                android:ellipsize="end"
++                android:fontFamily="google-sans-text-medium"
++                android:maxLines="2"
++                android:text="@string/blueos_media_widget_idle"
++                android:textColor="@color/blueos_widget_on_surface"
++                android:textSize="13sp" />
++
++            <ImageView
++                android:id="@+id/blueos_media_play_pause"
++                android:layout_width="44dp"
++                android:layout_height="44dp"
++                android:layout_marginStart="8dp"
++                android:background="@drawable/blueos_media_play_bg"
++                android:contentDescription="@string/blueos_media_widget_play"
++                android:padding="10dp"
++                android:src="@drawable/blueos_ic_play"
++                android:tint="@color/blueos_widget_on_primary" />
++        </LinearLayout>
++    </FrameLayout>
+ </FrameLayout>
+diff --git a/packages/SystemUI/res/layout/blueos_media_widget_wide.xml b/packages/SystemUI/res/layout/blueos_media_widget_wide.xml
+index 21948f724a13..86ff82933071 100644
+--- a/packages/SystemUI/res/layout/blueos_media_widget_wide.xml
++++ b/packages/SystemUI/res/layout/blueos_media_widget_wide.xml
+@@ -1,109 +1,117 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <!-- BlueOS music widget, a 3x1 / 4x1 strip: art, title, artist, controls -->
+ <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@drawable/blueos_widget_outline"
+-    android:clipToOutline="true">
++    android:padding="8dp">
+ 
+-    <ImageView
+-        android:id="@+id/blueos_widget_bg"
++    <!-- The card keeps 8 dp inside the widget's cells: widgets never touch each other or the
++         screen edge, whatever the grid -->
++    <FrameLayout
++        android:id="@android:id/background"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+-        android:contentDescription="@null"
+-        android:scaleType="fitXY"
+-        android:src="@drawable/blueos_widget_card_accent" />
++        android:background="@drawable/blueos_widget_outline"
++        android:clipToOutline="true">
+ 
+-    <LinearLayout
+-        android:layout_width="match_parent"
+-        android:layout_height="match_parent"
+-        android:gravity="center_vertical"
+-        android:orientation="horizontal"
+-        android:paddingHorizontal="10dp">
++        <ImageView
++            android:id="@+id/blueos_widget_bg"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitXY"
++            android:src="@drawable/blueos_widget_card" />
+ 
+-        <FrameLayout
+-            android:layout_width="48dp"
+-            android:layout_height="48dp"
+-            android:background="@drawable/blueos_media_art_bg"
+-            android:clipToOutline="true">
++        <LinearLayout
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:gravity="center_vertical"
++            android:orientation="horizontal"
++            android:paddingHorizontal="10dp">
+ 
+-            <ImageView
+-                android:id="@+id/blueos_media_placeholder"
+-                android:layout_width="match_parent"
+-                android:layout_height="match_parent"
+-                android:contentDescription="@null"
+-                android:padding="4dp"
+-                android:src="@drawable/blueos_ic_music_note" />
++            <FrameLayout
++                android:layout_width="48dp"
++                android:layout_height="48dp"
++                android:background="@drawable/blueos_media_art_bg"
++                android:clipToOutline="true">
+ 
+-            <ImageView
+-                android:id="@+id/blueos_media_art"
+-                android:layout_width="match_parent"
+-                android:layout_height="match_parent"
+-                android:contentDescription="@null"
+-                android:scaleType="centerCrop"
+-                android:visibility="gone" />
+-        </FrameLayout>
++                <ImageView
++                    android:id="@+id/blueos_media_placeholder"
++                    android:layout_width="match_parent"
++                    android:layout_height="match_parent"
++                    android:contentDescription="@null"
++                    android:padding="4dp"
++                    android:src="@drawable/blueos_ic_music_note" />
+ 
+-        <LinearLayout
+-            android:layout_width="0dp"
+-            android:layout_height="wrap_content"
+-            android:layout_marginStart="12dp"
+-            android:layout_weight="1"
+-            android:orientation="vertical">
++                <ImageView
++                    android:id="@+id/blueos_media_art"
++                    android:layout_width="match_parent"
++                    android:layout_height="match_parent"
++                    android:contentDescription="@null"
++                    android:scaleType="centerCrop"
++                    android:visibility="gone" />
++            </FrameLayout>
+ 
+-            <TextView
+-                android:id="@+id/blueos_media_title"
+-                android:layout_width="match_parent"
++            <LinearLayout
++                android:layout_width="0dp"
+                 android:layout_height="wrap_content"
+-                android:ellipsize="end"
+-                android:fontFamily="google-sans-text-medium"
+-                android:singleLine="true"
+-                android:text="@string/blueos_media_widget_idle"
+-                android:textColor="@color/blueos_widget_on_primary_container"
+-                android:textSize="14sp" />
++                android:layout_marginStart="12dp"
++                android:layout_weight="1"
++                android:orientation="vertical">
+ 
+-            <TextView
+-                android:id="@+id/blueos_media_artist"
+-                android:layout_width="match_parent"
+-                android:layout_height="wrap_content"
+-                android:alpha="0.75"
+-                android:ellipsize="end"
+-                android:fontFamily="google-sans-text"
+-                android:singleLine="true"
+-                android:textColor="@color/blueos_widget_on_primary_container"
+-                android:textSize="12sp" />
+-        </LinearLayout>
++                <TextView
++                    android:id="@+id/blueos_media_title"
++                    android:layout_width="match_parent"
++                    android:layout_height="wrap_content"
++                    android:ellipsize="end"
++                    android:fontFamily="google-sans-text-medium"
++                    android:singleLine="true"
++                    android:text="@string/blueos_media_widget_idle"
++                    android:textColor="@color/blueos_widget_on_surface"
++                    android:textSize="14sp" />
+ 
+-        <ImageView
+-            android:id="@+id/blueos_media_previous"
+-            android:layout_width="36dp"
+-            android:layout_height="36dp"
+-            android:background="?android:attr/selectableItemBackgroundBorderless"
+-            android:contentDescription="@string/blueos_media_widget_previous"
+-            android:padding="7dp"
+-            android:src="@drawable/blueos_ic_skip_previous"
+-            android:tint="@color/blueos_widget_on_primary_container" />
++                <TextView
++                    android:id="@+id/blueos_media_artist"
++                    android:layout_width="match_parent"
++                    android:layout_height="wrap_content"
++                    android:alpha="0.75"
++                    android:ellipsize="end"
++                    android:fontFamily="google-sans-text"
++                    android:singleLine="true"
++                    android:textColor="@color/blueos_widget_on_surface"
++                    android:textSize="12sp" />
++            </LinearLayout>
+ 
+-        <ImageView
+-            android:id="@+id/blueos_media_play_pause"
+-            android:layout_width="40dp"
+-            android:layout_height="40dp"
+-            android:layout_marginHorizontal="4dp"
+-            android:background="@drawable/blueos_media_play_bg_inverse"
+-            android:contentDescription="@string/blueos_media_widget_play"
+-            android:padding="9dp"
+-            android:src="@drawable/blueos_ic_play"
+-            android:tint="@color/blueos_widget_primary_container" />
++            <ImageView
++                android:id="@+id/blueos_media_previous"
++                android:layout_width="36dp"
++                android:layout_height="36dp"
++                android:background="?android:attr/selectableItemBackgroundBorderless"
++                android:contentDescription="@string/blueos_media_widget_previous"
++                android:padding="7dp"
++                android:src="@drawable/blueos_ic_skip_previous"
++                android:tint="@color/blueos_widget_on_surface" />
+ 
+-        <ImageView
+-            android:id="@+id/blueos_media_next"
+-            android:layout_width="36dp"
+-            android:layout_height="36dp"
+-            android:background="?android:attr/selectableItemBackgroundBorderless"
+-            android:contentDescription="@string/blueos_media_widget_next"
+-            android:padding="7dp"
+-            android:src="@drawable/blueos_ic_skip_next"
+-            android:tint="@color/blueos_widget_on_primary_container" />
+-    </LinearLayout>
++            <ImageView
++                android:id="@+id/blueos_media_play_pause"
++                android:layout_width="40dp"
++                android:layout_height="40dp"
++                android:layout_marginHorizontal="4dp"
++                android:background="@drawable/blueos_media_play_bg"
++                android:contentDescription="@string/blueos_media_widget_play"
++                android:padding="9dp"
++                android:src="@drawable/blueos_ic_play"
++                android:tint="@color/blueos_widget_on_primary" />
++
++            <ImageView
++                android:id="@+id/blueos_media_next"
++                android:layout_width="36dp"
++                android:layout_height="36dp"
++                android:background="?android:attr/selectableItemBackgroundBorderless"
++                android:contentDescription="@string/blueos_media_widget_next"
++                android:padding="7dp"
++                android:src="@drawable/blueos_ic_skip_next"
++                android:tint="@color/blueos_widget_on_surface" />
++        </LinearLayout>
++    </FrameLayout>
+ </FrameLayout>
+diff --git a/packages/SystemUI/res/layout/blueos_summary_widget_dark_text.xml b/packages/SystemUI/res/layout/blueos_summary_widget_dark_text.xml
+index 7dca10c15f51..e4cdcff76859 100644
+--- a/packages/SystemUI/res/layout/blueos_summary_widget_dark_text.xml
++++ b/packages/SystemUI/res/layout/blueos_summary_widget_dark_text.xml
+@@ -4,9 +4,9 @@
+     android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:gravity="center_vertical"
++    android:gravity="center"
+     android:orientation="vertical"
+-    android:paddingHorizontal="8dp">
++    android:padding="8dp">
+ 
+     <LinearLayout
+         android:layout_width="wrap_content"
+@@ -37,7 +37,7 @@
+     </LinearLayout>
+ 
+     <LinearLayout
+-        android:layout_width="match_parent"
++        android:layout_width="wrap_content"
+         android:layout_height="wrap_content"
+         android:layout_marginTop="6dp"
+         android:gravity="center_vertical"
+@@ -64,10 +64,9 @@
+ 
+         <TextView
+             android:id="@+id/blueos_summary_next"
+-            android:layout_width="0dp"
++            android:layout_width="wrap_content"
+             android:layout_height="wrap_content"
+             android:layout_marginStart="5dp"
+-            android:layout_weight="1"
+             android:ellipsize="end"
+             android:fontFamily="google-sans-text"
+             android:singleLine="true"
+diff --git a/packages/SystemUI/res/layout/blueos_summary_widget_light_text.xml b/packages/SystemUI/res/layout/blueos_summary_widget_light_text.xml
+index b1a71be377ba..a66d7454799e 100644
+--- a/packages/SystemUI/res/layout/blueos_summary_widget_light_text.xml
++++ b/packages/SystemUI/res/layout/blueos_summary_widget_light_text.xml
+@@ -4,9 +4,9 @@
+     android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:gravity="center_vertical"
++    android:gravity="center"
+     android:orientation="vertical"
+-    android:paddingHorizontal="8dp">
++    android:padding="8dp">
+ 
+     <LinearLayout
+         android:layout_width="wrap_content"
+@@ -37,7 +37,7 @@
+     </LinearLayout>
+ 
+     <LinearLayout
+-        android:layout_width="match_parent"
++        android:layout_width="wrap_content"
+         android:layout_height="wrap_content"
+         android:layout_marginTop="6dp"
+         android:gravity="center_vertical"
+@@ -64,10 +64,9 @@
+ 
+         <TextView
+             android:id="@+id/blueos_summary_next"
+-            android:layout_width="0dp"
++            android:layout_width="wrap_content"
+             android:layout_height="wrap_content"
+             android:layout_marginStart="5dp"
+-            android:layout_weight="1"
+             android:ellipsize="end"
+             android:fontFamily="google-sans-text"
+             android:singleLine="true"
+diff --git a/packages/SystemUI/res/layout/blueos_toggles_widget.xml b/packages/SystemUI/res/layout/blueos_toggles_widget.xml
+index cfe5ccadeb72..c08196e194bd 100644
+--- a/packages/SystemUI/res/layout/blueos_toggles_widget.xml
++++ b/packages/SystemUI/res/layout/blueos_toggles_widget.xml
+@@ -1,110 +1,118 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <!-- BlueOS quick toggles widget: flashlight, do not disturb, auto-rotate, dark theme, saver -->
+ <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@android:id/background"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:background="@drawable/blueos_widget_outline"
+-    android:clipToOutline="true">
++    android:padding="8dp">
+ 
+-    <ImageView
+-        android:id="@+id/blueos_widget_bg"
++    <!-- The card keeps 8 dp inside the widget's cells: widgets never touch each other or the
++         screen edge, whatever the grid -->
++    <FrameLayout
++        android:id="@android:id/background"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+-        android:contentDescription="@null"
+-        android:scaleType="fitXY"
+-        android:src="@drawable/blueos_widget_card" />
++        android:background="@drawable/blueos_widget_outline"
++        android:clipToOutline="true">
+ 
+-    <LinearLayout
+-        android:layout_width="match_parent"
+-        android:layout_height="match_parent"
+-        android:gravity="center_vertical"
+-        android:orientation="horizontal"
+-        android:paddingHorizontal="6dp">
++        <ImageView
++            android:id="@+id/blueos_widget_bg"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitXY"
++            android:src="@drawable/blueos_widget_card" />
+ 
+-        <FrameLayout
+-            android:layout_width="0dp"
++        <LinearLayout
++            android:layout_width="match_parent"
+             android:layout_height="match_parent"
+-            android:layout_weight="1">
++            android:gravity="center_vertical"
++            android:orientation="horizontal"
++            android:paddingHorizontal="6dp">
+ 
+-            <ImageView
+-                android:id="@+id/blueos_toggle_flashlight"
+-                android:layout_width="44dp"
+-                android:layout_height="44dp"
+-                android:layout_gravity="center"
+-                android:background="@drawable/blueos_toggle_off"
+-                android:contentDescription="@string/blueos_toggles_flashlight"
+-                android:padding="11dp"
+-                android:src="@drawable/blueos_ic_flashlight"
+-                android:tint="@color/blueos_widget_on_surface" />
+-        </FrameLayout>
++            <FrameLayout
++                android:layout_width="0dp"
++                android:layout_height="match_parent"
++                android:layout_weight="1">
+ 
+-        <FrameLayout
+-            android:layout_width="0dp"
+-            android:layout_height="match_parent"
+-            android:layout_weight="1">
++                <ImageView
++                    android:id="@+id/blueos_toggle_flashlight"
++                    android:layout_width="44dp"
++                    android:layout_height="44dp"
++                    android:layout_gravity="center"
++                    android:background="@drawable/blueos_toggle_off"
++                    android:contentDescription="@string/blueos_toggles_flashlight"
++                    android:padding="11dp"
++                    android:src="@drawable/blueos_ic_flashlight"
++                    android:tint="@color/blueos_widget_on_surface" />
++            </FrameLayout>
+ 
+-            <ImageView
+-                android:id="@+id/blueos_toggle_dnd"
+-                android:layout_width="44dp"
+-                android:layout_height="44dp"
+-                android:layout_gravity="center"
+-                android:background="@drawable/blueos_toggle_off"
+-                android:contentDescription="@string/blueos_toggles_dnd"
+-                android:padding="11dp"
+-                android:src="@drawable/blueos_ic_dnd"
+-                android:tint="@color/blueos_widget_on_surface" />
+-        </FrameLayout>
++            <FrameLayout
++                android:layout_width="0dp"
++                android:layout_height="match_parent"
++                android:layout_weight="1">
+ 
+-        <FrameLayout
+-            android:layout_width="0dp"
+-            android:layout_height="match_parent"
+-            android:layout_weight="1">
++                <ImageView
++                    android:id="@+id/blueos_toggle_dnd"
++                    android:layout_width="44dp"
++                    android:layout_height="44dp"
++                    android:layout_gravity="center"
++                    android:background="@drawable/blueos_toggle_off"
++                    android:contentDescription="@string/blueos_toggles_dnd"
++                    android:padding="11dp"
++                    android:src="@drawable/blueos_ic_dnd"
++                    android:tint="@color/blueos_widget_on_surface" />
++            </FrameLayout>
+ 
+-            <ImageView
+-                android:id="@+id/blueos_toggle_rotate"
+-                android:layout_width="44dp"
+-                android:layout_height="44dp"
+-                android:layout_gravity="center"
+-                android:background="@drawable/blueos_toggle_off"
+-                android:contentDescription="@string/blueos_toggles_rotate"
+-                android:padding="11dp"
+-                android:src="@drawable/blueos_ic_rotate"
+-                android:tint="@color/blueos_widget_on_surface" />
+-        </FrameLayout>
++            <FrameLayout
++                android:layout_width="0dp"
++                android:layout_height="match_parent"
++                android:layout_weight="1">
+ 
+-        <FrameLayout
+-            android:layout_width="0dp"
+-            android:layout_height="match_parent"
+-            android:layout_weight="1">
++                <ImageView
++                    android:id="@+id/blueos_toggle_rotate"
++                    android:layout_width="44dp"
++                    android:layout_height="44dp"
++                    android:layout_gravity="center"
++                    android:background="@drawable/blueos_toggle_off"
++                    android:contentDescription="@string/blueos_toggles_rotate"
++                    android:padding="11dp"
++                    android:src="@drawable/blueos_ic_rotate"
++                    android:tint="@color/blueos_widget_on_surface" />
++            </FrameLayout>
+ 
+-            <ImageView
+-                android:id="@+id/blueos_toggle_dark"
+-                android:layout_width="44dp"
+-                android:layout_height="44dp"
+-                android:layout_gravity="center"
+-                android:background="@drawable/blueos_toggle_off"
+-                android:contentDescription="@string/blueos_toggles_dark"
+-                android:padding="11dp"
+-                android:src="@drawable/blueos_ic_dark_theme"
+-                android:tint="@color/blueos_widget_on_surface" />
+-        </FrameLayout>
++            <FrameLayout
++                android:layout_width="0dp"
++                android:layout_height="match_parent"
++                android:layout_weight="1">
+ 
+-        <FrameLayout
+-            android:layout_width="0dp"
+-            android:layout_height="match_parent"
+-            android:layout_weight="1">
++                <ImageView
++                    android:id="@+id/blueos_toggle_dark"
++                    android:layout_width="44dp"
++                    android:layout_height="44dp"
++                    android:layout_gravity="center"
++                    android:background="@drawable/blueos_toggle_off"
++                    android:contentDescription="@string/blueos_toggles_dark"
++                    android:padding="11dp"
++                    android:src="@drawable/blueos_ic_dark_theme"
++                    android:tint="@color/blueos_widget_on_surface" />
++            </FrameLayout>
++
++            <FrameLayout
++                android:layout_width="0dp"
++                android:layout_height="match_parent"
++                android:layout_weight="1">
+ 
+-            <ImageView
+-                android:id="@+id/blueos_toggle_saver"
+-                android:layout_width="44dp"
+-                android:layout_height="44dp"
+-                android:layout_gravity="center"
+-                android:background="@drawable/blueos_toggle_off"
+-                android:contentDescription="@string/blueos_toggles_saver"
+-                android:padding="11dp"
+-                android:src="@drawable/blueos_ic_battery_saver"
+-                android:tint="@color/blueos_widget_on_surface" />
+-        </FrameLayout>
+-    </LinearLayout>
++                <ImageView
++                    android:id="@+id/blueos_toggle_saver"
++                    android:layout_width="44dp"
++                    android:layout_height="44dp"
++                    android:layout_gravity="center"
++                    android:background="@drawable/blueos_toggle_off"
++                    android:contentDescription="@string/blueos_toggles_saver"
++                    android:padding="11dp"
++                    android:src="@drawable/blueos_ic_battery_saver"
++                    android:tint="@color/blueos_widget_on_surface" />
++            </FrameLayout>
++        </LinearLayout>
++    </FrameLayout>
+ </FrameLayout>
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSBatteryWidgetProvider.kt b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSBatteryWidgetProvider.kt
+index c76c03c39a5d..626d525c003f 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSBatteryWidgetProvider.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSBatteryWidgetProvider.kt
+@@ -104,6 +104,7 @@ internal object BlueOSBatteryWidget {
+ 
+     fun push(context: Context) {
+         val app = context.applicationContext
++        if (!BlueOSWidgetStyle.canUpdate(app)) return
+         val wm = AppWidgetManager.getInstance(app)
+         val provider = ComponentName(app, BlueOSBatteryWidgetProvider::class.java)
+         if (wm.getAppWidgetIds(provider).isEmpty() || level < 0) return
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSMediaWidgetProvider.kt b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSMediaWidgetProvider.kt
+index 21ebf4e8761a..f1b01af9d9e8 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSMediaWidgetProvider.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSMediaWidgetProvider.kt
+@@ -86,7 +86,6 @@ internal object BlueOSMediaWidget {
+         val provider: Class<out AppWidgetProvider>,
+         val layouts: List<Pair<SizeF, Int>>,
+         val eqStyle: Int = -1,
+-        val onAccent: Boolean = false,
+     )
+ 
+     private val kinds =
+@@ -119,7 +118,6 @@ internal object BlueOSMediaWidget {
+                 BlueOSEqFullWidgetProvider::class.java,
+                 listOf(SizeF(40f, 40f) to R.layout.blueos_eq_widget_full),
+                 BlueOSVisualizerView.STYLE_MIRROR,
+-                onAccent = true,
+             ),
+         )
+ 
+@@ -220,6 +218,7 @@ internal object BlueOSMediaWidget {
+     fun push(context: Context, progressOnly: Boolean = false) {
+         handler.removeCallbacks(progressTick)
+         val app = context.applicationContext
++        if (!BlueOSWidgetStyle.canUpdate(app)) return
+         val wm = AppWidgetManager.getInstance(app)
+ 
+         val current = controller
+@@ -299,7 +298,7 @@ internal object BlueOSMediaWidget {
+                 rv.setColorStateList(
+                     R.id.blueos_media_title,
+                     "setTextColor",
+-                    R.color.blueos_widget_on_primary_container,
++                    R.color.blueos_widget_on_surface,
+                 )
+             }
+         }
+@@ -343,12 +342,7 @@ internal object BlueOSMediaWidget {
+             rv.setInt(R.id.blueos_eq_view, "setStyle", kind.eqStyle)
+             rv.setBoolean(R.id.blueos_eq_view, "setPlaying", track.playing)
+             // A resource, so the launcher resolves it in the current theme
+-            rv.setColorStateList(
+-                R.id.blueos_eq_view,
+-                "setBarColor",
+-                if (kind.onAccent) R.color.blueos_widget_on_primary_container
+-                else R.color.blueos_widget_primary,
+-            )
++            rv.setColorStateList(R.id.blueos_eq_view, "setBarColor", R.color.blueos_widget_primary)
+             if (kind.eqStyle == BlueOSVisualizerView.STYLE_RING) {
+                 rv.setBitmap(R.id.blueos_eq_view, "setArtwork", art)
+             }
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSSummaryWidgetProvider.kt b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSSummaryWidgetProvider.kt
+index b635e3362064..17cdb1662a8c 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSSummaryWidgetProvider.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSSummaryWidgetProvider.kt
+@@ -82,6 +82,7 @@ internal object BlueOSSummaryWidget {
+ 
+     fun push(context: Context) {
+         val app = context.applicationContext
++        if (!BlueOSWidgetStyle.canUpdate(app)) return
+         val wm = AppWidgetManager.getInstance(app)
+         val provider = ComponentName(app, BlueOSSummaryWidgetProvider::class.java)
+         if (wm.getAppWidgetIds(provider).isEmpty()) return
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSTogglesWidgetProvider.kt b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSTogglesWidgetProvider.kt
+index 1967403f0160..bc5db221869d 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSTogglesWidgetProvider.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSTogglesWidgetProvider.kt
+@@ -184,6 +184,7 @@ internal object BlueOSTogglesWidget {
+ 
+     fun push(context: Context) {
+         val app = context.applicationContext
++        if (!BlueOSWidgetStyle.canUpdate(app)) return
+         val wm = AppWidgetManager.getInstance(app)
+         val provider = ComponentName(app, BlueOSTogglesWidgetProvider::class.java)
+         if (wm.getAppWidgetIds(provider).isEmpty()) return
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSWidgetStyle.kt b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSWidgetStyle.kt
+index d18040d6ab06..1c79d0c40e1b 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSWidgetStyle.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSWidgetStyle.kt
+@@ -24,6 +24,7 @@ import android.database.ContentObserver
+ import android.os.Handler
+ import android.os.Looper
+ import android.os.UserHandle
++import android.os.UserManager
+ import android.provider.Settings
+ import android.widget.RemoteViews
+ import com.android.systemui.res.R
+@@ -61,9 +62,18 @@ object BlueOSWidgetStyle {
+         )
+     }
+ 
++    /**
++     * Widgets exist only once the user unlocked the phone; before that AppWidgetManager throws
++     * (the wallpaper colors change at boot, while still locked).
++     */
++    fun canUpdate(context: Context): Boolean =
++        context.getSystemService(UserManager::class.java)?.isUserUnlocked == true
++
+     /** The transparency or the wallpaper colors changed: redraw every BlueOS widget. */
+     fun notifyChanged(context: Context) {
+         val app = context.applicationContext
++        // The other apps' widgets need the unlocked user too; they refresh on their own later
++        if (!canUpdate(app)) return
+         refreshOwnWidgets(app)
+         for (pkg in WIDGET_PACKAGES) {
+             app.sendBroadcastAsUser(

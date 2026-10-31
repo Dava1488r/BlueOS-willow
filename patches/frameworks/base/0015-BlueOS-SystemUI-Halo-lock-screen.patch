@@ -1,0 +1,1071 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sun, 25 Oct 2026 00:53:01 +0200
+Subject: [PATCH 15/30] BlueOS: SystemUI: Halo lock screen
+
+- Halo is the default clock (lockscreen_clock_id_fallback).
+- The wallpaper under the clock and under the date is sampled (region sampling,
+  unreleased upstream), so text is dark on a light wallpaper even in the dark
+  theme; a clock color picked by the user is used in a tone that reads there.
+- One-line (small) clock: the halo goes over the minutes, like over "OS" in
+  the logo; the stacked large clock keeps it on top.
+- Halos never fly away: when the clock switches size the halo fades well
+  before the digits (it disappears and appears instead of moving), and on
+  unlock it disappears in the first quarter of the transition.
+- Greeting to Sensei by the time of day above the date, and a "what's next"
+  card with the next calendar event (within 12 h, SystemUI gets READ_CALENDAR)
+  and the next alarm; both fade out on AOD.
+
+Change-Id: I53889ed0e900edc22976e2f26b878464999018e7
+---
+ packages/SystemUI/AndroidManifest.xml         |   2 +
+ .../controller/FlexClockTextViewController.kt |   5 +-
+ .../FlexClockViewGroupController.kt           |   5 +-
+ .../systemui/shared/clocks/view/BlueOSHalo.kt |  83 ++++++++-
+ .../shared/clocks/view/FlexClockTextView.kt   |  40 +++--
+ .../shared/clocks/view/FlexClockViewGroup.kt  |  21 ++-
+ .../layout/keyguard_slice_view.xml            |  25 +++
+ .../res/drawable/blueos_slice_card_bar.xml    |   7 +
+ .../res/drawable/blueos_slice_card_bg.xml     |   7 +
+ .../SystemUI/res/values-ru/blueos_strings.xml |   7 +
+ .../SystemUI/res/values/blueos_strings.xml    |  15 +-
+ packages/SystemUI/res/values/strings.xml      |   4 +-
+ .../android/keyguard/ClockEventController.kt  |  38 +++-
+ .../android/keyguard/KeyguardSliceView.java   | 135 +++++++++++++-
+ .../keyguard/KeyguardSliceViewController.java |  20 +++
+ .../keyguard/KeyguardSliceProvider.java       | 164 +++++++++++++++++-
+ 16 files changed, 552 insertions(+), 26 deletions(-)
+ create mode 100644 packages/SystemUI/res/drawable/blueos_slice_card_bar.xml
+ create mode 100644 packages/SystemUI/res/drawable/blueos_slice_card_bg.xml
+
+diff --git a/packages/SystemUI/AndroidManifest.xml b/packages/SystemUI/AndroidManifest.xml
+index 5fd3d1e20ce5..1bd8b98cc5de 100644
+--- a/packages/SystemUI/AndroidManifest.xml
++++ b/packages/SystemUI/AndroidManifest.xml
+@@ -48,6 +48,8 @@
+     <uses-permission android:name="android.permission.MANAGE_USERS" />
+     <uses-permission android:name="android.permission.READ_PROFILE" />
+     <uses-permission android:name="android.permission.READ_CONTACTS" />
++    <!-- BlueOS: the next event in the lock screen "what's next" card (granted by default) -->
++    <uses-permission android:name="android.permission.READ_CALENDAR" />
+     <uses-permission android:name="android.permission.CONFIGURE_WIFI_DISPLAY" />
+     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
+     <uses-permission android:name="android.permission.GET_APP_OPS_STATS" />
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockTextViewController.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockTextViewController.kt
+index c02649cce883..392b8476e2fd 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockTextViewController.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockTextViewController.kt
+@@ -43,6 +43,7 @@ import com.android.systemui.plugins.keyguard.ui.clocks.ThemeConfig
+ import com.android.systemui.plugins.keyguard.ui.clocks.TimeFormatKind
+ import com.android.systemui.shared.clocks.FlexClockContext
+ import com.android.systemui.shared.clocks.view.FlexClockTextView
++import com.android.systemui.shared.clocks.view.blueOSHaloDefaultColor
+ import java.util.Locale
+ 
+ data class LayerConfig(
+@@ -199,7 +200,9 @@ class FlexClockTextViewController(
+                 // BlueOS Halo: a clock color picked by the user replaces the accent
+                 view.haloUsesAccent = theme.seedColor == null
+                 view.updateColor(
+-                    lockscreenColor = theme.getDefaultColor(clockCtx.context),
++                    lockscreenColor =
++                        if (clockCtx.isBlueOSHalo) theme.blueOSHaloDefaultColor(clockCtx.context)
++                        else theme.getDefaultColor(clockCtx.context),
+                     aodColor = theme.getAodColor(clockCtx.context),
+                 )
+                 refreshTime()
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockViewGroupController.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockViewGroupController.kt
+index bb849a9c4c01..b2e847ca6b62 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockViewGroupController.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockViewGroupController.kt
+@@ -42,6 +42,7 @@ import com.android.systemui.shared.Flags.enableAiClocks
+ import com.android.systemui.shared.clocks.FlexClockContext
+ import com.android.systemui.shared.clocks.view.BitmapClockViewGroup
+ import com.android.systemui.shared.clocks.view.FlexClockViewGroup
++import com.android.systemui.shared.clocks.view.blueOSHaloDefaultColor
+ import java.util.Locale
+ 
+ class FlexClockViewGroupController
+@@ -193,7 +194,9 @@ constructor(
+                 // BlueOS Halo: a clock color picked by the user replaces the accent
+                 (view as? FlexClockViewGroup)?.haloUsesAccent = theme.seedColor == null
+                 view.updateColor(
+-                    lockscreenColor = theme.getDefaultColor(clockCtx.context),
++                    lockscreenColor =
++                        if (clockCtx.isBlueOSHalo) theme.blueOSHaloDefaultColor(clockCtx.context)
++                        else theme.getDefaultColor(clockCtx.context),
+                     aodColor = theme.getAodColor(clockCtx.context),
+                 )
+             }
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt
+index 7e3c853567ae..3976b9c7b653 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt
+@@ -10,9 +10,90 @@ import android.graphics.Canvas
+ import android.graphics.Color
+ import android.graphics.Paint
+ import android.graphics.RectF
++import android.view.View
++import android.view.ViewGroup
++import android.view.ViewTreeObserver
+ import androidx.core.graphics.withSave
++import kotlin.math.abs
++import com.android.systemui.monet.ColorScheme
++import com.android.systemui.plugins.keyguard.ui.clocks.ThemeConfig
+ 
+-// BlueOS Halo clock: the tilted halo of the BlueOS logo, drawn over the hours.
++// BlueOS Halo clock: the tilted halo of the BlueOS logo. Stacked clock (hours over minutes):
++// on top; one-line clock: over the minutes, the accent part, like over "OS" in the logo.
++// Halos never fly away - like in the game they just disappear and appear.
++
++/** A view that draws a halo; the lock screen fades it out on unlock (see setBlueOSHaloAlpha). */
++interface BlueOSHaloHost {
++    var blueOSHaloAlpha: Float
++}
++
++/** Sets the halo alpha of this view and of every halo view inside it. */
++fun View.setBlueOSHaloAlpha(alpha: Float) {
++    if (this is BlueOSHaloHost) blueOSHaloAlpha = alpha
++    if (this is ViewGroup) {
++        for (i in 0 until childCount) getChildAt(i).setBlueOSHaloAlpha(alpha)
++    }
++}
++
++/**
++ * How visible the halo of [view] is: its own alpha times the square of the alpha of the view and
++ * its parents. When a clock fades (the large <-> small clock switch moves it while fading), the
++ * halo is gone well before the digits instead of moving along, and appears last.
++ */
++internal fun haloVisibility(view: View, haloAlpha: Float): Float {
++    var alpha = 1f
++    var current: Any? = view
++    while (current is View) {
++        alpha *= current.alpha
++        current = current.parent
++    }
++    return (haloAlpha * alpha * alpha).coerceIn(0f, 1f)
++}
++
++/**
++ * Redraws a halo view when the alpha of its parents changes how visible the halo is: a new alpha
++ * alone doesn't redraw a view, so the halo would only fade together with the digits.
++ */
++internal fun View.redrawHaloWhenFading(visibility: () -> Float) {
++    var drawn = -1f
++    val listener =
++        ViewTreeObserver.OnPreDrawListener {
++            val now = visibility()
++            if (abs(now - drawn) > 0.01f) {
++                drawn = now
++                invalidate()
++            }
++            true
++        }
++    addOnAttachStateChangeListener(
++        object : View.OnAttachStateChangeListener {
++            override fun onViewAttachedToWindow(v: View) =
++                v.viewTreeObserver.addOnPreDrawListener(listener)
++
++            override fun onViewDetachedFromWindow(v: View) =
++                v.viewTreeObserver.removeOnPreDrawListener(listener)
++        }
++    )
++}
++
++internal fun withVisibility(color: Int, visibility: Float): Int =
++    Color.argb(
++        (Color.alpha(color) * visibility).toInt(),
++        Color.red(color),
++        Color.green(color),
++        Color.blue(color),
++    )
++
++/**
++ * Halo clock digit color. A clock color picked by the user is used in a tone that reads on the
++ * wallpaper under the clock (the stock clocks use the picked color as is, which can vanish on a
++ * light wallpaper).
++ */
++fun ThemeConfig.blueOSHaloDefaultColor(context: Context): Int {
++    val seed = seedColor ?: return getDefaultColor(context)
++    val palette = ColorScheme(seed, isDarkTheme).accent1
++    return if (isDarkTheme) palette.s100 else palette.s700
++}
+ 
+ /** Horizontal radius of the halo, as a part of the width of the hours */
+ internal const val HALO_RX_FRACTION = 0.3f
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt
+index ea1b94cfaa99..4653ad1023ad 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt
+@@ -29,7 +29,7 @@ import com.android.systemui.shared.clocks.FlexClockContext
+ 
+ @SuppressLint("ViewConstructor")
+ class FlexClockTextView(clockCtx: FlexClockContext, private val isLargeClock: Boolean) :
+-    DigitalClockTextView(clockCtx) {
++    DigitalClockTextView(clockCtx), BlueOSHaloHost {
+     private val isLegacyFlex: Boolean = clockCtx.settings.clockId == FLEX_CLOCK_ID
+     private val isBlueOSHalo: Boolean = clockCtx.isBlueOSHalo
+     override val typefaceCache = clockCtx.typefaceCache.getVariantCache(Unit)
+@@ -57,8 +57,8 @@ class FlexClockTextView(clockCtx: FlexClockContext, private val isLargeClock: Bo
+         fontVariations = buildFontVariations(lsFontAxes, aodAxes)
+     }
+ 
+-    // BlueOS Halo, small clock (one line, e.g. with notifications or on AOD): the halo goes
+-    // above the hours, in room added on top of the text
++    // BlueOS Halo, small clock (one line, e.g. with notifications): the halo goes over the
++    // minutes (the accent part, like over "OS" in the logo), in room added on top of the text
+     private val hasSmallHalo: Boolean = isBlueOSHalo && !isLargeClock
+     private val haloPaint = Paint()
+     private val haloOval = RectF()
+@@ -66,24 +66,42 @@ class FlexClockTextView(clockCtx: FlexClockContext, private val isLargeClock: Bo
+     /** False when the user picked a clock color: then the halo uses that color. */
+     var haloUsesAccent = true
+ 
+-    private val hoursWidth: Float
++    override var blueOSHaloAlpha = 1f
++        set(value) {
++            if (field == value) return
++            field = value
++            invalidate()
++        }
++
++    /** Start and width of the minutes in the one-line time ("07:40" -> "40"). */
++    private val minutesSpan: Pair<Float, Float>
+         get() {
+-            val time = text?.toString() ?: return 0f
++            val time = text?.toString() ?: return 0f to 0f
+             val colon = time.indexOf(':')
+-            return lockscreenPaint.measureText(if (colon > 0) time.substring(0, colon) else time.take(2))
++            if (colon < 0) return 0f to lockscreenPaint.measureText(time)
++            return lockscreenPaint.measureText(time, 0, colon + 1) to
++                lockscreenPaint.measureText(time, colon + 1, time.length)
+         }
+ 
++    init {
++        if (hasSmallHalo) redrawHaloWhenFading { haloVisibility(this, blueOSHaloAlpha) }
++    }
++
+     override val extraTopSpace: Float
+-        get() = if (hasSmallHalo) hoursWidth * HALO_RX_FRACTION * HALO_SPACE_FRACTION else 0f
++        get() =
++            if (hasSmallHalo) minutesSpan.second * HALO_RX_FRACTION * HALO_SPACE_FRACTION else 0f
+ 
+     override fun onDraw(canvas: Canvas) {
+         super.onDraw(canvas)
+         if (!hasSmallHalo) return
+-        val rx = hoursWidth * HALO_RX_FRACTION
+-        if (rx <= 0f) return
++        val (minutesStart, minutesWidth) = minutesSpan
++        val rx = minutesWidth * HALO_RX_FRACTION
++        val visibility = haloVisibility(this, blueOSHaloAlpha)
++        if (rx <= 0f || visibility <= 0f) return
+         val digitColor = if (isDozing) aodColor else lockscreenColor
+-        drawHaloShape(canvas, hoursWidth / 2f, extraTopSpace / 2f, rx, isDozing, haloPaint,
+-            haloOval, if (haloUsesAccent) haloAccentFor(context, digitColor) else digitColor)
++        val color = if (haloUsesAccent) haloAccentFor(context, digitColor) else digitColor
++        drawHaloShape(canvas, minutesStart + minutesWidth / 2f, extraTopSpace / 2f, rx, isDozing,
++            haloPaint, haloOval, withVisibility(color, visibility))
+     }
+ 
+     override fun updateFontVariations(lsAxes: ClockAxisStyle): FontVariations {
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt
+index 7d4272aec083..8544ad46b30e 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt
+@@ -47,7 +47,7 @@ import kotlin.collections.max
+ 
+ @SuppressLint("ViewConstructor")
+ class FlexClockViewGroup(clockCtx: FlexClockContext) :
+-    DigitalClockViewGroup<FlexClockTextView>(clockCtx) {
++    DigitalClockViewGroup<FlexClockTextView>(clockCtx), BlueOSHaloHost {
+     override val children: Sequence<FlexClockTextView>
+         get() = (this as ViewGroup).children.filterIsInstance<FlexClockTextView>()
+ 
+@@ -115,8 +115,19 @@ class FlexClockViewGroup(clockCtx: FlexClockContext) :
+         if (isBlueOSHalo) drawHalo(canvas)
+     }
+ 
+-    // BlueOS Halo clock: a tilted halo over the hours, like the one over the "O" of the logo
++    // BlueOS Halo clock, large (hours over minutes): the tilted halo of the logo on top
+     private val isBlueOSHalo = clockCtx.isBlueOSHalo
++
++    override var blueOSHaloAlpha = 1f
++        set(value) {
++            if (field == value) return
++            field = value
++            invalidate()
++        }
++
++    init {
++        if (isBlueOSHalo) redrawHaloWhenFading { haloVisibility(this, blueOSHaloAlpha) }
++    }
+     private var isHaloDozing = false
+     private var haloLockscreenColor = Color.WHITE
+     private var haloAodColor = Color.WHITE
+@@ -155,9 +166,11 @@ class FlexClockViewGroup(clockCtx: FlexClockContext) :
+         val right = hours.maxOf { it.position.x + it.measuredSize.x }
+         val top = hours.minOf { it.position.y }
+         val rx = haloRx
+-        if (rx <= 0f) return
++        val visibility = haloVisibility(this, blueOSHaloAlpha)
++        if (rx <= 0f || visibility <= 0f) return
++        val color = if (isHaloDozing) haloAodColor else haloLockscreenColor
+         drawHaloShape(canvas, (left + right) / 2f, top - haloSpace / 2f, rx, isHaloDozing,
+-            haloPaint, haloOval, if (isHaloDozing) haloAodColor else haloLockscreenColor)
++            haloPaint, haloOval, withVisibility(color, visibility))
+     }
+ 
+     private fun accentFor(digitColor: Int): Int = haloAccentFor(context, digitColor)
+diff --git a/packages/SystemUI/res-keyguard/layout/keyguard_slice_view.xml b/packages/SystemUI/res-keyguard/layout/keyguard_slice_view.xml
+index d789505138d8..2e62abb76400 100644
+--- a/packages/SystemUI/res-keyguard/layout/keyguard_slice_view.xml
++++ b/packages/SystemUI/res-keyguard/layout/keyguard_slice_view.xml
+@@ -41,4 +41,29 @@
+               android:orientation="horizontal"
+               android:gravity="start"
+     />
++    <!-- BlueOS: "what's next" card (next event / alarm), colors set in KeyguardSliceView -->
++    <LinearLayout
++              android:id="@+id/blueos_slice_card"
++              android:layout_width="wrap_content"
++              android:layout_height="wrap_content"
++              android:layout_marginTop="10dp"
++              android:background="@drawable/blueos_slice_card_bg"
++              android:orientation="horizontal"
++              android:paddingStart="10dp"
++              android:paddingTop="8dp"
++              android:paddingEnd="16dp"
++              android:paddingBottom="8dp"
++              android:visibility="gone">
++        <View
++              android:id="@+id/blueos_slice_card_bar"
++              android:layout_width="3dp"
++              android:layout_height="match_parent"
++              android:background="@drawable/blueos_slice_card_bar" />
++        <LinearLayout
++              android:id="@+id/blueos_slice_card_items"
++              android:layout_width="wrap_content"
++              android:layout_height="wrap_content"
++              android:layout_marginStart="9dp"
++              android:orientation="vertical" />
++    </LinearLayout>
+ </com.android.keyguard.KeyguardSliceView>
+diff --git a/packages/SystemUI/res/drawable/blueos_slice_card_bar.xml b/packages/SystemUI/res/drawable/blueos_slice_card_bar.xml
+new file mode 100644
+index 000000000000..4ddb07cc5294
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/blueos_slice_card_bar.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS lock screen "what's next" card: accent bar, tinted in KeyguardSliceView -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android"
++    android:shape="rectangle">
++    <solid android:color="@android:color/white" />
++    <corners android:radius="2dp" />
++</shape>
+diff --git a/packages/SystemUI/res/drawable/blueos_slice_card_bg.xml b/packages/SystemUI/res/drawable/blueos_slice_card_bg.xml
+new file mode 100644
+index 000000000000..8c4fc4d03d13
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/blueos_slice_card_bg.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS lock screen "what's next" card: tinted in KeyguardSliceView -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android"
++    android:shape="rectangle">
++    <solid android:color="@android:color/white" />
++    <corners android:radius="16dp" />
++</shape>
+diff --git a/packages/SystemUI/res/values-ru/blueos_strings.xml b/packages/SystemUI/res/values-ru/blueos_strings.xml
+index 253adadb82fc..de1a8950d147 100644
+--- a/packages/SystemUI/res/values-ru/blueos_strings.xml
++++ b/packages/SystemUI/res/values-ru/blueos_strings.xml
+@@ -2,4 +2,11 @@
+ <resources>
+     <string name="blueos_shutdown_greeting">До встречи, Сэнсэй</string>
+     <string name="blueos_reboot_greeting">Сейчас вернусь, Сэнсэй</string>
++    <string name="blueos_greeting_morning">Доброе утро, Сэнсэй</string>
++    <string name="blueos_greeting_day">Добрый день, Сэнсэй</string>
++    <string name="blueos_greeting_evening">Добрый вечер, Сэнсэй</string>
++    <string name="blueos_greeting_night">Спокойной ночи, Сэнсэй</string>
++    <string name="blueos_slice_alarm">Будильник <xliff:g id="time" example="08:30" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%1$s</xliff:g></string>
++    <string name="blueos_slice_event_now">Сейчас, до <xliff:g id="time" example="19:00" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%1$s</xliff:g></string>
++    <string name="blueos_slice_event_tomorrow">Завтра, <xliff:g id="time" example="10:00" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%1$s</xliff:g></string>
+ </resources>
+diff --git a/packages/SystemUI/res/values/blueos_strings.xml b/packages/SystemUI/res/values/blueos_strings.xml
+index 3aa545a18755..e36244de1d90 100644
+--- a/packages/SystemUI/res/values/blueos_strings.xml
++++ b/packages/SystemUI/res/values/blueos_strings.xml
+@@ -1,6 +1,19 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS: power off / reboot screen -->
++<!-- BlueOS -->
+ <resources>
++    <!-- Power off / reboot screen -->
+     <string name="blueos_shutdown_greeting">See you, Sensei</string>
+     <string name="blueos_reboot_greeting">Be right back, Sensei</string>
++
++    <!-- Lock screen: greeting above the date, by the time of day -->
++    <string name="blueos_greeting_morning">Good morning, Sensei</string>
++    <string name="blueos_greeting_day">Good afternoon, Sensei</string>
++    <string name="blueos_greeting_evening">Good evening, Sensei</string>
++    <string name="blueos_greeting_night">Good night, Sensei</string>
++    <!-- Lock screen "what's next" card: the next alarm; its time -->
++    <string name="blueos_slice_alarm">Alarm <xliff:g id="time" example="08:30" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%1$s</xliff:g></string>
++    <!-- "What's next" card: an event that has started; when it ends -->
++    <string name="blueos_slice_event_now">Now, until <xliff:g id="time" example="19:00" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%1$s</xliff:g></string>
++    <!-- "What's next" card: an event tomorrow; when it starts -->
++    <string name="blueos_slice_event_tomorrow">Tomorrow, <xliff:g id="time" example="10:00" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%1$s</xliff:g></string>
+ </resources>
+diff --git a/packages/SystemUI/res/values/strings.xml b/packages/SystemUI/res/values/strings.xml
+index d025a3ff3a9d..de54b990aa2b 100644
+--- a/packages/SystemUI/res/values/strings.xml
++++ b/packages/SystemUI/res/values/strings.xml
+@@ -3361,8 +3361,8 @@
+     <!-- SysUI Tuner: Summary of no shortcut being selected [CHAR LIMIT=60] -->
+     <string name="lockscreen_none">None</string>
+ 
+-    <!-- ClockId to use when none is set by user -->
+-    <string name="lockscreen_clock_id_fallback" translatable="false">DEFAULT</string>
++    <!-- ClockId to use when none is set by user (BlueOS: the Halo clock) -->
++    <string name="lockscreen_clock_id_fallback" translatable="false">BLUEOS_HALO</string>
+ 
+     <!-- SysUI Tuner: Format string for describing launching an app [CHAR LIMIT=60] -->
+     <string name="tuner_launch_app">Launch <xliff:g id="app" example="Settings">%1$s</xliff:g></string>
+diff --git a/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt b/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt
+index 5473eada2df6..955596e33fe1 100644
+--- a/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt
++++ b/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt
+@@ -44,11 +44,11 @@ import com.android.systemui.dagger.qualifiers.Background
+ import com.android.systemui.dagger.qualifiers.Main
+ import com.android.systemui.display.data.repository.DisplayWindowPropertiesRepository
+ import com.android.systemui.flags.FeatureFlagsClassic
+-import com.android.systemui.flags.Flags.REGION_SAMPLING
+ import com.android.systemui.keyguard.domain.interactor.KeyguardTransitionInteractor
+ import com.android.systemui.keyguard.shared.model.Edge
+ import com.android.systemui.keyguard.shared.model.KeyguardState.AOD
+ import com.android.systemui.keyguard.shared.model.KeyguardState.DOZING
++import com.android.systemui.keyguard.shared.model.KeyguardState.GONE
+ import com.android.systemui.keyguard.shared.model.KeyguardState.LOCKSCREEN
+ import com.android.systemui.keyguard.shared.model.TransitionState
+ import com.android.systemui.keyguard.ui.viewmodel.DozingToLockscreenTransitionViewModel
+@@ -70,6 +70,7 @@ import com.android.systemui.plugins.keyguard.ui.clocks.TimeFormatKind
+ import com.android.systemui.res.R as SysuiR
+ import com.android.systemui.scene.shared.flag.SceneContainerFlag
+ import com.android.systemui.settings.UserTracker
++import com.android.systemui.shared.clocks.view.setBlueOSHaloAlpha
+ import com.android.systemui.shared.regionsampling.RegionSampler
+ import com.android.systemui.statusbar.policy.BatteryController
+ import com.android.systemui.statusbar.policy.BatteryController.BatteryStateChangeCallback
+@@ -247,7 +248,9 @@ constructor(
+     private var isCharging = false
+     private var isKeyguardVisible = false
+     private var isRegistered = false
+-    private val regionSamplingEnabled = featureFlags.isEnabled(REGION_SAMPLING)
++    // BlueOS: always sample the wallpaper under the clock, so the digits are dark on a light
++    // wallpaper even in the dark theme (the flag is unreleased upstream)
++    private val regionSamplingEnabled = true
+     private var largeClockDisplayId = Display.DEFAULT_DISPLAY
+ 
+     val dozeAmount = MutableStateFlow(0f)
+@@ -479,6 +482,7 @@ constructor(
+                 listenForAnyStateToLockscreenTransition(this)
+                 listenForAnyStateToDozingTransition(this)
+                 listenForDozingToLockscreen(this)
++                listenForBlueOSHaloUnlock(this)
+             }
+         }
+     }
+@@ -661,6 +665,34 @@ constructor(
+         }
+     }
+ 
++    /**
++     * BlueOS Halo clock: on unlock the halo disappears during the first part of the transition
++     * (halos never fly away); it is back as soon as the keyguard shows again.
++     */
++    private fun listenForBlueOSHaloUnlock(scope: CoroutineScope): Job {
++        return scope.launch {
++            merge(
++                    keyguardTransitionInteractor.transition(Edge.create(to = GONE)).map { step ->
++                        when (step.transitionState) {
++                            TransitionState.CANCELED -> 1f
++                            TransitionState.FINISHED -> 0f
++                            else -> 1f - (step.value * HALO_UNLOCK_FADE_SPEED).coerceIn(0f, 1f)
++                        }
++                    },
++                    keyguardTransitionInteractor
++                        .transition(Edge.create(from = GONE))
++                        .filter { it.transitionState == TransitionState.STARTED }
++                        .map { 1f },
++                )
++                .collect { alpha ->
++                    clock?.run {
++                        smallClock.view.setBlueOSHaloAlpha(alpha)
++                        largeClock.view.setBlueOSHaloAlpha(alpha)
++                    }
++                }
++        }
++    }
++
+     private fun listenForDozingToLockscreen(scope: CoroutineScope): Job {
+         return scope.launch {
+             dozingToLockscreenViewModel.get().clockDozeAmount.collect { handleDoze(it) }
+@@ -737,5 +769,7 @@ constructor(
+     companion object {
+         private const val TAG = "ClockEventController"
+         private const val DOZE_TICKRATE_THRESHOLD = 0.99f
++        // BlueOS: the halo is gone after the first quarter of the unlock transition
++        private const val HALO_UNLOCK_FADE_SPEED = 4f
+     }
+ }
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java
+index 062ff3828a60..0fdad6f092d6 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java
+@@ -23,6 +23,7 @@ import android.annotation.ColorInt;
+ import android.annotation.StyleRes;
+ import android.app.PendingIntent;
+ import android.content.Context;
++import android.content.res.ColorStateList;
+ import android.content.res.Resources;
+ import android.graphics.Color;
+ import android.graphics.drawable.Drawable;
+@@ -30,9 +31,12 @@ import android.graphics.drawable.InsetDrawable;
+ import android.graphics.text.LineBreaker;
+ import android.net.Uri;
+ import android.os.Trace;
++import android.text.SpannableStringBuilder;
+ import android.text.TextUtils;
+ import android.text.TextUtils.TruncateAt;
++import android.text.style.RelativeSizeSpan;
+ import android.util.AttributeSet;
++import android.util.TypedValue;
+ import android.view.Gravity;
+ import android.view.View;
+ import android.view.animation.Animation;
+@@ -83,6 +87,12 @@ public class KeyguardSliceView extends LinearLayout {
+     private boolean mHasHeader;
+     private View.OnClickListener mOnClickListener;
+ 
++    // BlueOS: greeting header and the "what's next" card (next event / alarm); both hide on AOD
++    private boolean mHasGreeting;
++    private View mCard;
++    private View mCardBar;
++    private LinearLayout mCardItems;
++
+     public KeyguardSliceView(Context context, AttributeSet attrs) {
+         super(context, attrs);
+ 
+@@ -104,6 +114,9 @@ public class KeyguardSliceView extends LinearLayout {
+         super.onFinishInflate();
+         mTitle = findViewById(R.id.title);
+         mRow = findViewById(R.id.row);
++        mCard = findViewById(R.id.blueos_slice_card);
++        mCardBar = findViewById(R.id.blueos_slice_card_bar);
++        mCardItems = findViewById(R.id.blueos_slice_card_items);
+         mTextColor = Utils.getColorAttrDefaultColor(mContext, R.attr.wallpaperTextColor);
+         mIconSize = (int) mContext.getResources().getDimension(R.dimen.widget_icon_size);
+         mIconSizeWithHeader = (int) mContext.getResources().getDimension(R.dimen.header_icon_size);
+@@ -126,7 +139,9 @@ public class KeyguardSliceView extends LinearLayout {
+     void hideSlice() {
+         mTitle.setVisibility(GONE);
+         mRow.setVisibility(GONE);
++        mCard.setVisibility(GONE);
+         mHasHeader = false;
++        mHasGreeting = false;
+         if (mContentChangeListener != null) {
+             mContentChangeListener.run();
+         }
+@@ -135,12 +150,14 @@ public class KeyguardSliceView extends LinearLayout {
+     Map<View, PendingIntent> showSlice(RowContent header, List<SliceContent> subItems) {
+         Trace.beginSection("KeyguardSliceView#showSlice");
+         mHasHeader = header != null;
++        mHasGreeting = mHasHeader && KeyguardSliceProvider.KEYGUARD_GREETING_URI.equals(
++                header.getSliceItem().getSlice().getUri().toString());
+         Map<View, PendingIntent> clickActions = new HashMap<>();
+ 
+         if (!mHasHeader) {
+             mTitle.setVisibility(GONE);
+         } else {
+-            mTitle.setVisibility(VISIBLE);
++            mTitle.setVisibility(mHasGreeting && mDarkAmount >= 1f ? GONE : VISIBLE);
+ 
+             SliceItem mainTitle = header.getTitleItem();
+             CharSequence title = mainTitle != null ? mainTitle.getText() : null;
+@@ -163,6 +180,19 @@ public class KeyguardSliceView extends LinearLayout {
+             RowContent rc = (RowContent) subItems.get(i);
+             SliceItem item = rc.getSliceItem();
+             final Uri itemTag = item.getSlice().getUri();
++            // BlueOS: the next event and alarm go to the "what's next" card
++            if (isCardItem(itemTag)) {
++                TextView cardItem = mCardItems.findViewWithTag(itemTag);
++                if (cardItem == null) {
++                    cardItem = createCardItem();
++                    cardItem.setTag(itemTag);
++                    mCardItems.addView(cardItem);
++                }
++                bindCardItem(cardItem, rc, item);
++                clickActions.put(cardItem, rc.getPrimaryAction() == null ? null
++                        : rc.getPrimaryAction().getAction());
++                continue;
++            }
+             // Try to reuse the view if already exists in the layout
+             KeyguardSliceTextView button = mRow.findViewWithTag(itemTag);
+             if (button == null) {
+@@ -170,7 +200,8 @@ public class KeyguardSliceView extends LinearLayout {
+                 button.setTextColor(blendedColor);
+                 button.setTag(itemTag);
+                 final int viewIndex = i - (mHasHeader ? 1 : 0);
+-                mRow.addView(button, viewIndex);
++                // BlueOS: card items are not in the row, so the index can be past its end
++                mRow.addView(button, Math.min(viewIndex, mRow.getChildCount()));
+             }
+ 
+             PendingIntent pendingIntent = null;
+@@ -213,6 +244,15 @@ public class KeyguardSliceView extends LinearLayout {
+                 i--;
+             }
+         }
++        for (int i = 0; i < mCardItems.getChildCount(); i++) {
++            View child = mCardItems.getChildAt(i);
++            if (!clickActions.containsKey(child)) {
++                mCardItems.removeView(child);
++                i--;
++            }
++        }
++        mRow.setVisibility(mRow.getChildCount() > 0 ? VISIBLE : GONE);
++        updateCardColors();
+ 
+         if (mContentChangeListener != null) {
+             mContentChangeListener.run();
+@@ -238,6 +278,97 @@ public class KeyguardSliceView extends LinearLayout {
+                 ((TextView) v).setTextColor(blendedColor);
+             }
+         }
++        updateCardColors();
++    }
++
++    private static boolean isCardItem(Uri uri) {
++        final String value = uri.toString();
++        return KeyguardSliceProvider.KEYGUARD_EVENT_URI.equals(value)
++                || KeyguardSliceProvider.KEYGUARD_NEXT_ALARM_URI.equals(value);
++    }
++
++    private TextView createCardItem() {
++        TextView view = new TextView(mContext);
++        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
++        view.setMaxLines(3);
++        view.setEllipsize(TruncateAt.END);
++        view.setCompoundDrawablePadding(
++                (int) (6 * mContext.getResources().getDisplayMetrics().density));
++        return view;
++    }
++
++    /** Title, and the subtitle (when) a bit smaller on a second line; the alarm keeps its icon. */
++    private void bindCardItem(TextView view, RowContent rc, SliceItem item) {
++        final SliceItem titleItem = rc.getTitleItem();
++        final SliceItem subtitleItem = rc.getSubtitleItem();
++        final SpannableStringBuilder text = new SpannableStringBuilder();
++        if (titleItem != null && titleItem.getText() != null) {
++            text.append(titleItem.getText());
++        }
++        if (subtitleItem != null && !TextUtils.isEmpty(subtitleItem.getText())) {
++            text.append('\n');
++            final int start = text.length();
++            text.append(subtitleItem.getText());
++            text.setSpan(new RelativeSizeSpan(0.85f), start, text.length(), 0);
++        }
++        view.setText(text);
++        view.setContentDescription(rc.getContentDescription());
++
++        Drawable icon = null;
++        SliceItem iconItem = SliceQuery.find(item.getSlice(),
++                android.app.slice.SliceItem.FORMAT_IMAGE);
++        if (iconItem != null) {
++            icon = iconItem.getIcon().loadDrawable(mContext);
++            if (icon != null) {
++                final int width = (int) (icon.getIntrinsicWidth()
++                        / (float) icon.getIntrinsicHeight() * mIconSize);
++                icon.setBounds(0, 0, Math.max(width, 1), mIconSize);
++            }
++        }
++        view.setCompoundDrawablesRelative(icon, null, null, null);
++        view.setOnClickListener(mOnClickListener);
++        view.setClickable(rc.getPrimaryAction() != null);
++    }
++
++    /**
++     * The card is light on light wallpapers and dark on dark ones (from the sampled text color),
++     * with an accent bar; it fades out with the greeting when going to AOD.
++     */
++    private void updateCardColors() {
++        if (mCard == null) {
++            return;
++        }
++        final boolean lightText = Color.luminance(mTextColor) > 0.5f;
++        final int background = mContext.getColor(lightText
++                ? android.R.color.system_surface_container_dark
++                : android.R.color.system_surface_container_light);
++        final int foreground = mContext.getColor(lightText
++                ? android.R.color.system_on_surface_dark
++                : android.R.color.system_on_surface_light);
++        final int accent = mContext.getColor(lightText
++                ? android.R.color.system_primary_dark
++                : android.R.color.system_primary_light);
++        mCard.setBackgroundTintList(
++                ColorStateList.valueOf(ColorUtils.setAlphaComponent(background, 0xE6)));
++        mCardBar.setBackgroundTintList(ColorStateList.valueOf(accent));
++        for (int i = 0; i < mCardItems.getChildCount(); i++) {
++            View v = mCardItems.getChildAt(i);
++            if (v instanceof TextView) {
++                ((TextView) v).setTextColor(foreground);
++                ((TextView) v).setCompoundDrawableTintList(ColorStateList.valueOf(foreground));
++            }
++        }
++
++        final float awake = 1f - mDarkAmount;
++        final boolean hasCard = mCardItems.getChildCount() > 0;
++        mCard.setVisibility(hasCard && awake > 0f ? VISIBLE : GONE);
++        mCard.setAlpha(awake);
++        if (mHasGreeting) {
++            mTitle.setAlpha(awake);
++            mTitle.setVisibility(awake > 0f ? VISIBLE : GONE);
++        } else {
++            mTitle.setAlpha(1f);
++        }
+     }
+ 
+     /**
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java
+index dd67b23910ba..d8f3a957a729 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java
+@@ -21,6 +21,7 @@ import static android.app.slice.Slice.HINT_LIST_ITEM;
+ import static com.android.systemui.util.kotlin.JavaAdapterKt.collectFlow;
+ 
+ import android.app.PendingIntent;
++import android.graphics.Color;
+ import android.net.Uri;
+ import android.os.Handler;
+ import android.os.Trace;
+@@ -49,9 +50,11 @@ import com.android.systemui.plugins.ActivityStarter;
+ import com.android.systemui.power.domain.interactor.PowerInteractor;
+ import com.android.systemui.power.shared.model.ScreenPowerState;
+ import com.android.systemui.settings.DisplayTracker;
++import com.android.systemui.shared.regionsampling.RegionSampler;
+ import com.android.systemui.statusbar.policy.ConfigurationController;
+ import com.android.systemui.util.ViewController;
+ 
++import kotlin.Unit;
+ import kotlin.coroutines.CoroutineContext;
+ import kotlin.coroutines.EmptyCoroutineContext;
+ 
+@@ -80,6 +83,9 @@ public class KeyguardSliceViewController extends ViewController<KeyguardSliceVie
+     private Map<View, PendingIntent> mClickActions;
+     private KeyguardInteractor mKeyguardInteractor;
+     private PowerInteractor mPowerInteractor;
++    // BlueOS: text color from the wallpaper under the slice (like the clock), so the greeting
++    // and the date are dark on a light wallpaper even in the dark theme
++    private RegionSampler mRegionSampler;
+ 
+     ConfigurationController.ConfigurationListener mConfigurationListener =
+             new ConfigurationController.ConfigurationListener() {
+@@ -164,6 +170,16 @@ public class KeyguardSliceViewController extends ViewController<KeyguardSliceVie
+             mLiveData.observeForever(mObserver);
+         }
+         mConfigurationController.addCallback(mConfigurationListener);
++        mRegionSampler = new RegionSampler(mView, mHandler::post, mBgHandler::post,
++                true /* regionSamplingEnabled */, true /* isLockscreen */, () -> {
++                    if (mRegionSampler != null) {
++                        mView.setTextColor(mRegionSampler.currentForegroundColor());
++                    }
++                    return Unit.INSTANCE;
++                });
++        mRegionSampler.setForegroundColors(Color.WHITE,
++                mView.getContext().getColor(android.R.color.system_on_surface_light));
++        mRegionSampler.startRegionSampler();
+         mDumpManager.registerNormalDumpable(
+                 TAG + "@" + Integer.toHexString(
+                         KeyguardSliceViewController.this.hashCode()),
+@@ -177,6 +193,10 @@ public class KeyguardSliceViewController extends ViewController<KeyguardSliceVie
+             mLiveData.removeObserver(mObserver);
+         }
+         mConfigurationController.removeCallback(mConfigurationListener);
++        if (mRegionSampler != null) {
++            mRegionSampler.stopRegionSampler();
++            mRegionSampler = null;
++        }
+         mDumpManager.unregisterDumpable(
+                 TAG + "@" + Integer.toHexString(
+                         KeyguardSliceViewController.this.hashCode()));
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardSliceProvider.java b/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardSliceProvider.java
+index 8e04eee6c212..fafce89088c2 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardSliceProvider.java
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardSliceProvider.java
+@@ -16,14 +16,19 @@
+ 
+ package com.android.systemui.keyguard;
+ 
++import android.Manifest;
+ import android.annotation.AnyThread;
+ import android.app.AlarmManager;
+ import android.app.PendingIntent;
+ import android.content.BroadcastReceiver;
+ import android.content.ContentResolver;
++import android.content.ContentUris;
+ import android.content.Context;
+ import android.content.Intent;
+ import android.content.IntentFilter;
++import android.content.pm.PackageManager;
++import android.database.ContentObserver;
++import android.database.Cursor;
+ import android.graphics.Typeface;
+ import android.graphics.drawable.Icon;
+ import android.icu.text.DateFormat;
+@@ -33,9 +38,11 @@ import android.media.session.PlaybackState;
+ import android.net.Uri;
+ import android.os.Handler;
+ import android.os.Trace;
++import android.provider.CalendarContract;
+ import android.provider.Settings;
+ import android.service.notification.ZenModeConfig;
+ import android.text.TextUtils;
++import android.text.format.DateUtils;
+ import android.text.style.StyleSpan;
+ import android.util.Log;
+ 
+@@ -65,6 +72,7 @@ import com.android.systemui.util.wakelock.SettableWakeLock;
+ import com.android.systemui.util.wakelock.WakeLock;
+ import com.android.systemui.util.wakelock.WakeLockLogger;
+ 
++import java.util.Calendar;
+ import java.util.Date;
+ import java.util.Locale;
+ import java.util.TimeZone;
+@@ -97,6 +105,16 @@ public class KeyguardSliceProvider extends SliceProvider implements
+             "content://com.android.systemui.keyguard/media";
+     public static final String KEYGUARD_ACTION_URI =
+             "content://com.android.systemui.keyguard/action";
++    // BlueOS: greeting to Sensei (header) and the next event (shown in the "what's next" card
++    // together with the next alarm, see KeyguardSliceView)
++    public static final String KEYGUARD_GREETING_URI =
++            "content://com.android.systemui.keyguard/greeting";
++    public static final String KEYGUARD_EVENT_URI =
++            "content://com.android.systemui.keyguard/event";
++
++    /** BlueOS: only show calendar events that start within N hours. */
++    private static final int EVENT_VISIBILITY_HOURS = 12;
++    private static final long EVENT_CHECK_INTERVAL_MS = TimeUnit.MINUTES.toMillis(1);
+ 
+     /**
+      * Only show alarms that will ring within N hours.
+@@ -113,6 +131,8 @@ public class KeyguardSliceProvider extends SliceProvider implements
+     protected final Uri mAlarmUri;
+     protected final Uri mDndUri;
+     protected final Uri mMediaUri;
++    protected final Uri mGreetingUri;
++    protected final Uri mEventUri;
+     private final Date mCurrentTime = new Date();
+     private final Handler mHandler;
+     private final Handler mMediaHandler;
+@@ -148,6 +168,20 @@ public class KeyguardSliceProvider extends SliceProvider implements
+     UserTracker mUserTracker;
+     private CharSequence mMediaTitle;
+     private CharSequence mMediaArtist;
++    // BlueOS
++    private String mGreeting;
++    private String mNextEventTitle;
++    private String mNextEventWhen;
++    private long mNextEventCheckedAt;
++    private final ContentObserver mCalendarObserver = new ContentObserver(null) {
++        @Override
++        public void onChange(boolean selfChange) {
++            synchronized (KeyguardSliceProvider.this) {
++                mNextEventCheckedAt = 0;
++            }
++            refreshBlueOSInBackground();
++        }
++    };
+     protected boolean mDozing;
+     private int mStatusBarState;
+     private boolean mMediaIsVisible;
+@@ -186,6 +220,8 @@ public class KeyguardSliceProvider extends SliceProvider implements
+                     synchronized (this) {
+                         updateClockLocked();
+                     }
++                    // BlueOS: the greeting follows the time of day, the card the next event
++                    refreshBlueOSInBackground();
+                 }
+ 
+                 @Override
+@@ -209,6 +245,8 @@ public class KeyguardSliceProvider extends SliceProvider implements
+         mAlarmUri = Uri.parse(KEYGUARD_NEXT_ALARM_URI);
+         mDndUri = Uri.parse(KEYGUARD_DND_URI);
+         mMediaUri = Uri.parse(KEYGUARD_MEDIA_URI);
++        mGreetingUri = Uri.parse(KEYGUARD_GREETING_URI);
++        mEventUri = Uri.parse(KEYGUARD_EVENT_URI);
+     }
+ 
+     @AnyThread
+@@ -223,8 +261,15 @@ public class KeyguardSliceProvider extends SliceProvider implements
+                 if (needsMediaLocked()) {
+                     addMediaLocked(builder);
+                 } else {
++                    // BlueOS: a greeting to Sensei above the date
++                    if (mGreeting == null) {
++                        mGreeting = getGreetingLocked();
++                    }
++                    builder.setHeader(new ListBuilder.HeaderBuilder(mGreetingUri)
++                            .setTitle(mGreeting));
+                     builder.addRow(new RowBuilder(mDateUri).setTitle(mLastText));
+                 }
++                addNextEventLocked(builder);
+                 addNextAlarmLocked(builder);
+                 addZenModeLocked(builder);
+                 addPrimaryActionLocked(builder);
+@@ -287,12 +332,120 @@ public class KeyguardSliceProvider extends SliceProvider implements
+         }
+         IconCompat alarmIcon = IconCompat.createWithResource(getContext(),
+                 R.drawable.ic_access_alarms_big);
++        // BlueOS: "Alarm 08:30" in the "what's next" card
+         RowBuilder alarmRowBuilder = new RowBuilder(mAlarmUri)
+-                .setTitle(mNextAlarm)
++                .setTitle(getContext().getString(R.string.blueos_slice_alarm, mNextAlarm))
+                 .addEndItem(alarmIcon, ListBuilder.ICON_IMAGE);
+         builder.addRow(alarmRowBuilder);
+     }
+ 
++    /** BlueOS: the next calendar event, for the "what's next" card. */
++    protected void addNextEventLocked(ListBuilder builder) {
++        if (TextUtils.isEmpty(mNextEventTitle)) {
++            return;
++        }
++        builder.addRow(new RowBuilder(mEventUri)
++                .setTitle(mNextEventTitle)
++                .setSubtitle(mNextEventWhen));
++    }
++
++    /** BlueOS: greeting to Sensei by the time of day. */
++    private String getGreetingLocked() {
++        final int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
++        final int greeting;
++        if (hour >= 5 && hour < 12) {
++            greeting = R.string.blueos_greeting_morning;
++        } else if (hour >= 12 && hour < 17) {
++            greeting = R.string.blueos_greeting_day;
++        } else if (hour >= 17 && hour < 23) {
++            greeting = R.string.blueos_greeting_evening;
++        } else {
++            greeting = R.string.blueos_greeting_night;
++        }
++        return getContext().getString(greeting);
++    }
++
++    /** BlueOS: recomputes the greeting and the next event off the main thread. */
++    private void refreshBlueOSInBackground() {
++        if (mBgHandler == null) {
++            return;
++        }
++        mBgHandler.post(() -> {
++            final boolean changed;
++            synchronized (KeyguardSliceProvider.this) {
++                changed = updateBlueOSLocked();
++            }
++            if (changed) {
++                notifyChange();
++            }
++        });
++    }
++
++    private boolean updateBlueOSLocked() {
++        final String greeting = getGreetingLocked();
++        final String title = mNextEventTitle;
++        final String when = mNextEventWhen;
++        final long now = System.currentTimeMillis();
++        if (now - mNextEventCheckedAt >= EVENT_CHECK_INTERVAL_MS) {
++            mNextEventCheckedAt = now;
++            loadNextEventLocked(now);
++        }
++        final boolean changed = !TextUtils.equals(greeting, mGreeting)
++                || !TextUtils.equals(title, mNextEventTitle)
++                || !TextUtils.equals(when, mNextEventWhen);
++        mGreeting = greeting;
++        return changed;
++    }
++
++    /** The first visible, not all-day event that hasn't ended and starts within N hours. */
++    private void loadNextEventLocked(long now) {
++        mNextEventTitle = null;
++        mNextEventWhen = null;
++        final Context context = getContext();
++        if (context.checkSelfPermission(Manifest.permission.READ_CALENDAR)
++                != PackageManager.PERMISSION_GRANTED) {
++            return;
++        }
++        final Uri.Builder uri = CalendarContract.Instances.CONTENT_URI.buildUpon();
++        ContentUris.appendId(uri, now);
++        ContentUris.appendId(uri, now + TimeUnit.HOURS.toMillis(EVENT_VISIBILITY_HOURS));
++        final String[] projection = {
++                CalendarContract.Instances.TITLE,
++                CalendarContract.Instances.BEGIN,
++                CalendarContract.Instances.END,
++        };
++        try (Cursor c = context.getContentResolver().query(uri.build(), projection,
++                CalendarContract.Instances.VISIBLE + "=1 AND "
++                        + CalendarContract.Instances.ALL_DAY + "=0",
++                null, CalendarContract.Instances.BEGIN + " ASC")) {
++            while (c != null && c.moveToNext()) {
++                final long begin = c.getLong(1);
++                final long end = c.getLong(2);
++                if (end <= now || TextUtils.isEmpty(c.getString(0))) {
++                    continue;
++                }
++                mNextEventTitle = c.getString(0);
++                mNextEventWhen = formatEventTime(context, begin, end, now);
++                return;
++            }
++        } catch (RuntimeException e) {
++            Log.w(TAG, "Could not read the next calendar event", e);
++        }
++    }
++
++    /** "now, until 19:00" / "18:00 – 19:00" / "tomorrow, 10:00". */
++    private static String formatEventTime(Context context, long begin, long end, long now) {
++        if (begin <= now) {
++            return context.getString(R.string.blueos_slice_event_now,
++                    DateUtils.formatDateTime(context, end, DateUtils.FORMAT_SHOW_TIME));
++        }
++        if (DateUtils.isToday(begin)) {
++            return DateUtils.formatDateRange(context, begin, end, DateUtils.FORMAT_SHOW_TIME);
++        }
++        return context.getString(R.string.blueos_slice_event_tomorrow,
++                DateUtils.formatDateTime(context, begin, DateUtils.FORMAT_SHOW_TIME));
++    }
++
+     /**
+      * Add zen mode (DND) icon to slice if it's enabled.
+      * @param builder The slice builder.
+@@ -344,6 +497,14 @@ public class KeyguardSliceProvider extends SliceProvider implements
+             registerClockUpdate();
+             updateClockLocked();
+         }
++        // BlueOS: the "what's next" card follows calendar changes
++        try {
++            mContentResolver.registerContentObserver(CalendarContract.CONTENT_URI,
++                    true /* notifyForDescendants */, mCalendarObserver);
++        } catch (SecurityException e) {
++            Log.w(TAG, "Can't observe the calendar", e);
++        }
++        refreshBlueOSInBackground();
+         return true;
+     }
+ 
+@@ -354,6 +515,7 @@ public class KeyguardSliceProvider extends SliceProvider implements
+             mZenModeController.removeCallback(this);
+             mMediaWakeLock.setAcquired(false);
+             mAlarmManager.cancel(mUpdateNextAlarm);
++            mContentResolver.unregisterContentObserver(mCalendarObserver);
+             if (mRegistered) {
+                 mRegistered = false;
+                 mKeyguardUpdateMonitor.removeCallback(mKeyguardUpdateMonitorCallback);

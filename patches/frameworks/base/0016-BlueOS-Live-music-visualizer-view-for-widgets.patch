@@ -1,0 +1,701 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sun, 25 Oct 2026 04:49:34 +0100
+Subject: [PATCH 16/30] BlueOS: Live music visualizer view for widgets
+
+BlueOSVisualizerView is allowed in RemoteViews (@RemoteView, hidden), so
+home screen widgets can use it: it draws itself every frame inside the
+launcher (bars, bars around the album art, waves, bars from the middle).
+The spectrum comes from SystemUI's visualizer service through read-only
+shared memory; the view binds it as the launcher only while music plays
+and it is visible. Without it, or when it stays silent while playing
+(e.g. offloaded playback), the view plays a made-up animation instead.
+
+Change-Id: Id69a09db7b774060b8654525966f8132ebf3c66b
+---
+ .../android/widget/BlueOSVisualizerView.java  | 469 ++++++++++++++++++
+ .../res/color/blueos_widget_card_bg.xml       |   5 -
+ .../res/layout/blueos_battery_widget.xml      |  78 ---
+ .../res/layout/blueos_media_widget.xml        | 100 ----
+ 4 files changed, 469 insertions(+), 183 deletions(-)
+ create mode 100644 core/java/android/widget/BlueOSVisualizerView.java
+ delete mode 100644 packages/SystemUI/res/color/blueos_widget_card_bg.xml
+ delete mode 100644 packages/SystemUI/res/layout/blueos_battery_widget.xml
+ delete mode 100644 packages/SystemUI/res/layout/blueos_media_widget.xml
+
+diff --git a/core/java/android/widget/BlueOSVisualizerView.java b/core/java/android/widget/BlueOSVisualizerView.java
+new file mode 100644
+index 000000000000..f2a6d9d53c93
+--- /dev/null
++++ b/core/java/android/widget/BlueOSVisualizerView.java
+@@ -0,0 +1,469 @@
++/*
++ * Copyright (C) 2026 BlueOS
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package android.widget;
++
++import android.annotation.Nullable;
++import android.app.ActivityThread;
++import android.app.Application;
++import android.content.ComponentName;
++import android.content.Context;
++import android.content.Intent;
++import android.content.ServiceConnection;
++import android.content.res.ColorStateList;
++import android.content.res.Configuration;
++import android.graphics.Bitmap;
++import android.graphics.BitmapShader;
++import android.graphics.Canvas;
++import android.graphics.Color;
++import android.graphics.Matrix;
++import android.graphics.Paint;
++import android.graphics.Path;
++import android.graphics.Shader;
++import android.os.Binder;
++import android.os.IBinder;
++import android.os.Parcel;
++import android.os.RemoteException;
++import android.os.SharedMemory;
++import android.os.SystemClock;
++import android.system.ErrnoException;
++import android.util.AttributeSet;
++import android.util.Log;
++import android.view.RemotableViewMethod;
++import android.view.View;
++
++import java.nio.ByteBuffer;
++import java.util.Arrays;
++
++/**
++ * BlueOS: a live music visualizer for home screen widgets. Widgets are {@link RemoteViews}, which
++ * can't animate by sending updates, so this view (allowed in RemoteViews) draws itself every frame
++ * inside the launcher. The spectrum of what is playing comes from SystemUI's visualizer service
++ * through shared memory; when it isn't available (or stays silent, e.g. offloaded playback) the
++ * view plays a made-up animation instead. It only runs while music plays and it is visible.
++ *
++ * @hide
++ */
++@RemoteViews.RemoteView
++public class BlueOSVisualizerView extends View {
++    private static final String TAG = "BlueOSVisualizer";
++
++    /** Bars from the bottom. */
++    public static final int STYLE_BARS = 0;
++    /** Bars around the album art in the middle. */
++    public static final int STYLE_RING = 1;
++    /** Two waves. */
++    public static final int STYLE_WAVE = 2;
++    /** Bars from the middle line, bass in the center. */
++    public static final int STYLE_MIRROR = 3;
++
++    /** SystemUI's service, bound by the view in the launcher's process. */
++    public static final String ACTION_VISUALIZER_SERVICE = "org.blueos.action.VISUALIZER";
++    public static final String SERVICE_PACKAGE = "com.android.systemui";
++    /** In: a client token. Out: int 1 + the shared memory, or int 0 if not allowed. */
++    public static final int TRANSACTION_ATTACH = IBinder.FIRST_CALL_TRANSACTION;
++    /** In: the client token. One way. */
++    public static final int TRANSACTION_DETACH = IBinder.FIRST_CALL_TRANSACTION + 1;
++    public static final int BANDS = 32;
++    /** Shared memory: int sequence, int flags, then BANDS floats from 0 to 1, low to high. */
++    public static final int OFFSET_FLAGS = 4;
++    public static final int OFFSET_BANDS = 8;
++    public static final int SHARED_SIZE = OFFSET_BANDS + BANDS * 4;
++    /** Flag: the service couldn't capture the audio. */
++    public static final int FLAG_UNAVAILABLE = 1;
++
++    /** All-silent spectrum while playing for this long means we can't hear it: animate instead. */
++    private static final long SILENCE_FALLBACK_MILLIS = 1500;
++
++    private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mArtPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Path mPath = new Path();
++    private final Matrix mArtMatrix = new Matrix();
++    private final float[] mTarget = new float[BANDS];
++    private final float[] mShown = new float[BANDS];
++    private final float mDensity;
++
++    private int mStyle = STYLE_BARS;
++    private boolean mPlaying;
++    private boolean mVisible;
++    @Nullable private ColorStateList mColor;
++    @Nullable private Bitmap mArt;
++    private long mLastFrame;
++    private long mSilentSince;
++
++    // Service connection, only while playing and visible
++    @Nullable private Context mBindContext;
++    @Nullable private IBinder mService;
++    @Nullable private SharedMemory mShared;
++    @Nullable private ByteBuffer mBuffer;
++    private final IBinder mToken = new Binder();
++    private final ServiceConnection mConnection = new ServiceConnection() {
++        @Override
++        public void onServiceConnected(ComponentName name, IBinder service) {
++            mService = service;
++            attachToService();
++        }
++
++        @Override
++        public void onServiceDisconnected(ComponentName name) {
++            mService = null;
++            releaseBuffer();
++        }
++    };
++
++    public BlueOSVisualizerView(Context context) {
++        this(context, null);
++    }
++
++    public BlueOSVisualizerView(Context context, @Nullable AttributeSet attrs) {
++        this(context, attrs, 0);
++    }
++
++    public BlueOSVisualizerView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
++        super(context, attrs, defStyleAttr);
++        mDensity = context.getResources().getDisplayMetrics().density;
++        mPaint.setStrokeCap(Paint.Cap.ROUND);
++    }
++
++    /** One of the STYLE_ constants. */
++    @RemotableViewMethod
++    public void setStyle(int style) {
++        mStyle = style;
++        invalidate();
++    }
++
++    /** Whether music is playing: the view only moves (and listens) while it is. */
++    @RemotableViewMethod
++    public void setPlaying(boolean playing) {
++        if (mPlaying == playing) return;
++        mPlaying = playing;
++        mSilentSince = 0;
++        updateRunning();
++    }
++
++    /** Usually set with RemoteViews.setColorStateList, so the launcher resolves theme colors. */
++    @RemotableViewMethod
++    public void setBarColor(@Nullable ColorStateList color) {
++        mColor = color;
++        invalidate();
++    }
++
++    @RemotableViewMethod
++    public void setBarColorInt(int color) {
++        setBarColor(ColorStateList.valueOf(color));
++    }
++
++    /** Album art for the ring style, drawn as a circle in the middle. */
++    @RemotableViewMethod
++    public void setArtwork(@Nullable Bitmap art) {
++        mArt = art;
++        mArtPaint.setShader(art == null ? null
++                : new BitmapShader(art, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
++        invalidate();
++    }
++
++    @Override
++    public void onVisibilityAggregated(boolean isVisible) {
++        super.onVisibilityAggregated(isVisible);
++        mVisible = isVisible;
++        updateRunning();
++    }
++
++    @Override
++    protected void onDetachedFromWindow() {
++        super.onDetachedFromWindow();
++        mVisible = false;
++        updateRunning();
++    }
++
++    private void updateRunning() {
++        if (mPlaying && mVisible) {
++            connect();
++        } else {
++            disconnect();
++        }
++        mLastFrame = 0;
++        postInvalidateOnAnimation();
++    }
++
++    // --- Service ---
++
++    private void connect() {
++        if (mBindContext != null) return;
++        // The view's own context belongs to the widget's package; bind as the launcher itself
++        final Application app = ActivityThread.currentApplication();
++        if (app == null) return;
++        final Intent intent = new Intent(ACTION_VISUALIZER_SERVICE).setPackage(SERVICE_PACKAGE);
++        try {
++            if (app.bindService(intent, mConnection, Context.BIND_AUTO_CREATE)) {
++                mBindContext = app;
++            } else {
++                app.unbindService(mConnection);
++            }
++        } catch (RuntimeException e) {
++            Log.w(TAG, "Can't bind the visualizer service", e);
++        }
++    }
++
++    private void attachToService() {
++        final IBinder service = mService;
++        if (service == null) return;
++        final Parcel data = Parcel.obtain();
++        final Parcel reply = Parcel.obtain();
++        try {
++            data.writeStrongBinder(mToken);
++            service.transact(TRANSACTION_ATTACH, data, reply, 0);
++            if (reply.readInt() != 0) {
++                releaseBuffer();
++                mShared = SharedMemory.CREATOR.createFromParcel(reply);
++                mBuffer = mShared.mapReadOnly();
++            }
++        } catch (RemoteException | ErrnoException | RuntimeException e) {
++            Log.w(TAG, "Can't attach to the visualizer service", e);
++            releaseBuffer();
++        } finally {
++            data.recycle();
++            reply.recycle();
++        }
++    }
++
++    private void disconnect() {
++        final IBinder service = mService;
++        if (service != null) {
++            final Parcel data = Parcel.obtain();
++            try {
++                data.writeStrongBinder(mToken);
++                service.transact(TRANSACTION_DETACH, data, null, IBinder.FLAG_ONEWAY);
++            } catch (RemoteException e) {
++                // It's gone anyway
++            } finally {
++                data.recycle();
++            }
++        }
++        if (mBindContext != null) {
++            try {
++                mBindContext.unbindService(mConnection);
++            } catch (RuntimeException e) {
++                // Already unbound
++            }
++            mBindContext = null;
++        }
++        mService = null;
++        releaseBuffer();
++    }
++
++    private void releaseBuffer() {
++        if (mBuffer != null) {
++            SharedMemory.unmap(mBuffer);
++            mBuffer = null;
++        }
++        if (mShared != null) {
++            mShared.close();
++            mShared = null;
++        }
++    }
++
++    /** Fills mTarget from the service; false when there's nothing real to show. */
++    private boolean readSpectrum(long now) {
++        final ByteBuffer buffer = mBuffer;
++        if (buffer == null || (buffer.getInt(OFFSET_FLAGS) & FLAG_UNAVAILABLE) != 0) return false;
++        boolean silent = true;
++        for (int i = 0; i < BANDS; i++) {
++            final float v = buffer.getFloat(OFFSET_BANDS + i * 4);
++            mTarget[i] = v;
++            if (v > 0.02f) silent = false;
++        }
++        if (!silent) {
++            mSilentSince = 0;
++            return true;
++        }
++        if (mSilentSince == 0) mSilentSince = now;
++        // Quiet moments are real; a long silence while playing means we can't hear the player
++        return now - mSilentSince < SILENCE_FALLBACK_MILLIS;
++    }
++
++    /** A made-up spectrum: a 120 bpm kick, hi-hats and a slow melody. */
++    private void fakeSpectrum(long now) {
++        final float t = now / 1000f;
++        final float kick = (float) Math.exp(-((t % 0.5f) / 0.11f));
++        final float hat = (float) Math.exp(-(((t + 0.25f) % 0.5f) / 0.05f));
++        for (int i = 0; i < BANDS; i++) {
++            final float f = i / (float) (BANDS - 1);
++            final float melody = 0.5f + 0.5f * (float) (Math.sin(t * 3.1 + f * 9)
++                    * Math.sin(t * 1.7 + f * 4));
++            mTarget[i] = Math.min(1f, 0.1f + kick * (1 - f) * 0.7f + hat * f * 0.4f
++                    + melody * 0.3f * (0.4f + f * 0.6f));
++        }
++    }
++
++    // --- Drawing ---
++
++    @Override
++    protected void onDraw(Canvas canvas) {
++        final long now = SystemClock.uptimeMillis();
++        final float dt = mLastFrame == 0 ? 1f : Math.min(4f, (now - mLastFrame) / 16.67f);
++        mLastFrame = now;
++
++        final boolean running = mPlaying && mVisible;
++        if (!running) {
++            Arrays.fill(mTarget, 0f);
++        } else if (!readSpectrum(now)) {
++            fakeSpectrum(now);
++        }
++
++        // Quick rise, slow fall, the same at any frame rate
++        boolean moving = false;
++        for (int i = 0; i < BANDS; i++) {
++            final float target = mTarget[i];
++            final float k = target > mShown[i] ? 0.55f : 0.14f;
++            mShown[i] += (target - mShown[i]) * (1f - (float) Math.pow(1f - k, dt));
++            if (Math.abs(mShown[i] - target) > 0.002f || target > 0.002f) moving = true;
++        }
++
++        mPaint.setColor(currentColor());
++        switch (mStyle) {
++            case STYLE_RING -> drawRing(canvas);
++            case STYLE_WAVE -> drawWave(canvas, now);
++            case STYLE_MIRROR -> drawBars(canvas, true);
++            default -> drawBars(canvas, false);
++        }
++
++        if (running || moving) {
++            postInvalidateOnAnimation();
++        }
++    }
++
++    private int currentColor() {
++        if (mColor != null) {
++            return mColor.getColorForState(getDrawableState(), mColor.getDefaultColor());
++        }
++        final boolean night = (getResources().getConfiguration().uiMode
++                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
++        return getContext().getColor(night ? android.R.color.system_primary_dark
++                : android.R.color.system_primary_light);
++    }
++
++    /** The shown level at position f (0..1, low to high), interpolated between bands. */
++    private float level(float f) {
++        final float x = Math.max(0f, Math.min(1f, f)) * (BANDS - 1);
++        final int i = (int) x;
++        final int j = Math.min(BANDS - 1, i + 1);
++        return mShown[i] + (mShown[j] - mShown[i]) * (x - i);
++    }
++
++    private void drawBars(Canvas canvas, boolean mirror) {
++        final float w = getWidth() - getPaddingLeft() - getPaddingRight();
++        final float h = getHeight() - getPaddingTop() - getPaddingBottom();
++        if (w <= 0 || h <= 0) return;
++        final float barWidth = Math.max(3 * mDensity, Math.min(8 * mDensity, h / 10f));
++        final float gap = barWidth * 0.7f;
++        final int count = Math.max(4, (int) ((w + gap) / (barWidth + gap)));
++        final float used = count * barWidth + (count - 1) * gap;
++        float x = getPaddingLeft() + (w - used) / 2f + barWidth / 2f;
++        mPaint.setStyle(Paint.Style.STROKE);
++        mPaint.setStrokeWidth(barWidth);
++        final float minLen = 0.001f;
++        for (int i = 0; i < count; i++) {
++            final float pos = count == 1 ? 0f : i / (float) (count - 1);
++            // Mirror: bass in the middle, highs to both sides
++            final float f = mirror ? Math.abs(pos - 0.5f) * 2f : pos;
++            final float len = Math.max(minLen, level(f) * (h - barWidth));
++            if (mirror) {
++                final float cy = getPaddingTop() + h / 2f;
++                canvas.drawLine(x, cy - len / 2f, x, cy + len / 2f, mPaint);
++            } else {
++                final float bottom = getPaddingTop() + h - barWidth / 2f;
++                canvas.drawLine(x, bottom, x, bottom - len, mPaint);
++            }
++            x += barWidth + gap;
++        }
++    }
++
++    private void drawRing(Canvas canvas) {
++        final float w = getWidth() - getPaddingLeft() - getPaddingRight();
++        final float h = getHeight() - getPaddingTop() - getPaddingBottom();
++        final float size = Math.min(w, h);
++        if (size <= 0) return;
++        final float cx = getPaddingLeft() + w / 2f;
++        final float cy = getPaddingTop() + h / 2f;
++        final float outer = size / 2f;
++        final float inner = outer * 0.6f;
++        final float artRadius = inner - 4 * mDensity;
++
++        // The art (or a soft disc) in the middle
++        if (mArt != null) {
++            final float scale = 2 * artRadius / Math.min(mArt.getWidth(), mArt.getHeight());
++            mArtMatrix.setScale(scale, scale);
++            mArtMatrix.postTranslate(cx - mArt.getWidth() * scale / 2f, cy - mArt.getHeight() * scale / 2f);
++            mArtPaint.getShader().setLocalMatrix(mArtMatrix);
++            canvas.drawCircle(cx, cy, artRadius, mArtPaint);
++        } else {
++            mPaint.setStyle(Paint.Style.FILL);
++            final int color = mPaint.getColor();
++            mPaint.setAlpha(60);
++            canvas.drawCircle(cx, cy, artRadius, mPaint);
++            mPaint.setColor(color);
++        }
++
++        final int count = 40;
++        final float barWidth = Math.max(2.5f * mDensity, (float) (2 * Math.PI * inner / count) * 0.45f);
++        mPaint.setStyle(Paint.Style.STROKE);
++        mPaint.setStrokeWidth(barWidth);
++        final float start = inner + barWidth;
++        final float maxLen = outer - barWidth / 2f - start;
++        for (int i = 0; i < count; i++) {
++            final double a = i * 2 * Math.PI / count - Math.PI / 2;
++            // Symmetric: bass at the top and the bottom meet the highs at the sides
++            final float f = Math.abs(((i + count / 2f) % count) / count * 2f - 1f);
++            final float len = Math.max(0.001f, level(1f - f) * maxLen);
++            final float cos = (float) Math.cos(a);
++            final float sin = (float) Math.sin(a);
++            canvas.drawLine(cx + cos * start, cy + sin * start,
++                    cx + cos * (start + len), cy + sin * (start + len), mPaint);
++        }
++    }
++
++    private void drawWave(Canvas canvas, long now) {
++        final float w = getWidth() - getPaddingLeft() - getPaddingRight();
++        final float h = getHeight() - getPaddingTop() - getPaddingBottom();
++        if (w <= 0 || h <= 0) return;
++        final float t = now / 1000f;
++        final float cy = getPaddingTop() + h / 2f;
++        final float amp = h / 2f - 3 * mDensity;
++        mPaint.setStyle(Paint.Style.STROKE);
++        final int color = mPaint.getColor();
++        for (int line = 0; line < 2; line++) {
++            mPath.reset();
++            final int steps = Math.max(24, (int) (w / (4 * mDensity)));
++            for (int s = 0; s <= steps; s++) {
++                final float f = s / (float) steps;
++                final float envelope = (float) Math.sin(Math.PI * f);
++                final float lvl = line == 0 ? level(f) : level(1f - f);
++                final double phase = line == 0 ? f * w / (14 * mDensity) + t * 7
++                        : f * w / (20 * mDensity) - t * 5;
++                final float y = cy + (float) Math.sin(phase) * envelope * lvl * amp
++                        * (line == 0 ? 1f : 0.75f);
++                final float x = getPaddingLeft() + f * w;
++                if (s == 0) mPath.moveTo(x, y); else mPath.lineTo(x, y);
++            }
++            mPaint.setStrokeWidth((line == 0 ? 3f : 2f) * mDensity);
++            mPaint.setColor(line == 0 ? color
++                    : Color.argb(110, Color.red(color), Color.green(color), Color.blue(color)));
++            canvas.drawPath(mPath, mPaint);
++        }
++        mPaint.setColor(color);
++    }
++}
+diff --git a/packages/SystemUI/res/color/blueos_widget_card_bg.xml b/packages/SystemUI/res/color/blueos_widget_card_bg.xml
+deleted file mode 100644
+index 7252c4139133..000000000000
+--- a/packages/SystemUI/res/color/blueos_widget_card_bg.xml
++++ /dev/null
+@@ -1,5 +0,0 @@
+-<?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS: slightly translucent card, the wallpaper shows through a little -->
+-<selector xmlns:android="http://schemas.android.com/apk/res/android">
+-    <item android:alpha="0.9" android:color="@color/blueos_widget_card" />
+-</selector>
+diff --git a/packages/SystemUI/res/layout/blueos_battery_widget.xml b/packages/SystemUI/res/layout/blueos_battery_widget.xml
+deleted file mode 100644
+index 48c06949d300..000000000000
+--- a/packages/SystemUI/res/layout/blueos_battery_widget.xml
++++ /dev/null
+@@ -1,78 +0,0 @@
+-<?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS battery widget: phone charge ring, charging bolt, Bluetooth headphones -->
+-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@android:id/background"
+-    android:layout_width="match_parent"
+-    android:layout_height="match_parent"
+-    android:background="@drawable/blueos_widget_card"
+-    android:gravity="center"
+-    android:orientation="vertical"
+-    android:padding="10dp">
+-
+-    <FrameLayout
+-        android:layout_width="72dp"
+-        android:layout_height="72dp">
+-
+-        <ProgressBar
+-            android:id="@+id/blueos_battery_ring"
+-            style="?android:attr/progressBarStyleHorizontal"
+-            android:layout_width="match_parent"
+-            android:layout_height="match_parent"
+-            android:indeterminate="false"
+-            android:max="100"
+-            android:progressDrawable="@drawable/blueos_battery_ring" />
+-
+-        <TextView
+-            android:id="@+id/blueos_battery_level"
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:layout_gravity="center"
+-            android:fontFamily="blueos-clock"
+-            android:fontVariationSettings="'wght' 600"
+-            android:includeFontPadding="false"
+-            android:singleLine="true"
+-            android:textColor="@color/blueos_widget_on_surface"
+-            android:textSize="16sp" />
+-    </FrameLayout>
+-
+-    <LinearLayout
+-        android:layout_width="wrap_content"
+-        android:layout_height="wrap_content"
+-        android:layout_marginTop="6dp"
+-        android:gravity="center_vertical"
+-        android:orientation="horizontal">
+-
+-        <ImageView
+-            android:id="@+id/blueos_battery_charging"
+-            android:layout_width="14dp"
+-            android:layout_height="14dp"
+-            android:contentDescription="@string/blueos_battery_widget_charging"
+-            android:src="@drawable/blueos_ic_bolt"
+-            android:visibility="gone" />
+-
+-        <LinearLayout
+-            android:id="@+id/blueos_headset"
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:layout_marginStart="6dp"
+-            android:gravity="center_vertical"
+-            android:orientation="horizontal"
+-            android:visibility="gone">
+-
+-            <ImageView
+-                android:layout_width="14dp"
+-                android:layout_height="14dp"
+-                android:contentDescription="@string/blueos_battery_widget_headphones"
+-                android:src="@drawable/blueos_ic_headphones" />
+-
+-            <TextView
+-                android:id="@+id/blueos_headset_level"
+-                android:layout_width="wrap_content"
+-                android:layout_height="wrap_content"
+-                android:layout_marginStart="3dp"
+-                android:singleLine="true"
+-                android:textColor="@color/blueos_widget_on_surface_variant"
+-                android:textSize="12sp" />
+-        </LinearLayout>
+-    </LinearLayout>
+-</LinearLayout>
+diff --git a/packages/SystemUI/res/layout/blueos_media_widget.xml b/packages/SystemUI/res/layout/blueos_media_widget.xml
+deleted file mode 100644
+index c3eadd692136..000000000000
+--- a/packages/SystemUI/res/layout/blueos_media_widget.xml
++++ /dev/null
+@@ -1,100 +0,0 @@
+-<?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS music widget: art, title, artist, progress, previous / play-pause / next -->
+-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@android:id/background"
+-    android:layout_width="match_parent"
+-    android:layout_height="match_parent"
+-    android:background="@drawable/blueos_widget_card"
+-    android:gravity="center_vertical"
+-    android:orientation="vertical"
+-    android:padding="14dp">
+-
+-    <LinearLayout
+-        android:layout_width="match_parent"
+-        android:layout_height="wrap_content"
+-        android:gravity="center_vertical"
+-        android:orientation="horizontal">
+-
+-        <ImageView
+-            android:id="@+id/blueos_media_art"
+-            android:layout_width="48dp"
+-            android:layout_height="48dp"
+-            android:background="@drawable/blueos_media_art_bg"
+-            android:clipToOutline="true"
+-            android:contentDescription="@null"
+-            android:scaleType="centerCrop"
+-            android:src="@drawable/blueos_ic_music_note" />
+-
+-        <LinearLayout
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginStart="12dp"
+-            android:orientation="vertical">
+-
+-            <TextView
+-                android:id="@+id/blueos_media_title"
+-                android:layout_width="match_parent"
+-                android:layout_height="wrap_content"
+-                android:ellipsize="end"
+-                android:singleLine="true"
+-                android:text="@string/blueos_media_widget_idle"
+-                android:textColor="@color/blueos_widget_on_surface"
+-                android:textSize="14sp" />
+-
+-            <TextView
+-                android:id="@+id/blueos_media_artist"
+-                android:layout_width="match_parent"
+-                android:layout_height="wrap_content"
+-                android:ellipsize="end"
+-                android:singleLine="true"
+-                android:textColor="@color/blueos_widget_on_surface_variant"
+-                android:textSize="12sp" />
+-        </LinearLayout>
+-    </LinearLayout>
+-
+-    <ProgressBar
+-        android:id="@+id/blueos_media_progress"
+-        style="?android:attr/progressBarStyleHorizontal"
+-        android:layout_width="match_parent"
+-        android:layout_height="4dp"
+-        android:layout_marginTop="12dp"
+-        android:indeterminate="false"
+-        android:max="1000"
+-        android:progressDrawable="@drawable/blueos_media_progress" />
+-
+-    <LinearLayout
+-        android:layout_width="match_parent"
+-        android:layout_height="wrap_content"
+-        android:layout_marginTop="8dp"
+-        android:gravity="center"
+-        android:orientation="horizontal">
+-
+-        <ImageView
+-            android:id="@+id/blueos_media_previous"
+-            android:layout_width="40dp"
+-            android:layout_height="40dp"
+-            android:background="?android:attr/selectableItemBackgroundBorderless"
+-            android:contentDescription="@string/blueos_media_widget_previous"
+-            android:padding="8dp"
+-            android:src="@drawable/blueos_ic_skip_previous" />
+-
+-        <ImageView
+-            android:id="@+id/blueos_media_play_pause"
+-            android:layout_width="44dp"
+-            android:layout_height="44dp"
+-            android:layout_marginHorizontal="24dp"
+-            android:background="@drawable/blueos_media_play_bg"
+-            android:contentDescription="@string/blueos_media_widget_play"
+-            android:padding="10dp"
+-            android:src="@drawable/blueos_ic_play" />
+-
+-        <ImageView
+-            android:id="@+id/blueos_media_next"
+-            android:layout_width="40dp"
+-            android:layout_height="40dp"
+-            android:background="?android:attr/selectableItemBackgroundBorderless"
+-            android:contentDescription="@string/blueos_media_widget_next"
+-            android:padding="8dp"
+-            android:src="@drawable/blueos_ic_skip_next" />
+-    </LinearLayout>
+-</LinearLayout>

@@ -1,0 +1,161 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Thu, 29 Oct 2026 18:11:23 +0100
+Subject: [PATCH 3/3] BlueOS: iconloaderlib: 0.8 glyph role, readable plates,
+ plate exactly like the widget cards
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+«Цвет значков» (glyph role), see-through plates made denser until the glyph reads 3:1 on the wallpaper, and blueos_icon_material = -2: the widget card colour, material and transparency, without the shadow showing through.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: I96c9bd45982785214d0321920859fd4df6567b7d
+---
+ .../icons/mono/ThemedIconDelegate.kt          | 114 +++++++++++++++++-
+ 1 file changed, 110 insertions(+), 4 deletions(-)
+
+diff --git a/iconloaderlib/src/com/android/launcher3/icons/mono/ThemedIconDelegate.kt b/iconloaderlib/src/com/android/launcher3/icons/mono/ThemedIconDelegate.kt
+index b8afdd0..f3a8e33 100644
+--- a/iconloaderlib/src/com/android/launcher3/icons/mono/ThemedIconDelegate.kt
++++ b/iconloaderlib/src/com/android/launcher3/icons/mono/ThemedIconDelegate.kt
+@@ -59,7 +59,9 @@ class ThemedIconDelegate(
+         bounds: Rect,
+         paint: Paint,
+     ) {
+-        canvas.drawBitmap(iconShape.shadowLayer, null, bounds, paint)
++        // BlueOS 0.8: no shadow under a plate «Точно как у виджетов» — it showed through the see-through plate as a
++        // darker spot, and the widget cards have none
++        if (!blueOSExact) canvas.drawBitmap(iconShape.shadowLayer, null, bounds, paint)
+ 
+         canvas.resizeToContentSize(bounds, iconShape.pathSize.toFloat()) {
+             clipPath(iconShape.path)
+@@ -89,6 +91,41 @@ class ThemedIconDelegate(
+          * 4 accent. Monet colours only, so it follows any wallpaper.
+          * 0.7.2: «Прозрачность подложки» (blueos_icon_transparency, 0…100) thins every material.
+          */
++        /** 0.8: the plate is «Точно как у виджетов» (blueos_icon_material = -2): set by [getColors]. */
++        @Volatile private var blueOSExact = false
++
++        private fun blueOSDark(context: Context) = (context.resources.configuration.uiMode and
++            android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
++
++        /**
++         * BlueOS 0.8 «Точно как у виджетов»: the widget card's own colour (surface container) with the widgets'
++         * material and transparency slider, the same formulas as Launcher3 BlueOSMaterial (the blur under it is
++         * drawn by BubbleTextView). Strokes of glass / outline are left out: a plate has no border.
++         */
++        private fun blueOSExactPlate(context: Context): Int {
++            val cr = context.contentResolver
++            val dark = blueOSDark(context)
++            val card = context.getColor(if (dark) android.R.color.system_surface_container_dark
++                else android.R.color.system_surface_container_light)
++            val o = 1f - android.provider.Settings.Secure.getInt(cr, "blueos_widget_transparency", 15)
++                .coerceIn(0, 100) / 100f
++            fun alpha(color: Int, a: Float) = (color and 0x00ffffff) or ((a.coerceIn(0f, 1f) * 255).toInt() shl 24)
++            return when (android.provider.Settings.Secure.getInt(cr, "blueos_widget_material", 0)) {
++                1 -> alpha(card, 0.65f * o)
++                2 -> card
++                3 -> alpha(card, 0.53f * o)
++                4 -> {
++                    val acc = context.getColor(if (dark) android.R.color.system_accent1_200 else android.R.color.system_accent1_600)
++                    fun mix(a: Int, b: Int) = (a * 0.26f + b * 0.74f).toInt()
++                    alpha(android.graphics.Color.rgb(
++                        mix(android.graphics.Color.red(acc), android.graphics.Color.red(card)),
++                        mix(android.graphics.Color.green(acc), android.graphics.Color.green(card)),
++                        mix(android.graphics.Color.blue(acc), android.graphics.Color.blue(card))), o)
++                }
++                else -> alpha(card, o)
++            }
++        }
++
+         private fun blueOSPlate(context: Context, base: Int): Int {
+             val cr = context.contentResolver
+             var m = android.provider.Settings.Secure.getInt(cr, "blueos_icon_material", -1)
+@@ -115,14 +152,83 @@ class ThemedIconDelegate(
+             }
+         }
+ 
++        /**
++         * BlueOS 0.8: the glyph's role, «Цвет значков» in Обои и стиль → Цвета (the same rule as
++         * org.blueos.arona.BlueOSColorRoles.iconGlyph — this library doesn't link it): 0 text, 2 accent (stock),
++         * 3 second, 4 third palette colour.
++         */
++        private fun blueOSGlyph(context: Context, stock: Int): Int {
++            val dark = (context.resources.configuration.uiMode and
++                android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
++                android.content.res.Configuration.UI_MODE_NIGHT_YES
++            fun c(light: Int, night: Int) = context.getColor(if (dark) night else light)
++            return when (android.provider.Settings.Secure.getInt(context.contentResolver, "blueos_color_icons", 2)) {
++                0 -> c(android.R.color.system_on_surface_light, android.R.color.system_on_surface_dark)
++                3 -> c(android.R.color.system_secondary_light, android.R.color.system_secondary_dark)
++                4 -> c(android.R.color.system_tertiary_light, android.R.color.system_tertiary_dark)
++                else -> stock
++            }
++        }
++
++        private var wallLight = 0
++        private var wallLightAt = 0L
++
++        /** The lightest of the wallpaper's main colours (what may shine through a see-through plate). */
++        private fun wallpaperLight(context: Context): Int? {
++            val now = android.os.SystemClock.uptimeMillis()
++            if (wallLightAt != 0L && now - wallLightAt < 3000) return wallLight
++            val colors = try {
++                android.app.WallpaperManager.getInstance(context)
++                    .getWallpaperColors(android.app.WallpaperManager.FLAG_SYSTEM)
++            } catch (e: RuntimeException) {
++                null
++            } ?: return null
++            wallLight = listOfNotNull(colors.primaryColor, colors.secondaryColor, colors.tertiaryColor)
++                .map { it.toArgb() }.maxByOrNull { lum(it) } ?: return null
++            wallLightAt = now
++            return wallLight
++        }
++
++        private fun lum(c: Int): Double {
++            fun ch(v: Int) = (v / 255.0).let { if (it <= 0.04045) it / 12.92 else Math.pow((it + 0.055) / 1.055, 2.4) }
++            return 0.2126 * ch(android.graphics.Color.red(c)) + 0.7152 * ch(android.graphics.Color.green(c)) +
++                0.0722 * ch(android.graphics.Color.blue(c))
++        }
++
++        /**
++         * BlueOS 0.8: a see-through plate (glass, outline, the transparency slider) must not let the glyph vanish on a
++         * light wallpaper (measured on the phone: 1.3:1 in the dark theme). Denser just as much as 3:1 needs.
++         */
++        private fun blueOSReadable(context: Context, plate: Int, glyph: Int, minContrast: Double = 3.0): Int {
++            val light = wallpaperLight(context) ?: return plate
++            val gl = lum(glyph)
++            var a = android.graphics.Color.alpha(plate) / 255f
++            fun over(a: Float): Double {
++                val p = plate
++                fun mix(s: Int, d: Int) = (s * a + d * (1 - a)).toInt()
++                return lum(android.graphics.Color.rgb(
++                    mix(android.graphics.Color.red(p), android.graphics.Color.red(light)),
++                    mix(android.graphics.Color.green(p), android.graphics.Color.green(light)),
++                    mix(android.graphics.Color.blue(p), android.graphics.Color.blue(light))))
++            }
++            fun contrast(l: Double) = (maxOf(gl, l) + 0.05) / (minOf(gl, l) + 0.05)
++            while (a < 0.95f && contrast(over(a)) < minContrast) a += 0.05f
++            return (plate and 0x00ffffff) or ((a.coerceAtMost(1f) * 255).toInt() shl 24)
++        }
++
+         /** Get an int array representing background and foreground colors for themed icons */
+         @JvmStatic
+         fun getColors(context: Context): ColorList {
+             val res = context.resources
++            val glyph = blueOSGlyph(context, res.getColor(R.color.themed_icon_color))
++            blueOSExact = android.provider.Settings.Secure.getInt(context.contentResolver, "blueos_icon_material", -1) == -2
++            // «Точно как у виджетов»: denser only when the glyph would really vanish (2:1), so the plates stay
++            // the widgets' see-through card over the blur, like the widgets' own text
++            val plate = if (blueOSExact) blueOSReadable(context, blueOSExactPlate(context), glyph, 2.0)
++                else blueOSReadable(context, blueOSPlate(context, res.getColor(R.color.themed_icon_background_color)), glyph)
+             return ColorList(
+-                iconBackgroundColor =
+-                    blueOSPlate(context, res.getColor(R.color.themed_icon_background_color)),
+-                iconForegroundColor = res.getColor(R.color.themed_icon_color),
++                iconBackgroundColor = plate,
++                iconForegroundColor = glyph,
+                 iconAdaptiveBackgroundColor =
+                     res.getColor(R.color.themed_icon_adaptive_background_color),
+                 badgeBackgroundColor = res.getColor(R.color.themed_badge_icon_background_color),

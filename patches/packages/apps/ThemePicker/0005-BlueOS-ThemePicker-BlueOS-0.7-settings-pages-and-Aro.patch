@@ -1,0 +1,969 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 27 Oct 2026 03:49:42 +0100
+Subject: [PATCH 05/12] BlueOS: ThemePicker: BlueOS 0.7 settings pages and
+ Arona position editor
+
+Entries: Arona and live clock (lock screen list), BlueOS home screen and Weather (home screen list); every 0.7 feature has its own switch.
+Change-Id: I8707fc1a405b3281161b9bf27643d1fbc435b09e
+---
+ Android.bp                                    |   2 +
+ AndroidManifest.xml                           |  15 +
+ res/values-ru/blueos_07_strings.xml           | 175 ++++++++
+ res/values/blueos_07_strings.xml              | 175 ++++++++
+ .../blueos/BlueOSAronaEditorActivity.kt       | 133 +++++++
+ .../blueos/BlueOSSettingsActivity.kt          | 375 ++++++++++++++++++
+ .../ThemePickerCustomizationOptionViewUtil.kt |   5 +
+ 7 files changed, 880 insertions(+)
+ mode change 100755 => 100644 AndroidManifest.xml
+ create mode 100644 res/values-ru/blueos_07_strings.xml
+ create mode 100644 res/values/blueos_07_strings.xml
+ create mode 100644 src/com/android/customization/blueos/BlueOSAronaEditorActivity.kt
+ create mode 100644 src/com/android/customization/blueos/BlueOSSettingsActivity.kt
+
+diff --git a/Android.bp b/Android.bp
+index 9f87b070..3f40850b 100644
+--- a/Android.bp
++++ b/Android.bp
+@@ -85,6 +85,8 @@ android_library {
+         "androidx.lifecycle_lifecycle-runtime-compose",
+         "androidx.lifecycle_lifecycle-viewmodel-compose",
+         "PlatformComposeSceneTransitionLayout",
++        // BlueOS: 0.7 settings keys + Arona preview for the position editor (vendor/blueos/libs/arona)
++        "BlueOSAronaLib",
+     ],
+ 
+     srcs: [
+diff --git a/AndroidManifest.xml b/AndroidManifest.xml
+old mode 100755
+new mode 100644
+index f39f7849..78fadea3
+--- a/AndroidManifest.xml
++++ b/AndroidManifest.xml
+@@ -102,6 +102,21 @@
+             android:theme="@style/CustomizationTheme.NoActionBar"
+             android:exported="false"/>
+ 
++        <!-- BlueOS 0.7: settings pages (Arona and live clock / home screen / weather) and the
++             position editor for Arona's "custom" mode -->
++        <activity
++            android:name="com.android.customization.blueos.BlueOSSettingsActivity"
++            android:label="@string/app_name"
++            android:theme="@style/CustomizationTheme.NoActionBar"
++            android:exported="false"/>
++
++        <activity
++            android:name="com.android.customization.blueos.BlueOSAronaEditorActivity"
++            android:label="@string/app_name"
++            android:screenOrientation="portrait"
++            android:theme="@style/CustomizationTheme.NoActionBar"
++            android:exported="false"/>
++
+         <activity-alias
+             android:name="com.android.customization.picker.CustomizationPickerActivity"
+             android:targetActivity="com.android.wallpaper.picker.TrampolinePickerActivity"
+diff --git a/res/values-ru/blueos_07_strings.xml b/res/values-ru/blueos_07_strings.xml
+new file mode 100644
+index 00000000..abb9fac5
+--- /dev/null
++++ b/res/values-ru/blueos_07_strings.xml
+@@ -0,0 +1,175 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS 0.7 settings (generated from one table, ru + en) -->
++<resources>
++    <string name="blueos_s_entry_lock">Арона и живые часы</string>
++    <string name="blueos_s_entry_lock_desc">Живая Арона, реплики, ореол, падение и встряхивание</string>
++    <string name="blueos_s_entry_home">Рабочий стол BlueOS</string>
++    <string name="blueos_s_entry_home_desc">Материалы, значки, живые виджеты, наклон</string>
++    <string name="blueos_s_entry_weather">Погода</string>
++    <string name="blueos_s_entry_weather_desc">Виджет, сводка, дата, часы блокировки</string>
++    <string name="blueos_s_page_lock">Экран блокировки</string>
++    <string name="blueos_s_page_home">Рабочий стол</string>
++    <string name="blueos_s_page_weather">Погода</string>
++    <string name="blueos_s_h_arona">Арона</string>
++    <string name="blueos_s_arona_show">Арона на экране блокировки</string>
++    <string name="blueos_s_arona_show_d">Живой персонаж из Blue Archive</string>
++    <string name="blueos_s_h_where">Где стоит</string>
++    <string name="blueos_s_mode_clock">У часов</string>
++    <string name="blueos_s_mode_clock_d">Маленькая, справа от часов</string>
++    <string name="blueos_s_mode_fp">У сканера</string>
++    <string name="blueos_s_mode_fp_d">Внизу, рядом с кнопкой камеры</string>
++    <string name="blueos_s_mode_lobby">Лобби</string>
++    <string name="blueos_s_mode_lobby_d">Большая, за интерфейсом, как Memorial Lobby</string>
++    <string name="blueos_s_mode_dyn">Динамический</string>
++    <string name="blueos_s_mode_dyn_d">Растёт, когда с ней играешь; уменьшается сама</string>
++    <string name="blueos_s_mode_custom">Свой</string>
++    <string name="blueos_s_mode_custom_d">Сам выбираешь место и размер</string>
++    <string name="blueos_s_edit">Настроить положение…</string>
++    <string name="blueos_s_edit_d">Перетащить и изменить размер</string>
++    <string name="blueos_s_h_touch">Касания</string>
++    <string name="blueos_s_look">Смотрит на палец</string>
++    <string name="blueos_s_pat">Можно погладить по голове</string>
++    <string name="blueos_s_h_replies">Реплики (экран блокировки и виджет)</string>
++    <string name="blueos_s_voice">Голосом</string>
++    <string name="blueos_s_voice_d">Японская озвучка из игры</string>
++    <string name="blueos_s_sfx">Звуками эмоций</string>
++    <string name="blueos_s_sfx_d">SFX Emoticon Motion вместо голоса</string>
++    <string name="blueos_s_mute">Без звука</string>
++    <string name="blueos_s_emo_only">Только значок эмоции</string>
++    <string name="blueos_s_emo_only_d">Без текста</string>
++    <string name="blueos_s_text">Показывать текст реплик</string>
++    <string name="blueos_s_lang_ru">Русский</string>
++    <string name="blueos_s_lang_en">English</string>
++    <string name="blueos_s_lang_ja">日本語</string>
++    <string name="blueos_s_notif">Замечает уведомления</string>
++    <string name="blueos_s_notif_d">Только облачко, без звука — у системы свой звук</string>
++    <string name="blueos_s_h_more">Ещё</string>
++    <string name="blueos_s_sleep">Ночью спит</string>
++    <string name="blueos_s_sleep_d">С 23:00 до 7:00: закрытые глаза, бормочет во сне</string>
++    <string name="blueos_s_aod">Силуэт на AOD</string>
++    <string name="blueos_s_aod_d">Неподвижный контур на «всегда включённом» экране</string>
++    <string name="blueos_s_tilt_look">Смотрит по наклону телефона</string>
++    <string name="blueos_s_accel">Акселерометр</string>
++    <string name="blueos_s_h_halo">Живые часы</string>
++    <string name="blueos_s_halo">Живой ореол</string>
++    <string name="blueos_s_halo_d">Ореол над часами двигается и светится</string>
++    <string name="blueos_s_halo_glow">Дышит светом</string>
++    <string name="blueos_s_halo_glow_d">Мягкое свечение цветом акцента</string>
++    <string name="blueos_s_halo_float">Покачивается</string>
++    <string name="blueos_s_halo_float_d">Чуть-чуть, никуда не улетает</string>
++    <string name="blueos_s_halo_spark">Блик каждую минуту</string>
++    <string name="blueos_s_halo_spark_d">Пробегает при смене минуты</string>
++    <string name="blueos_s_halo_charge">Ярче при зарядке</string>
++    <string name="blueos_s_halo_touch">Качается от касания</string>
++    <string name="blueos_s_halo_touch_d">Без звука</string>
++    <string name="blueos_s_halo_tilt">Наклоняется вместе с телефоном</string>
++    <string name="blueos_s_h_lockwx">Погода у часов</string>
++    <string name="blueos_s_lockwx_full">Значок и температура</string>
++    <string name="blueos_s_lockwx_full_d">После даты: «Вт, 27 окт. · ☁ 7°»</string>
++    <string name="blueos_s_lockwx_temp">Только температура</string>
++    <string name="blueos_s_lockwx_off">Не показывать</string>
++    <string name="blueos_s_h_fall">Если телефон упал</string>
++    <string name="blueos_s_fall">Замечать падение</string>
++    <string name="blueos_s_fall_d">Невесомость → удар → телефон замер</string>
++    <string name="blueos_s_fall_arona">Арона пугается</string>
++    <string name="blueos_s_fall_arona_d">Вздрагивает и что-то говорит</string>
++    <string name="blueos_s_fall_halo">Ореолы гаснут и мигают</string>
++    <string name="blueos_s_fall_halo_d">На месте, на пару секунд</string>
++    <string name="blueos_s_fall_pocket">Не реагировать в кармане и во время звонка</string>
++    <string name="blueos_s_fall_pocket_d">По датчику приближения</string>
++    <string name="blueos_s_fall_normal">Чувствительность: обычная</string>
++    <string name="blueos_s_fall_normal_d">Невесомость от 0,15 с, удар от 2,5 g</string>
++    <string name="blueos_s_fall_low">Чувствительность: низкая</string>
++    <string name="blueos_s_fall_low_d">Невесомость от 0,25 с, удар от 3,5 g — меньше ложных</string>
++    <string name="blueos_s_h_motion">Движение телефона</string>
++    <string name="blueos_s_inertia">Инерция</string>
++    <string name="blueos_s_inertia_d">Ореол, Арона и значок погоды чуть отстают от движения и возвращаются на место</string>
++    <string name="blueos_s_inertia_soft">Слабая</string>
++    <string name="blueos_s_inertia_normal">Обычная</string>
++    <string name="blueos_s_h_shake">Если телефон встряхнули</string>
++    <string name="blueos_s_shake">Замечать встряхивание</string>
++    <string name="blueos_s_shake_d">Резкая тряска 3+ раза в секунду, а не плавные движения</string>
++    <string name="blueos_s_shake_arona">Арона возмущается</string>
++    <string name="blueos_s_shake_arona_d">Голова кругом — и высказывает Сэнсэю</string>
++    <string name="blueos_s_shake_big">Сильнее раскачивать живые объекты</string>
++    <string name="blueos_s_shake_big_d">Ореолы и значки качаются и успокаиваются</string>
++    <string name="blueos_s_shake_steps">Не реагировать при ходьбе и беге</string>
++    <string name="blueos_s_shake_steps_d">По датчику шагов: пока он считает шаги, тряска не засчитывается</string>
++    <string name="blueos_s_h_mat">Материал виджетов</string>
++    <string name="blueos_s_mat_matte">Матовый</string>
++    <string name="blueos_s_mat_matte_d">Как сейчас: карточка, прозрачность из «Палитры»</string>
++    <string name="blueos_s_mat_glass">Стекло</string>
++    <string name="blueos_s_mat_glass_d">Размытые обои сквозь карточку, светлая кромка</string>
++    <string name="blueos_s_mat_solid">Сплошной</string>
++    <string name="blueos_s_mat_solid_d">Без прозрачности</string>
++    <string name="blueos_s_mat_outline">Контур</string>
++    <string name="blueos_s_mat_outline_d">Почти прозрачная, только тонкая рамка</string>
++    <string name="blueos_s_mat_accent">Цвет акцента</string>
++    <string name="blueos_s_mat_accent_d">Карточка подкрашена акцентом</string>
++    <string name="blueos_s_h_icons">Значки приложений</string>
++    <string name="blueos_s_iround">Скругление значков</string>
++    <string name="blueos_s_iround_circle">Круг (как сейчас) — форма из «Форма значков»</string>
++    <string name="blueos_s_iround_square">Квадрат</string>
++    <string name="blueos_s_iround_pct">Скругление %1$d %%</string>
++    <string name="blueos_s_imat_widgets">Материал: как у виджетов</string>
++    <string name="blueos_s_imat_solid">Материал: сплошной</string>
++    <string name="blueos_s_imat_solid_d">Как сейчас</string>
++    <string name="blueos_s_imat_glass">Материал: стекло</string>
++    <string name="blueos_s_imat_outline">Материал: контур</string>
++    <string name="blueos_s_imat_accent">Материал: цвет акцента</string>
++    <string name="blueos_s_h_live">Живые виджеты</string>
++    <string name="blueos_s_live">Живые виджеты</string>
++    <string name="blueos_s_live_d">Анимации на виджетах BlueOS</string>
++    <string name="blueos_s_saver">Отключать в энергосбережении</string>
++    <string name="blueos_s_saver_d">Все анимации замирают</string>
++    <string name="blueos_s_h_summary">Сводка</string>
++    <string name="blueos_s_sum_card">Фон-карточка</string>
++    <string name="blueos_s_sum_card_d">Как у остальных виджетов</string>
++    <string name="blueos_s_sum_shine">Блик на приветствии</string>
++    <string name="blueos_s_h_clock">Часы: карточка</string>
++    <string name="blueos_s_clk_halo">Живой ореол</string>
++    <string name="blueos_s_clk_halo_d">Дышит светом, блик раз в минуту</string>
++    <string name="blueos_s_clk_sec">Полоска секунд</string>
++    <string name="blueos_s_clk_sec_d">Тонкая линия внизу карточки</string>
++    <string name="blueos_s_h_mdt">Музыка, дата, переключатели</string>
++    <string name="blueos_s_music">Музыка: ноты и пульс кнопки</string>
++    <string name="blueos_s_music_d">Когда играет</string>
++    <string name="blueos_s_date_shine">Дата: блик на числе</string>
++    <string name="blueos_s_toggles">Переключатели: отклик</string>
++    <string name="blueos_s_toggles_d">Пружинка при нажатии</string>
++    <string name="blueos_s_h_aw">Арона (виджет)</string>
++    <string name="blueos_s_aw_music">Покачивается под музыку</string>
++    <string name="blueos_s_aw_music_d">Плавно, не в такт</string>
++    <string name="blueos_s_h_tilt">Наклон и движение телефона</string>
++    <string name="blueos_s_home_inertia">Инерция</string>
++    <string name="blueos_s_home_inertia_d">Ореол, Арона и значки погоды чуть отстают от движения и возвращаются</string>
++    <string name="blueos_s_tilt">Реагировать на наклон</string>
++    <string name="blueos_s_tilt_d">Акселерометр, только пока экран включён</string>
++    <string name="blueos_s_tilt_glare">Блик на карточках</string>
++    <string name="blueos_s_tilt_glare_d">Как свет на стекле</string>
++    <string name="blueos_s_tilt_halo">Ореол на часах наклоняется</string>
++    <string name="blueos_s_tilt_arona">Арона смотрит по наклону</string>
++    <string name="blueos_s_h_source">Источник</string>
++    <string name="blueos_s_source">Open-Meteo, по примерному местоположению</string>
++    <string name="blueos_s_source_d">Обновление раз в 30–60 мин. Google Погода не делится данными с другими приложениями</string>
++    <string name="blueos_s_units_c">Градусы Цельсия, °C</string>
++    <string name="blueos_s_units_f">Градусы Фаренгейта, °F</string>
++    <string name="blueos_s_h_wx_where">Где показывать</string>
++    <string name="blueos_s_wx_sum">В «Сводке»</string>
++    <string name="blueos_s_wx_sum_d">После даты: «вт, 27 окт. · ☁ 7°»</string>
++    <string name="blueos_s_wx_date">В виджете «Дата»</string>
++    <string name="blueos_s_wx_date_d">В правом верхнем углу</string>
++    <string name="blueos_s_wx_lock_full">У часов: значок и температура</string>
++    <string name="blueos_s_wx_lock_temp">У часов: только температура</string>
++    <string name="blueos_s_wx_lock_off">У часов: не показывать</string>
++    <string name="blueos_s_wx_widget">Виджет «Погода» 2×1</string>
++    <string name="blueos_s_wx_widget_d">Добавляется как обычный виджет: долгое нажатие на рабочем столе → Виджеты</string>
++    <string name="blueos_s_h_wx_live">Живая погода</string>
++    <string name="blueos_s_wx_live">Живые значки погоды</string>
++    <string name="blueos_s_wx_live_d">Солнце крутится, облака плывут, идёт дождь и снег</string>
++    <string name="blueos_s_wx_talk">Арона говорит о погоде</string>
++    <string name="blueos_s_wx_talk_d">Только если фраза совпадает с настоящей погодой</string>
++    <string name="blueos_s_ed_hint">Тащи Арону пальцем · щипок — размер</string>
++    <string name="blueos_s_ed_reset">Сбросить</string>
++    <string name="blueos_s_ed_done">Готово</string>
++</resources>
+diff --git a/res/values/blueos_07_strings.xml b/res/values/blueos_07_strings.xml
+new file mode 100644
+index 00000000..4b778e59
+--- /dev/null
++++ b/res/values/blueos_07_strings.xml
+@@ -0,0 +1,175 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS 0.7 settings (generated from one table, ru + en) -->
++<resources>
++    <string name="blueos_s_entry_lock">Arona and live clock</string>
++    <string name="blueos_s_entry_lock_desc">Live Arona, replies, halo, fall and shake</string>
++    <string name="blueos_s_entry_home">BlueOS home screen</string>
++    <string name="blueos_s_entry_home_desc">Materials, icons, live widgets, tilt</string>
++    <string name="blueos_s_entry_weather">Weather</string>
++    <string name="blueos_s_entry_weather_desc">Widget, summary, date, lock clock</string>
++    <string name="blueos_s_page_lock">Lock screen</string>
++    <string name="blueos_s_page_home">Home screen</string>
++    <string name="blueos_s_page_weather">Weather</string>
++    <string name="blueos_s_h_arona">Arona</string>
++    <string name="blueos_s_arona_show">Arona on the lock screen</string>
++    <string name="blueos_s_arona_show_d">A live character from Blue Archive</string>
++    <string name="blueos_s_h_where">Where she stands</string>
++    <string name="blueos_s_mode_clock">Next to the clock</string>
++    <string name="blueos_s_mode_clock_d">Small, to the right of the clock</string>
++    <string name="blueos_s_mode_fp">By the fingerprint</string>
++    <string name="blueos_s_mode_fp_d">At the bottom, by the camera button</string>
++    <string name="blueos_s_mode_lobby">Lobby</string>
++    <string name="blueos_s_mode_lobby_d">Big, behind everything, like the Memorial Lobby</string>
++    <string name="blueos_s_mode_dyn">Dynamic</string>
++    <string name="blueos_s_mode_dyn_d">Grows while you play with her, shrinks by herself</string>
++    <string name="blueos_s_mode_custom">Custom</string>
++    <string name="blueos_s_mode_custom_d">You choose the place and the size</string>
++    <string name="blueos_s_edit">Adjust the position…</string>
++    <string name="blueos_s_edit_d">Drag and resize</string>
++    <string name="blueos_s_h_touch">Touches</string>
++    <string name="blueos_s_look">Follows your finger</string>
++    <string name="blueos_s_pat">Head pats</string>
++    <string name="blueos_s_h_replies">Replies (lock screen and widget)</string>
++    <string name="blueos_s_voice">Voice</string>
++    <string name="blueos_s_voice_d">Her Japanese voice from the game</string>
++    <string name="blueos_s_sfx">Emotion sounds</string>
++    <string name="blueos_s_sfx_d">SFX Emoticon Motion instead of the voice</string>
++    <string name="blueos_s_mute">Silent</string>
++    <string name="blueos_s_emo_only">Emotion badge only</string>
++    <string name="blueos_s_emo_only_d">No text</string>
++    <string name="blueos_s_text">Show the reply text</string>
++    <string name="blueos_s_lang_ru">Русский</string>
++    <string name="blueos_s_lang_en">English</string>
++    <string name="blueos_s_lang_ja">日本語</string>
++    <string name="blueos_s_notif">Notices notifications</string>
++    <string name="blueos_s_notif_d">A bubble only, no sound — the system has its own</string>
++    <string name="blueos_s_h_more">More</string>
++    <string name="blueos_s_sleep">Sleeps at night</string>
++    <string name="blueos_s_sleep_d">11 pm – 7 am: eyes closed, mumbles in her sleep</string>
++    <string name="blueos_s_aod">Silhouette on the always-on display</string>
++    <string name="blueos_s_aod_d">A still outline on the always-on display</string>
++    <string name="blueos_s_tilt_look">Looks where you tilt the phone</string>
++    <string name="blueos_s_accel">Accelerometer</string>
++    <string name="blueos_s_h_halo">Live clock</string>
++    <string name="blueos_s_halo">Live halo</string>
++    <string name="blueos_s_halo_d">The halo over the clock moves and glows</string>
++    <string name="blueos_s_halo_glow">Breathes with light</string>
++    <string name="blueos_s_halo_glow_d">A soft glow in the accent colour</string>
++    <string name="blueos_s_halo_float">Floats</string>
++    <string name="blueos_s_halo_float_d">Just a little, it never flies away</string>
++    <string name="blueos_s_halo_spark">A gleam every minute</string>
++    <string name="blueos_s_halo_spark_d">Runs around when the minute changes</string>
++    <string name="blueos_s_halo_charge">Brighter while charging</string>
++    <string name="blueos_s_halo_touch">Swings when touched</string>
++    <string name="blueos_s_halo_touch_d">No sound</string>
++    <string name="blueos_s_halo_tilt">Leans with the phone</string>
++    <string name="blueos_s_h_lockwx">Weather by the clock</string>
++    <string name="blueos_s_lockwx_full">Icon and temperature</string>
++    <string name="blueos_s_lockwx_full_d">After the date: “Tue, Oct 27 · ☁ 7°”</string>
++    <string name="blueos_s_lockwx_temp">Temperature only</string>
++    <string name="blueos_s_lockwx_off">Don’t show</string>
++    <string name="blueos_s_h_fall">If the phone falls</string>
++    <string name="blueos_s_fall">Notice falls</string>
++    <string name="blueos_s_fall_d">Free fall → impact → the phone lies still</string>
++    <string name="blueos_s_fall_arona">Arona gets scared</string>
++    <string name="blueos_s_fall_arona_d">She startles and says something</string>
++    <string name="blueos_s_fall_halo">Halos go out and flicker</string>
++    <string name="blueos_s_fall_halo_d">In place, for a couple of seconds</string>
++    <string name="blueos_s_fall_pocket">Not in a pocket or during a call</string>
++    <string name="blueos_s_fall_pocket_d">By the proximity sensor</string>
++    <string name="blueos_s_fall_normal">Sensitivity: normal</string>
++    <string name="blueos_s_fall_normal_d">Free fall from 0.15 s, impact from 2.5 g</string>
++    <string name="blueos_s_fall_low">Sensitivity: low</string>
++    <string name="blueos_s_fall_low_d">Free fall from 0.25 s, impact from 3.5 g — fewer false alarms</string>
++    <string name="blueos_s_h_motion">Phone motion</string>
++    <string name="blueos_s_inertia">Inertia</string>
++    <string name="blueos_s_inertia_d">The halo, Arona and the weather icon lag a little behind the motion and spring back</string>
++    <string name="blueos_s_inertia_soft">Soft</string>
++    <string name="blueos_s_inertia_normal">Normal</string>
++    <string name="blueos_s_h_shake">If the phone is shaken</string>
++    <string name="blueos_s_shake">Notice shaking</string>
++    <string name="blueos_s_shake_d">Sharp shaking 3+ times a second, not smooth motion</string>
++    <string name="blueos_s_shake_arona">Arona protests</string>
++    <string name="blueos_s_shake_arona_d">Her head spins — and she tells Sensei off</string>
++    <string name="blueos_s_shake_big">Swing the live objects more</string>
++    <string name="blueos_s_shake_big_d">Halos and icons swing and settle</string>
++    <string name="blueos_s_shake_steps">Ignore walking and running</string>
++    <string name="blueos_s_shake_steps_d">By the step detector: while it counts steps, shaking doesn’t count</string>
++    <string name="blueos_s_h_mat">Widget material</string>
++    <string name="blueos_s_mat_matte">Matte</string>
++    <string name="blueos_s_mat_matte_d">As before: a card, transparency from the palette</string>
++    <string name="blueos_s_mat_glass">Glass</string>
++    <string name="blueos_s_mat_glass_d">The blurred wallpaper through the card, a light edge</string>
++    <string name="blueos_s_mat_solid">Solid</string>
++    <string name="blueos_s_mat_solid_d">No transparency</string>
++    <string name="blueos_s_mat_outline">Outline</string>
++    <string name="blueos_s_mat_outline_d">Almost see-through, just a thin frame</string>
++    <string name="blueos_s_mat_accent">Accent colour</string>
++    <string name="blueos_s_mat_accent_d">The card is tinted with the accent</string>
++    <string name="blueos_s_h_icons">App icons</string>
++    <string name="blueos_s_iround">Icon rounding</string>
++    <string name="blueos_s_iround_circle">Circle (as before) — the shape picked under icon shape</string>
++    <string name="blueos_s_iround_square">Square</string>
++    <string name="blueos_s_iround_pct">Rounding %1$d %%</string>
++    <string name="blueos_s_imat_widgets">Material: like the widgets</string>
++    <string name="blueos_s_imat_solid">Material: solid</string>
++    <string name="blueos_s_imat_solid_d">As before</string>
++    <string name="blueos_s_imat_glass">Material: glass</string>
++    <string name="blueos_s_imat_outline">Material: outline</string>
++    <string name="blueos_s_imat_accent">Material: accent colour</string>
++    <string name="blueos_s_h_live">Live widgets</string>
++    <string name="blueos_s_live">Live widgets</string>
++    <string name="blueos_s_live_d">Animations on the BlueOS widgets</string>
++    <string name="blueos_s_saver">Off in battery saver</string>
++    <string name="blueos_s_saver_d">All animations stop</string>
++    <string name="blueos_s_h_summary">Summary</string>
++    <string name="blueos_s_sum_card">Card background</string>
++    <string name="blueos_s_sum_card_d">Like the other widgets</string>
++    <string name="blueos_s_sum_shine">Shine on the greeting</string>
++    <string name="blueos_s_h_clock">Clock: card</string>
++    <string name="blueos_s_clk_halo">Live halo</string>
++    <string name="blueos_s_clk_halo_d">Breathes with light, a gleam every minute</string>
++    <string name="blueos_s_clk_sec">Seconds line</string>
++    <string name="blueos_s_clk_sec_d">A thin line at the bottom of the card</string>
++    <string name="blueos_s_h_mdt">Music, date, toggles</string>
++    <string name="blueos_s_music">Music: notes and a pulsing button</string>
++    <string name="blueos_s_music_d">While playing</string>
++    <string name="blueos_s_date_shine">Date: shine on the day</string>
++    <string name="blueos_s_toggles">Toggles: feedback</string>
++    <string name="blueos_s_toggles_d">A springy bounce on tap</string>
++    <string name="blueos_s_h_aw">Arona (widget)</string>
++    <string name="blueos_s_aw_music">Sways to music</string>
++    <string name="blueos_s_aw_music_d">Smoothly, not on the beat</string>
++    <string name="blueos_s_h_tilt">Phone tilt and motion</string>
++    <string name="blueos_s_home_inertia">Inertia</string>
++    <string name="blueos_s_home_inertia_d">The halo, Arona and weather icons lag a little behind the motion and come back</string>
++    <string name="blueos_s_tilt">React to tilt</string>
++    <string name="blueos_s_tilt_d">Accelerometer, only while the screen is on</string>
++    <string name="blueos_s_tilt_glare">Glare on the cards</string>
++    <string name="blueos_s_tilt_glare_d">Like light on glass</string>
++    <string name="blueos_s_tilt_halo">The clock halo leans</string>
++    <string name="blueos_s_tilt_arona">Arona looks where you tilt</string>
++    <string name="blueos_s_h_source">Source</string>
++    <string name="blueos_s_source">Open-Meteo, for the approximate location</string>
++    <string name="blueos_s_source_d">Updated every 30–60 min. Google Weather doesn’t share its data with other apps</string>
++    <string name="blueos_s_units_c">Celsius, °C</string>
++    <string name="blueos_s_units_f">Fahrenheit, °F</string>
++    <string name="blueos_s_h_wx_where">Where to show</string>
++    <string name="blueos_s_wx_sum">In “Summary”</string>
++    <string name="blueos_s_wx_sum_d">After the date: “Tue, Oct 27 · ☁ 7°”</string>
++    <string name="blueos_s_wx_date">In the “Date” widget</string>
++    <string name="blueos_s_wx_date_d">In the top-right corner</string>
++    <string name="blueos_s_wx_lock_full">By the clock: icon and temperature</string>
++    <string name="blueos_s_wx_lock_temp">By the clock: temperature only</string>
++    <string name="blueos_s_wx_lock_off">By the clock: don’t show</string>
++    <string name="blueos_s_wx_widget">The “Weather” widget 2×1</string>
++    <string name="blueos_s_wx_widget_d">Add it like any widget: long-press the home screen → Widgets</string>
++    <string name="blueos_s_h_wx_live">Live weather</string>
++    <string name="blueos_s_wx_live">Live weather icons</string>
++    <string name="blueos_s_wx_live_d">The sun turns, clouds drift, rain and snow fall</string>
++    <string name="blueos_s_wx_talk">Arona talks about the weather</string>
++    <string name="blueos_s_wx_talk_d">Only when the line matches the real weather</string>
++    <string name="blueos_s_ed_hint">Drag Arona · pinch to resize</string>
++    <string name="blueos_s_ed_reset">Reset</string>
++    <string name="blueos_s_ed_done">Done</string>
++</resources>
+diff --git a/src/com/android/customization/blueos/BlueOSAronaEditorActivity.kt b/src/com/android/customization/blueos/BlueOSAronaEditorActivity.kt
+new file mode 100644
+index 00000000..5491687f
+--- /dev/null
++++ b/src/com/android/customization/blueos/BlueOSAronaEditorActivity.kt
+@@ -0,0 +1,133 @@
++package com.android.customization.blueos
++
++import android.app.Activity
++import android.app.WallpaperManager
++import android.graphics.Color
++import android.graphics.drawable.GradientDrawable
++import android.os.Bundle
++import android.provider.Settings
++import android.util.TypedValue
++import android.view.Gravity
++import android.view.MotionEvent
++import android.view.ScaleGestureDetector
++import android.view.View
++import android.widget.Button
++import android.widget.FrameLayout
++import android.widget.ImageView
++import android.widget.LinearLayout
++import android.widget.TextView
++import com.android.themepicker.R
++import java.util.Locale
++import org.blueos.arona.AronaView
++import org.blueos.arona.BlueOSSettings as K
++
++/**
++ * BlueOS 0.7: where Arona stands in the "Свой" mode. Over the lock screen wallpaper: drag her with a finger,
++ * pinch to resize; «Готово» saves "cx;top;h" (fractions of the screen) and switches the mode to custom.
++ * (The lock screen itself can't be used: its long press belongs to Android, a swipe unlocks.)
++ */
++class BlueOSAronaEditorActivity : Activity() {
++    private lateinit var root: FrameLayout
++    private lateinit var arona: AronaView
++    private lateinit var frame: View
++    private var cx = 0.52f
++    private var top = 0.46f
++    private var h = 0.46f
++    private var lastX = 0f
++    private var lastY = 0f
++    private val dp get() = resources.displayMetrics.density
++
++    override fun onCreate(savedInstanceState: Bundle?) {
++        super.onCreate(savedInstanceState)
++        K.string(contentResolver, K.ARONA_CUSTOM, "").split(';').mapNotNull { it.toFloatOrNull() }
++            .takeIf { it.size == 3 }?.let { cx = it[0]; top = it[1]; h = it[2] }
++
++        root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
++        // the lock screen wallpaper (or the home one if there is no separate lock wallpaper)
++        val wm = WallpaperManager.getInstance(this)
++        val wallpaper = runCatching { wm.getDrawable(WallpaperManager.FLAG_LOCK) ?: wm.drawable }.getOrNull()
++        root.addView(ImageView(this).apply { setImageDrawable(wallpaper); scaleType = ImageView.ScaleType.CENTER_CROP },
++            FrameLayout.LayoutParams(-1, -1))
++        arona = AronaView(this)
++        root.addView(arona, FrameLayout.LayoutParams(0, 0))
++        frame = View(this).apply {
++            background = GradientDrawable().apply {
++                cornerRadius = 10 * dp
++                setStroke((2 * dp).toInt(), Color.WHITE, 8 * dp, 6 * dp)
++            }
++        }
++        root.addView(frame, FrameLayout.LayoutParams(0, 0))
++        root.addView(TextView(this).apply {
++            setText(R.string.blueos_s_ed_hint)
++            setTextColor(Color.WHITE)
++            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
++            gravity = Gravity.CENTER
++            setPadding((12 * dp).toInt(), (8 * dp).toInt(), (12 * dp).toInt(), (8 * dp).toInt())
++            background = GradientDrawable().apply { cornerRadius = 14 * dp; setColor(0x8c000000.toInt()) }
++        }, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = (56 * dp).toInt() })
++        val buttons = LinearLayout(this).apply {
++            orientation = LinearLayout.HORIZONTAL
++            addView(Button(this@BlueOSAronaEditorActivity).apply {
++                setText(R.string.blueos_s_ed_reset)
++                setOnClickListener { reset() }
++            })
++            addView(Button(this@BlueOSAronaEditorActivity).apply {
++                setText(R.string.blueos_s_ed_done)
++                setOnClickListener { save(); finish() }
++            }, LinearLayout.LayoutParams(-2, -2).apply { marginStart = (12 * dp).toInt() })
++        }
++        root.addView(buttons, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = (48 * dp).toInt() })
++        setContentView(root)
++        root.post { place() }
++
++        val scale = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
++            override fun onScale(d: ScaleGestureDetector): Boolean {
++                val c = top + h / 2
++                h = (h * d.scaleFactor).coerceIn(0.12f, 1.35f)
++                top = c - h / 2
++                place()
++                return true
++            }
++        })
++        root.setOnTouchListener { _, e ->
++            scale.onTouchEvent(e)
++            when (e.actionMasked) {
++                MotionEvent.ACTION_DOWN -> { lastX = e.x; lastY = e.y }
++                MotionEvent.ACTION_MOVE -> if (!scale.isInProgress && e.pointerCount == 1) {
++                    cx += (e.x - lastX) / root.width
++                    top += (e.y - lastY) / root.height
++                    lastX = e.x; lastY = e.y
++                    place()
++                }
++                MotionEvent.ACTION_POINTER_UP -> { lastX = e.getX(0); lastY = e.getY(0) }
++            }
++            true
++        }
++    }
++
++    private fun reset() {
++        cx = 0.52f; top = 0.46f; h = 0.46f
++        place()
++    }
++
++    private fun place() {
++        if (root.width == 0) return
++        cx = cx.coerceIn(-0.2f, 1.2f)
++        top = top.coerceIn(-0.5f, 0.95f)
++        val vp = arona.viewport
++        val hh = (h * root.height).toInt()
++        val ww = (hh * vp.w / vp.h).toInt()
++        for (v in listOf(arona, frame)) {
++            v.layoutParams = (v.layoutParams as FrameLayout.LayoutParams).apply {
++                width = ww; height = hh
++                leftMargin = (cx * root.width - ww / 2f).toInt()
++                topMargin = (top * root.height).toInt()
++            }
++        }
++    }
++
++    private fun save() {
++        Settings.Secure.putString(contentResolver, K.ARONA_CUSTOM, String.format(Locale.US, "%.4f;%.4f;%.4f", cx, top, h))
++        Settings.Secure.putInt(contentResolver, K.ARONA_MODE, 4)
++    }
++}
+diff --git a/src/com/android/customization/blueos/BlueOSSettingsActivity.kt b/src/com/android/customization/blueos/BlueOSSettingsActivity.kt
+new file mode 100644
+index 00000000..8d0d2fd2
+--- /dev/null
++++ b/src/com/android/customization/blueos/BlueOSSettingsActivity.kt
+@@ -0,0 +1,375 @@
++package com.android.customization.blueos
++
++import android.app.Activity
++import android.content.Context
++import android.content.Intent
++import android.content.res.Configuration
++import android.os.Bundle
++import android.provider.Settings
++import android.util.TypedValue
++import android.view.Gravity
++import android.view.View
++import android.widget.ImageButton
++import android.widget.LinearLayout
++import android.widget.RadioButton
++import android.widget.ScrollView
++import android.widget.SeekBar
++import android.widget.Switch
++import android.widget.TextView
++import com.android.themepicker.R
++import org.blueos.arona.BlueOSSettings as K
++
++/** BlueOS 0.7 entries in the «Обои и стиль» lists; each opens a [BlueOSSettingsActivity] page. */
++enum class BlueOSCustomizationOption(val page: String, val title: Int, val desc: Int) :
++    com.android.wallpaper.picker.customization.ui.util.CustomizationOptionUtil.CustomizationOption {
++    ARONA(BlueOSSettingsActivity.LOCK, R.string.blueos_s_entry_lock, R.string.blueos_s_entry_lock_desc),
++    HOME(BlueOSSettingsActivity.HOME, R.string.blueos_s_entry_home, R.string.blueos_s_entry_home_desc),
++    WEATHER(BlueOSSettingsActivity.WEATHER, R.string.blueos_s_entry_weather, R.string.blueos_s_entry_weather_desc);
++
++    /** A list entry styled like the stock ones ("More lock screen settings" layout). */
++    fun entry(inflater: android.view.LayoutInflater, parent: android.view.ViewGroup): Pair<BlueOSCustomizationOption, View> {
++        val v = inflater.inflate(R.layout.customization_option_entry_more_lock_settings, parent, false)
++        v.findViewById<TextView>(R.id.option_entry_title).setText(title)
++        v.findViewById<TextView>(R.id.option_entry_description).setText(desc)
++        v.setOnClickListener { BlueOSSettingsActivity.open(it.context, page) }
++        return this to v
++    }
++}
++
++/**
++ * BlueOS 0.7 settings in «Обои и стиль» (approved mockup 2): «Экран блокировки» (Arona, replies, live clock,
++ * weather by the clock, fall, motion, shake), «Рабочий стол» (materials, icons, live widgets, tilt) and «Погода».
++ * Every feature has its own switch; values live in Settings.Secure (see org.blueos.arona.BlueOSSettings).
++ */
++class BlueOSSettingsActivity : Activity() {
++    companion object {
++        private const val EXTRA_PAGE = "blueos_page"
++        const val LOCK = "lock"
++        const val HOME = "home"
++        const val WEATHER = "weather"
++
++        fun open(context: Context, page: String) =
++            context.startActivity(Intent(context, BlueOSSettingsActivity::class.java).putExtra(EXTRA_PAGE, page))
++    }
++
++    private sealed class Item {
++        open val dep: () -> Boolean = { true }
++        open val sub = false
++        class Header(val text: Int) : Item()
++        object Divider : Item()
++        class Sw(val key: String, val title: Int, val desc: Int? = null, override val sub: Boolean = false,
++                 override val dep: () -> Boolean = { true }) : Item()
++        class Radio(val key: String, val value: Int, val title: Int, val desc: Int? = null, override val sub: Boolean = false,
++                    override val dep: () -> Boolean = { true }) : Item()
++        class RadioStr(val key: String, val value: String, val def: String, val title: Int, override val sub: Boolean = false,
++                       override val dep: () -> Boolean = { true }) : Item()
++        class Slider(val key: String, val title: Int, val desc: (Int) -> String) : Item()
++        class Btn(val title: Int, val desc: Int?, override val sub: Boolean = false, override val dep: () -> Boolean,
++                  val onClick: () -> Unit) : Item()
++        class Info(val title: Int, val desc: Int) : Item()
++    }
++
++    private val rows = mutableListOf<Pair<Item, () -> Unit>>()
++    private val dp get() = resources.displayMetrics.density
++
++    private fun int(key: String) = K.int(contentResolver, key)
++    private fun on(key: String) = int(key) != 0
++    private fun put(key: String, v: Int) { Settings.Secure.putInt(contentResolver, key, v); refresh() }
++    private fun put(key: String, v: String) { Settings.Secure.putString(contentResolver, key, v); refresh() }
++
++    // ------------------------------------------------------------------ pages (= the mockup's settings phones)
++
++    private fun lockPage(): List<Item> {
++        val show = { on(K.ARONA_SHOW) }
++        val sfxOnly = { int(K.ARONA_VOICE) == 1 && on(K.ARONA_EMO_ONLY) }
++        val text = { show() && on(K.ARONA_TEXT) && !sfxOnly() }
++        val halo = { on(K.HALO_LIVE) }
++        val fall = { on(K.FALL) }
++        val shake = { on(K.SHAKE) }
++        val inertia = { on(K.INERTIA) }
++        return listOf(
++            Item.Header(R.string.blueos_s_h_arona),
++            Item.Sw(K.ARONA_SHOW, R.string.blueos_s_arona_show, R.string.blueos_s_arona_show_d),
++            Item.Header(R.string.blueos_s_h_where),
++            Item.Radio(K.ARONA_MODE, 0, R.string.blueos_s_mode_clock, R.string.blueos_s_mode_clock_d, dep = show),
++            Item.Radio(K.ARONA_MODE, 1, R.string.blueos_s_mode_fp, R.string.blueos_s_mode_fp_d, dep = show),
++            Item.Radio(K.ARONA_MODE, 2, R.string.blueos_s_mode_lobby, R.string.blueos_s_mode_lobby_d, dep = show),
++            Item.Radio(K.ARONA_MODE, 3, R.string.blueos_s_mode_dyn, R.string.blueos_s_mode_dyn_d, dep = show),
++            Item.Radio(K.ARONA_MODE, 4, R.string.blueos_s_mode_custom, R.string.blueos_s_mode_custom_d, dep = show),
++            Item.Btn(R.string.blueos_s_edit, R.string.blueos_s_edit_d, sub = true, dep = { show() && int(K.ARONA_MODE) == 4 }) {
++                startActivity(Intent(this, BlueOSAronaEditorActivity::class.java))
++            },
++            Item.Header(R.string.blueos_s_h_touch),
++            Item.Sw(K.ARONA_LOOK, R.string.blueos_s_look, dep = show),
++            Item.Sw(K.ARONA_PAT, R.string.blueos_s_pat, dep = show),
++            Item.Header(R.string.blueos_s_h_replies),
++            Item.Radio(K.ARONA_VOICE, 0, R.string.blueos_s_voice, R.string.blueos_s_voice_d, dep = show),
++            Item.Radio(K.ARONA_VOICE, 1, R.string.blueos_s_sfx, R.string.blueos_s_sfx_d, dep = show),
++            Item.Radio(K.ARONA_VOICE, 2, R.string.blueos_s_mute, dep = show),
++            Item.Sw(K.ARONA_EMO_ONLY, R.string.blueos_s_emo_only, R.string.blueos_s_emo_only_d, sub = true,
++                dep = { show() && int(K.ARONA_VOICE) == 1 }),
++            Item.Sw(K.ARONA_TEXT, R.string.blueos_s_text, dep = { show() && !sfxOnly() }),
++            Item.RadioStr(K.ARONA_LANG, "ru", "ru", R.string.blueos_s_lang_ru, sub = true, dep = text),
++            Item.RadioStr(K.ARONA_LANG, "en", "ru", R.string.blueos_s_lang_en, sub = true, dep = text),
++            Item.RadioStr(K.ARONA_LANG, "ja", "ru", R.string.blueos_s_lang_ja, sub = true, dep = text),
++            Item.Sw(K.ARONA_NOTIF, R.string.blueos_s_notif, R.string.blueos_s_notif_d, dep = show),
++            Item.Header(R.string.blueos_s_h_more),
++            Item.Sw(K.ARONA_SLEEP, R.string.blueos_s_sleep, R.string.blueos_s_sleep_d, dep = show),
++            Item.Sw(K.ARONA_AOD, R.string.blueos_s_aod, R.string.blueos_s_aod_d, dep = show),
++            Item.Sw(K.ARONA_TILT, R.string.blueos_s_tilt_look, R.string.blueos_s_accel, dep = show),
++            Item.Divider,
++            Item.Header(R.string.blueos_s_h_halo),
++            Item.Sw(K.HALO_LIVE, R.string.blueos_s_halo, R.string.blueos_s_halo_d),
++            Item.Sw(K.HALO_GLOW, R.string.blueos_s_halo_glow, R.string.blueos_s_halo_glow_d, sub = true, dep = halo),
++            Item.Sw(K.HALO_FLOAT, R.string.blueos_s_halo_float, R.string.blueos_s_halo_float_d, sub = true, dep = halo),
++            Item.Sw(K.HALO_SPARK, R.string.blueos_s_halo_spark, R.string.blueos_s_halo_spark_d, sub = true, dep = halo),
++            Item.Sw(K.HALO_CHARGE, R.string.blueos_s_halo_charge, sub = true, dep = halo),
++            Item.Sw(K.HALO_TOUCH, R.string.blueos_s_halo_touch, R.string.blueos_s_halo_touch_d, sub = true, dep = halo),
++            Item.Sw(K.HALO_TILT, R.string.blueos_s_halo_tilt, R.string.blueos_s_accel, sub = true, dep = halo),
++            Item.Header(R.string.blueos_s_h_lockwx),
++            Item.Radio(K.WEATHER_LOCK, 0, R.string.blueos_s_lockwx_full, R.string.blueos_s_lockwx_full_d),
++            Item.Radio(K.WEATHER_LOCK, 1, R.string.blueos_s_lockwx_temp),
++            Item.Radio(K.WEATHER_LOCK, 2, R.string.blueos_s_lockwx_off),
++            Item.Divider,
++            Item.Header(R.string.blueos_s_h_fall),
++            Item.Sw(K.FALL, R.string.blueos_s_fall, R.string.blueos_s_fall_d),
++            Item.Sw(K.FALL_ARONA, R.string.blueos_s_fall_arona, R.string.blueos_s_fall_arona_d, sub = true, dep = fall),
++            Item.Sw(K.FALL_HALO, R.string.blueos_s_fall_halo, R.string.blueos_s_fall_halo_d, sub = true, dep = fall),
++            Item.Sw(K.FALL_POCKET, R.string.blueos_s_fall_pocket, R.string.blueos_s_fall_pocket_d, sub = true, dep = fall),
++            Item.Radio(K.FALL_LOW, 0, R.string.blueos_s_fall_normal, R.string.blueos_s_fall_normal_d, sub = true, dep = fall),
++            Item.Radio(K.FALL_LOW, 1, R.string.blueos_s_fall_low, R.string.blueos_s_fall_low_d, sub = true, dep = fall),
++            Item.Header(R.string.blueos_s_h_motion),
++            Item.Sw(K.INERTIA, R.string.blueos_s_inertia, R.string.blueos_s_inertia_d),
++            Item.Radio(K.INERTIA_SOFT, 1, R.string.blueos_s_inertia_soft, sub = true, dep = inertia),
++            Item.Radio(K.INERTIA_SOFT, 0, R.string.blueos_s_inertia_normal, sub = true, dep = inertia),
++            Item.Header(R.string.blueos_s_h_shake),
++            Item.Sw(K.SHAKE, R.string.blueos_s_shake, R.string.blueos_s_shake_d),
++            Item.Sw(K.SHAKE_ARONA, R.string.blueos_s_shake_arona, R.string.blueos_s_shake_arona_d, sub = true, dep = shake),
++            Item.Sw(K.SHAKE_BIG, R.string.blueos_s_shake_big, R.string.blueos_s_shake_big_d, sub = true, dep = shake),
++            Item.Sw(K.SHAKE_STEPS, R.string.blueos_s_shake_steps, R.string.blueos_s_shake_steps_d, sub = true, dep = shake),
++        )
++    }
++
++    private fun homePage(): List<Item> {
++        val live = { on(K.LIVE_WIDGETS) }
++        val tilt = { live() && on(K.HOME_TILT) }
++        return listOf(
++            Item.Header(R.string.blueos_s_h_mat),
++            Item.Radio(K.WIDGET_MATERIAL, 0, R.string.blueos_s_mat_matte, R.string.blueos_s_mat_matte_d),
++            Item.Radio(K.WIDGET_MATERIAL, 1, R.string.blueos_s_mat_glass, R.string.blueos_s_mat_glass_d),
++            Item.Radio(K.WIDGET_MATERIAL, 2, R.string.blueos_s_mat_solid, R.string.blueos_s_mat_solid_d),
++            Item.Radio(K.WIDGET_MATERIAL, 3, R.string.blueos_s_mat_outline, R.string.blueos_s_mat_outline_d),
++            Item.Radio(K.WIDGET_MATERIAL, 4, R.string.blueos_s_mat_accent, R.string.blueos_s_mat_accent_d),
++            Item.Header(R.string.blueos_s_h_icons),
++            Item.Slider(K.ICON_ROUNDNESS, R.string.blueos_s_iround) { v ->
++                when { v >= 100 -> getString(R.string.blueos_s_iround_circle); v <= 0 -> getString(R.string.blueos_s_iround_square)
++                       else -> getString(R.string.blueos_s_iround_pct, v) }
++            },
++            Item.Radio(K.ICON_MATERIAL, -1, R.string.blueos_s_imat_widgets),
++            Item.Radio(K.ICON_MATERIAL, 0, R.string.blueos_s_imat_solid, R.string.blueos_s_imat_solid_d),
++            Item.Radio(K.ICON_MATERIAL, 1, R.string.blueos_s_imat_glass),
++            Item.Radio(K.ICON_MATERIAL, 3, R.string.blueos_s_imat_outline),
++            Item.Radio(K.ICON_MATERIAL, 4, R.string.blueos_s_imat_accent),
++            Item.Divider,
++            Item.Header(R.string.blueos_s_h_live),
++            Item.Sw(K.LIVE_WIDGETS, R.string.blueos_s_live, R.string.blueos_s_live_d),
++            Item.Sw(K.LIVE_SAVER, R.string.blueos_s_saver, R.string.blueos_s_saver_d, dep = live),
++            Item.Header(R.string.blueos_s_h_summary),
++            Item.Sw(K.SUMMARY_CARD, R.string.blueos_s_sum_card, R.string.blueos_s_sum_card_d),
++            Item.Sw(K.SUMMARY_SHIMMER, R.string.blueos_s_sum_shine, sub = true, dep = live),
++            Item.Header(R.string.blueos_s_h_clock),
++            Item.Sw(K.CLOCK_HALO, R.string.blueos_s_clk_halo, R.string.blueos_s_clk_halo_d, dep = live),
++            Item.Sw(K.CLOCK_SECONDS, R.string.blueos_s_clk_sec, R.string.blueos_s_clk_sec_d, dep = live),
++            Item.Header(R.string.blueos_s_h_mdt),
++            Item.Sw(K.MUSIC_LIVE, R.string.blueos_s_music, R.string.blueos_s_music_d, dep = live),
++            Item.Sw(K.DATE_SHIMMER, R.string.blueos_s_date_shine, dep = live),
++            Item.Sw(K.TOGGLES_LIVE, R.string.blueos_s_toggles, R.string.blueos_s_toggles_d, dep = live),
++            Item.Header(R.string.blueos_s_h_aw),
++            Item.Sw(K.ARONA_MUSIC, R.string.blueos_s_aw_music, R.string.blueos_s_aw_music_d, dep = live),
++            Item.Header(R.string.blueos_s_h_tilt),
++            Item.Sw(K.HOME_INERTIA, R.string.blueos_s_home_inertia, R.string.blueos_s_home_inertia_d, dep = live),
++            Item.Sw(K.HOME_TILT, R.string.blueos_s_tilt, R.string.blueos_s_tilt_d, dep = live),
++            Item.Sw(K.TILT_GLARE, R.string.blueos_s_tilt_glare, R.string.blueos_s_tilt_glare_d, sub = true, dep = tilt),
++            Item.Sw(K.TILT_HALO, R.string.blueos_s_tilt_halo, sub = true, dep = tilt),
++            Item.Sw(K.TILT_ARONA, R.string.blueos_s_tilt_arona, sub = true, dep = tilt),
++        )
++    }
++
++    private fun weatherPage(): List<Item> = listOf(
++        Item.Header(R.string.blueos_s_h_source),
++        Item.Info(R.string.blueos_s_source, R.string.blueos_s_source_d),
++        Item.Radio(K.WEATHER_F, 0, R.string.blueos_s_units_c),
++        Item.Radio(K.WEATHER_F, 1, R.string.blueos_s_units_f),
++        Item.Header(R.string.blueos_s_h_wx_where),
++        Item.Sw(K.WEATHER_SUMMARY, R.string.blueos_s_wx_sum, R.string.blueos_s_wx_sum_d),
++        Item.Sw(K.WEATHER_DATE, R.string.blueos_s_wx_date, R.string.blueos_s_wx_date_d),
++        Item.Radio(K.WEATHER_LOCK, 0, R.string.blueos_s_wx_lock_full),
++        Item.Radio(K.WEATHER_LOCK, 1, R.string.blueos_s_wx_lock_temp),
++        Item.Radio(K.WEATHER_LOCK, 2, R.string.blueos_s_wx_lock_off),
++        Item.Info(R.string.blueos_s_wx_widget, R.string.blueos_s_wx_widget_d),
++        Item.Header(R.string.blueos_s_h_wx_live),
++        Item.Sw(K.WEATHER_LIVE, R.string.blueos_s_wx_live, R.string.blueos_s_wx_live_d),
++        Item.Sw(K.WEATHER_TALK, R.string.blueos_s_wx_talk, R.string.blueos_s_wx_talk_d),
++    )
++
++    // ------------------------------------------------------------------ UI
++
++    private fun attrColor(attr: Int): Int {
++        val tv = TypedValue()
++        theme.resolveAttribute(attr, tv, true)
++        return if (tv.resourceId != 0) getColor(tv.resourceId) else tv.data
++    }
++
++    private val dark get() = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
++    private val accent get() = getColor(if (dark) android.R.color.system_accent1_200 else android.R.color.system_accent1_600)
++
++    override fun onCreate(savedInstanceState: Bundle?) {
++        super.onCreate(savedInstanceState)
++        val page = intent.getStringExtra(EXTRA_PAGE) ?: LOCK
++        val root = LinearLayout(this).apply {
++            orientation = LinearLayout.VERTICAL
++            setBackgroundColor(getColor(if (dark) android.R.color.system_surface_container_dark else android.R.color.system_surface_container_light))
++        }
++        // edge to edge: keep the content off the status and navigation bars
++        root.setOnApplyWindowInsetsListener { v, insets ->
++            val bars = insets.getInsets(android.view.WindowInsets.Type.systemBars())
++            v.setPadding(bars.left, bars.top, bars.right, 0)
++            insets
++        }
++        val bar = LinearLayout(this).apply {
++            orientation = LinearLayout.HORIZONTAL
++            gravity = Gravity.CENTER_VERTICAL
++            setPadding((4 * dp).toInt(), (8 * dp).toInt(), (16 * dp).toInt(), (8 * dp).toInt())
++        }
++        bar.addView(ImageButton(this).apply {
++            setImageResource(com.android.wallpaper.R.drawable.ic_arrow_back_24px)
++            imageTintList = android.content.res.ColorStateList.valueOf(attrColor(android.R.attr.textColorPrimary))
++            background = null
++            contentDescription = getString(android.R.string.cancel)
++            setOnClickListener { finish() }
++        }, LinearLayout.LayoutParams((48 * dp).toInt(), (48 * dp).toInt()))
++        bar.addView(TextView(this).apply {
++            setText(when (page) { HOME -> R.string.blueos_s_page_home; WEATHER -> R.string.blueos_s_page_weather; else -> R.string.blueos_s_page_lock })
++            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
++            setTextColor(attrColor(android.R.attr.textColorPrimary))
++            setPadding((8 * dp).toInt(), 0, 0, 0)
++        })
++        root.addView(bar)
++        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 0, 0, (32 * dp).toInt()) }
++        val scroll = ScrollView(this).apply { addView(list); clipToPadding = false }
++        scroll.setOnApplyWindowInsetsListener { v, insets ->
++            v.setPadding(0, 0, 0, insets.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom); insets
++        }
++        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
++        setContentView(root)
++        val items = when (page) { HOME -> homePage(); WEATHER -> weatherPage(); else -> lockPage() }
++        items.forEach { list.addView(build(it)) }
++        refresh()
++    }
++
++    override fun onResume() { super.onResume(); refresh() }
++
++    private fun refresh() = rows.forEach { (item, update) ->
++        update()
++    }
++
++    private fun build(item: Item): View {
++        val pad = (18 * dp).toInt()
++        val start = if (item.sub) (54 * dp).toInt() else pad
++        when (item) {
++            is Item.Header -> return TextView(this).apply {
++                setText(item.text)
++                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
++                setTypeface(typeface, android.graphics.Typeface.BOLD)
++                setTextColor(accent)
++                setPadding(pad, (18 * dp).toInt(), pad, (6 * dp).toInt())
++            }
++            is Item.Divider -> return View(this).apply {
++                setBackgroundColor(attrColor(android.R.attr.textColorSecondary) and 0x22ffffff)
++                layoutParams = LinearLayout.LayoutParams(-1, (1 * dp).toInt()).apply { setMargins(pad, (8 * dp).toInt(), pad, (8 * dp).toInt()) }
++            }
++            else -> {}
++        }
++        val row = LinearLayout(this).apply {
++            orientation = LinearLayout.HORIZONTAL
++            gravity = Gravity.CENTER_VERTICAL
++            setPadding(start, (12 * dp).toInt(), pad, (12 * dp).toInt())
++            minimumHeight = (56 * dp).toInt()
++            isClickable = item !is Item.Info
++            if (isClickable) {
++                val tv = TypedValue()
++                theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true)
++                setBackgroundResource(tv.resourceId)
++            }
++        }
++        val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
++        val title = TextView(this).apply { setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f); setTextColor(attrColor(android.R.attr.textColorPrimary)) }
++        val desc = TextView(this).apply { setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f); setTextColor(attrColor(android.R.attr.textColorSecondary)) }
++        texts.addView(title); texts.addView(desc)
++
++        fun setTexts(t: Int, d: CharSequence?) {
++            title.setText(t)
++            desc.text = d ?: ""
++            desc.visibility = if (d.isNullOrEmpty()) View.GONE else View.VISIBLE
++        }
++        val update: () -> Unit
++        when (item) {
++            is Item.Sw -> {
++                setTexts(item.title, item.desc?.let { getString(it) })
++                val sw = Switch(this).apply { isClickable = false; isFocusable = false }
++                row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
++                row.addView(sw)
++                row.setOnClickListener { put(item.key, if (on(item.key)) 0 else 1) }
++                update = { sw.isChecked = on(item.key) }
++            }
++            is Item.Radio -> {
++                setTexts(item.title, item.desc?.let { getString(it) })
++                val rb = RadioButton(this).apply { isClickable = false; isFocusable = false }
++                row.addView(rb); row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
++                row.setOnClickListener { put(item.key, item.value) }
++                update = { rb.isChecked = int(item.key) == item.value }
++            }
++            is Item.RadioStr -> {
++                setTexts(item.title, null)
++                val rb = RadioButton(this).apply { isClickable = false; isFocusable = false }
++                row.addView(rb); row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
++                row.setOnClickListener { put(item.key, item.value) }
++                update = { rb.isChecked = K.string(contentResolver, item.key, item.def) == item.value }
++            }
++            is Item.Slider -> {
++                row.isClickable = false
++                row.background = null
++                setTexts(item.title, item.desc(int(item.key)))
++                val bar = SeekBar(this).apply { max = 100 }
++                texts.addView(bar, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6 * dp).toInt() })
++                row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
++                bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
++                    override fun onProgressChanged(s: SeekBar, p: Int, fromUser: Boolean) { if (fromUser) desc.text = item.desc(p) }
++                    override fun onStartTrackingTouch(s: SeekBar) {}
++                    override fun onStopTrackingTouch(s: SeekBar) { put(item.key, s.progress) }   // icons are redrawn once, on release
++                })
++                update = { bar.progress = int(item.key); desc.text = item.desc(int(item.key)) }
++            }
++            is Item.Btn -> {
++                setTexts(item.title, item.desc?.let { getString(it) })
++                row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
++                row.setOnClickListener { item.onClick() }
++                update = {}
++            }
++            is Item.Info -> {
++                setTexts(item.title, getString(item.desc))
++                row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
++                update = {}
++            }
++            else -> update = {}
++        }
++        rows += item to {
++            update()
++            val enabled = item.dep()
++            row.alpha = if (enabled) 1f else 0.38f
++            row.isEnabled = enabled
++            for (i in 0 until row.childCount) row.getChildAt(i).isEnabled = enabled
++        }
++        return row
++    }
++}
+diff --git a/src/com/android/wallpaper/customization/ui/util/ThemePickerCustomizationOptionViewUtil.kt b/src/com/android/wallpaper/customization/ui/util/ThemePickerCustomizationOptionViewUtil.kt
+index f0e78a5d..44af8fdd 100644
+--- a/src/com/android/wallpaper/customization/ui/util/ThemePickerCustomizationOptionViewUtil.kt
++++ b/src/com/android/wallpaper/customization/ui/util/ThemePickerCustomizationOptionViewUtil.kt
+@@ -123,6 +123,8 @@ constructor(
+                                 false,
+                             )
+                     )
++                    // BlueOS 0.7: live Arona, replies, live clock, fall / shake
++                    add(com.android.customization.blueos.BlueOSCustomizationOption.ARONA.entry(layoutInflater, optionContainer))
+                     add(
+                         MORE_LOCK_SCREEN_SETTINGS to
+                             layoutInflater.inflate(
+@@ -195,6 +197,9 @@ constructor(
+                                 )
+                         )
+                     }
++                    // BlueOS 0.7: materials, icon rounding, live widgets; weather
++                    add(com.android.customization.blueos.BlueOSCustomizationOption.HOME.entry(layoutInflater, optionContainer))
++                    add(com.android.customization.blueos.BlueOSCustomizationOption.WEATHER.entry(layoutInflater, optionContainer))
+                 }
+         }
+     }

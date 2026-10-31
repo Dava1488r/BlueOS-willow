@@ -1,0 +1,155 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sun, 25 Oct 2026 10:26:41 +0100
+Subject: [PATCH 4/5] BlueOS: Etar: Widget layouts fit one row with the margin
+
+The date widget shows one event on one line in one row; the countdown's
+number follows the rows (32 / 44 / 56 sp) and its title is one line.
+
+Change-Id: I4241b737cd3904cd515f28fc21791184b5e00191
+---
+ .../widget/BlueOSCountdownWidgetProvider.java   | 17 ++++++++++++++++-
+ .../widget/BlueOSDateWidgetProvider.java        | 17 +++++++++++++----
+ .../main/res/layout/blueos_countdown_widget.xml |  2 +-
+ app/src/main/res/layout/blueos_date_widget.xml  |  6 +++---
+ 4 files changed, 33 insertions(+), 9 deletions(-)
+
+diff --git a/app/src/main/java/com/android/calendar/widget/BlueOSCountdownWidgetProvider.java b/app/src/main/java/com/android/calendar/widget/BlueOSCountdownWidgetProvider.java
+index 30d9d202..ba5c24f8 100644
+--- a/app/src/main/java/com/android/calendar/widget/BlueOSCountdownWidgetProvider.java
++++ b/app/src/main/java/com/android/calendar/widget/BlueOSCountdownWidgetProvider.java
+@@ -26,13 +26,17 @@ import android.content.Intent;
+ import android.content.SharedPreferences;
+ import android.provider.Settings;
+ import android.text.format.DateFormat;
++import android.util.SizeF;
++import android.util.TypedValue;
+ import android.view.View;
+ import android.widget.RemoteViews;
+ 
+ import java.time.LocalDate;
+ import java.time.ZoneId;
+ import java.time.temporal.ChronoUnit;
++import java.util.LinkedHashMap;
+ import java.util.Locale;
++import java.util.Map;
+ 
+ import ws.xsoh.etar.R;
+ 
+@@ -112,10 +116,21 @@ public class BlueOSCountdownWidgetProvider extends AppWidgetProvider {
+     }
+ 
+     static void update(Context context, AppWidgetManager wm, int id) {
++        // Inside the card: one row of 5x6 = 106.7 dp (number 32 sp), one row of 4x5 = 129.5 dp
++        // (44 sp), two rows (56 sp)
++        final Map<SizeF, RemoteViews> sized = new LinkedHashMap<>();
++        sized.put(new SizeF(90f, 90f), build(context, id, 32f));
++        sized.put(new SizeF(90f, 140f), build(context, id, 44f));
++        sized.put(new SizeF(90f, 180f), build(context, id, 56f));
++        wm.updateAppWidget(id, new RemoteViews(sized));
++    }
++
++    private static RemoteViews build(Context context, int id, float numberSp) {
+         final SharedPreferences prefs = prefs(context);
+         final RemoteViews rv = new RemoteViews(context.getPackageName(),
+                 R.layout.blueos_countdown_widget);
+         rv.setInt(R.id.blueos_widget_bg, "setImageAlpha", cardAlpha(context));
++        rv.setTextViewTextSize(R.id.blueos_countdown_number, TypedValue.COMPLEX_UNIT_SP, numberSp);
+ 
+         final long epochDay = prefs.getLong(keyDate(id), Long.MIN_VALUE);
+         if (epochDay == Long.MIN_VALUE) {
+@@ -159,7 +174,7 @@ public class BlueOSCountdownWidgetProvider extends AppWidgetProvider {
+                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id);
+         rv.setOnClickPendingIntent(android.R.id.background, PendingIntent.getActivity(
+                 context, id, setup, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+-        wm.updateAppWidget(id, rv);
++        return rv;
+     }
+ 
+     /** The picked date, or for a yearly one its next time from today (Feb 29 → Feb 28). */
+diff --git a/app/src/main/java/com/android/calendar/widget/BlueOSDateWidgetProvider.java b/app/src/main/java/com/android/calendar/widget/BlueOSDateWidgetProvider.java
+index bde6fc3a..520f4b4f 100644
+--- a/app/src/main/java/com/android/calendar/widget/BlueOSDateWidgetProvider.java
++++ b/app/src/main/java/com/android/calendar/widget/BlueOSDateWidgetProvider.java
+@@ -114,10 +114,11 @@ public class BlueOSDateWidgetProvider extends AppWidgetProvider {
+             return;
+         }
+         final List<Event> events = loadEvents(context);
+-        // One row (the 6a's cells are tall) fits one event, two rows both
++        // One row (106.7 dp inside the card) fits the date and one event on one line; two rows
++        // show both events with their times
+         final Map<SizeF, RemoteViews> sized = new LinkedHashMap<>();
+         sized.put(new SizeF(90f, 90f), buildViews(context, events, 1));
+-        sized.put(new SizeF(90f, 170f), buildViews(context, events, MAX_EVENTS));
++        sized.put(new SizeF(90f, 180f), buildViews(context, events, MAX_EVENTS));
+         final RemoteViews rv = new RemoteViews(sized);
+         for (int widgetId : widgetIds) {
+             wm.updateAppWidget(widgetId, rv);
+@@ -146,13 +147,21 @@ public class BlueOSDateWidgetProvider extends AppWidgetProvider {
+             if (i < events.size() && i < maxShown) {
+                 final Event event = events.get(i);
+                 rv.setViewVisibility(views[0], View.VISIBLE);
+-                rv.setTextViewText(views[1], event.title);
+-                rv.setTextViewText(views[2], formatWhen(context, event));
++                if (maxShown == 1) {
++                    // One line: "18:00 – 19:00  Title"
++                    rv.setTextViewText(views[1], formatWhen(context, event) + "  " + event.title);
++                    rv.setViewVisibility(views[2], View.GONE);
++                } else {
++                    rv.setTextViewText(views[1], event.title);
++                    rv.setTextViewText(views[2], formatWhen(context, event));
++                    rv.setViewVisibility(views[2], View.VISIBLE);
++                }
+             } else {
+                 rv.setViewVisibility(views[0], View.GONE);
+             }
+         }
+         rv.setViewVisibility(R.id.blueos_no_events, events.isEmpty() ? View.VISIBLE : View.GONE);
++        rv.setInt(R.id.blueos_no_events, "setMaxLines", maxShown == 1 ? 1 : 2);
+         rv.setTextViewText(R.id.blueos_no_events, context.getString(canRead
+                 ? R.string.blueos_date_widget_no_events
+                 : R.string.blueos_date_widget_no_access));
+diff --git a/app/src/main/res/layout/blueos_countdown_widget.xml b/app/src/main/res/layout/blueos_countdown_widget.xml
+index 3e6f40ae..04860a28 100644
+--- a/app/src/main/res/layout/blueos_countdown_widget.xml
++++ b/app/src/main/res/layout/blueos_countdown_widget.xml
+@@ -37,7 +37,7 @@
+                 android:alpha="0.8"
+                 android:ellipsize="end"
+                 android:fontFamily="google-sans-text"
+-                android:maxLines="2"
++                android:maxLines="1"
+                 android:textColor="@color/blueos_widget_on_surface_variant"
+                 android:textSize="13sp" />
+ 
+diff --git a/app/src/main/res/layout/blueos_date_widget.xml b/app/src/main/res/layout/blueos_date_widget.xml
+index bbbf4c33..589256e2 100644
+--- a/app/src/main/res/layout/blueos_date_widget.xml
++++ b/app/src/main/res/layout/blueos_date_widget.xml
+@@ -27,7 +27,7 @@
+             android:layout_height="match_parent"
+             android:gravity="center_vertical"
+             android:orientation="vertical"
+-            android:padding="14dp">
++            android:padding="12dp">
+ 
+             <LinearLayout
+                 android:layout_width="match_parent"
+@@ -78,7 +78,7 @@
+                 android:id="@+id/blueos_event1"
+                 android:layout_width="match_parent"
+                 android:layout_height="wrap_content"
+-                android:layout_marginTop="10dp"
++                android:layout_marginTop="8dp"
+                 android:orientation="horizontal"
+                 android:visibility="gone">
+ 
+@@ -166,7 +166,7 @@
+                 android:id="@+id/blueos_no_events"
+                 android:layout_width="match_parent"
+                 android:layout_height="wrap_content"
+-                android:layout_marginTop="10dp"
++                android:layout_marginTop="8dp"
+                 android:maxLines="2"
+                 android:text="@string/blueos_date_widget_no_events"
+                 android:fontFamily="google-sans-text"

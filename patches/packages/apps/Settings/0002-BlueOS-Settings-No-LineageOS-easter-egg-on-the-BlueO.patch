@@ -1,0 +1,61 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sat, 24 Oct 2026 12:59:40 +0200
+Subject: [PATCH 2/7] BlueOS: Settings: No LineageOS easter egg on the BlueOS
+ version
+
+Change-Id: I4a36573dfca29fa1a03b7eb68498a7ed2d2d76ae
+---
+ .../firmwareversion/LineageVersionDetailPreference.kt    | 9 +++++----
+ .../LineageVersionDetailPreferenceController.java        | 4 ++++
+ 2 files changed, 9 insertions(+), 4 deletions(-)
+
+diff --git a/src/com/android/settings/deviceinfo/firmwareversion/LineageVersionDetailPreference.kt b/src/com/android/settings/deviceinfo/firmwareversion/LineageVersionDetailPreference.kt
+index 913207039f8..f773c94b4cd 100644
+--- a/src/com/android/settings/deviceinfo/firmwareversion/LineageVersionDetailPreference.kt
++++ b/src/com/android/settings/deviceinfo/firmwareversion/LineageVersionDetailPreference.kt
+@@ -54,10 +54,8 @@ class LineageVersionDetailPreference :
+ 
+     override fun tags(context: Context) = arrayOf(TAG_DEVICE_STATE_PREFERENCE)
+ 
+-    override fun intent(context: Context): Intent? =
+-        Intent(Intent.ACTION_MAIN)
+-            .setClassName(PLATLOGO_PACKAGE_NAME, PLATLOGO_ACTIVITY_CLASS)
+-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
++    // BlueOS: no LineageOS easter egg behind the BlueOS version
++    override fun intent(context: Context): Intent? = null
+ 
+     override fun bind(preference: Preference, metadata: PreferenceMetadata) {
+         super.bind(preference, metadata)
+@@ -70,6 +68,7 @@ class LineageVersionDetailPreference :
+ 
+     // return true swallows the click event, while return false will start the intent
+     override fun onPreferenceClick(preference: Preference): Boolean {
++        if (BLUEOS_NO_EASTER_EGG) return true
+         if (Utils.isMonkeyRunning()) return true
+ 
+         // remove oldest hit and check whether there are 3 clicks within 500ms
+@@ -102,6 +101,8 @@ class LineageVersionDetailPreference :
+     }
+ 
+     companion object {
++        // BlueOS: a place for an own easter egg later
++        const val BLUEOS_NO_EASTER_EGG = true
+         const val ACTIVITY_TRIGGER_COUNT = 3
+         const val DELAY_TIMER_MILLIS = 500L
+ 
+diff --git a/src/com/android/settings/deviceinfo/firmwareversion/LineageVersionDetailPreferenceController.java b/src/com/android/settings/deviceinfo/firmwareversion/LineageVersionDetailPreferenceController.java
+index b98ab96bfaf..6227c0a240e 100644
+--- a/src/com/android/settings/deviceinfo/firmwareversion/LineageVersionDetailPreferenceController.java
++++ b/src/com/android/settings/deviceinfo/firmwareversion/LineageVersionDetailPreferenceController.java
+@@ -86,6 +86,10 @@ public class LineageVersionDetailPreferenceController extends BasePreferenceCont
+         if (!TextUtils.equals(preference.getKey(), getPreferenceKey())) {
+             return false;
+         }
++        // BlueOS: no LineageOS easter egg behind the BlueOS version
++        if (LineageVersionDetailPreference.BLUEOS_NO_EASTER_EGG) {
++            return true;
++        }
+         if (Utils.isMonkeyRunning()) {
+             return false;
+         }

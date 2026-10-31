@@ -1,0 +1,144 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sun, 25 Oct 2026 04:49:34 +0100
+Subject: [PATCH 03/12] BlueOS: ThemePicker: Widget transparency slider
+
+A slider under "Bright colors" in the palette sheet sets the Secure setting
+blueos_widget_transparency (0..100); SystemUI redraws the BlueOS widgets.
+
+Change-Id: I7b6a7c8d269b707bd5b0401b21ddd9494c4208bf
+---
+ res/layout/floating_sheet_colors.xml          | 25 ++++++++++++
+ res/values-ru/blueos_strings.xml              |  1 +
+ res/values/blueos_strings.xml                 |  2 +
+ .../ui/binder/ColorsFloatingSheetBinder.kt    | 40 +++++++++++++++++++
+ 4 files changed, 68 insertions(+)
+
+diff --git a/res/layout/floating_sheet_colors.xml b/res/layout/floating_sheet_colors.xml
+index 40163ec6..636b7d92 100644
+--- a/res/layout/floating_sheet_colors.xml
++++ b/res/layout/floating_sheet_colors.xml
+@@ -75,6 +75,31 @@
+             android:text="@string/blueos_bright_colors_title"
+             android:textAppearance="@style/SwitchSectionTitleTextStyle"
+             android:theme="@style/Theme.Material3.DynamicColors.DayNight" />
++
++        <!-- BlueOS: how transparent the cards of the BlueOS widgets are -->
++        <TextView
++            android:layout_width="match_parent"
++            android:layout_height="wrap_content"
++            android:layout_marginHorizontal="@dimen/floating_sheet_content_horizontal_padding"
++            android:layout_marginTop="12dp"
++            android:text="@string/blueos_widget_transparency_title"
++            android:textAppearance="@style/SwitchSectionTitleTextStyle"
++            android:textColor="@color/system_on_surface" />
++
++        <com.google.android.material.slider.Slider
++            xmlns:app="http://schemas.android.com/apk/res-auto"
++            android:id="@+id/blueos_widget_transparency_slider"
++            android:layout_width="match_parent"
++            android:layout_height="wrap_content"
++            android:paddingHorizontal="@dimen/floating_sheet_content_horizontal_padding"
++            android:minHeight="@dimen/touch_target_min_height"
++            android:contentDescription="@string/blueos_widget_transparency_title"
++            android:stepSize="5"
++            android:valueFrom="0"
++            android:valueTo="100"
++            app:trackHeight="@dimen/slider_track_height"
++            app:thumbHeight="@dimen/slider_thumb_height"
++            android:theme="@style/Theme.Material3.DynamicColors.DayNight" />
+     </LinearLayout>
+ 
+     <com.android.wallpaper.picker.customization.ui.view.FloatingToolbar
+diff --git a/res/values-ru/blueos_strings.xml b/res/values-ru/blueos_strings.xml
+index ec978eec..4116290e 100644
+--- a/res/values-ru/blueos_strings.xml
++++ b/res/values-ru/blueos_strings.xml
+@@ -1,4 +1,5 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources>
+     <string name="blueos_bright_colors_title">Яркие цвета</string>
++    <string name="blueos_widget_transparency_title">Прозрачность виджетов BlueOS</string>
+ </resources>
+diff --git a/res/values/blueos_strings.xml b/res/values/blueos_strings.xml
+index 5832b630..994eb57d 100644
+--- a/res/values/blueos_strings.xml
++++ b/res/values/blueos_strings.xml
+@@ -3,4 +3,6 @@
+ <resources>
+     <!-- Switch under "Dark theme" in the palette sheet: the vibrant variant of the chosen colors -->
+     <string name="blueos_bright_colors_title">Bright colors</string>
++    <!-- Slider in the palette sheet: how transparent the BlueOS widgets' cards are -->
++    <string name="blueos_widget_transparency_title">BlueOS widgets transparency</string>
+ </resources>
+diff --git a/src/com/android/customization/picker/color/ui/binder/ColorsFloatingSheetBinder.kt b/src/com/android/customization/picker/color/ui/binder/ColorsFloatingSheetBinder.kt
+index 9d5d9896..448cf575 100644
+--- a/src/com/android/customization/picker/color/ui/binder/ColorsFloatingSheetBinder.kt
++++ b/src/com/android/customization/picker/color/ui/binder/ColorsFloatingSheetBinder.kt
+@@ -16,6 +16,7 @@
+ 
+ package com.android.customization.picker.color.ui.binder
+ 
++import android.provider.Settings
+ import android.view.View
+ import android.view.ViewGroup
+ import android.widget.TextView
+@@ -39,12 +40,17 @@ import com.android.wallpaper.picker.customization.ui.view.adapter.FloatingToolba
+ import com.android.wallpaper.picker.customization.ui.viewmodel.ColorUpdateViewModel
+ import com.android.wallpaper.picker.option.ui.adapter.OptionItemAdapter2
+ import com.google.android.material.materialswitch.MaterialSwitch
++import com.google.android.material.slider.Slider
+ import java.lang.ref.WeakReference
+ import kotlinx.coroutines.DisposableHandle
+ import kotlinx.coroutines.launch
+ 
+ object ColorsFloatingSheetBinder {
+ 
++    // BlueOS: Secure setting read by the BlueOS widgets, 0..100
++    private const val BLUEOS_WIDGET_TRANSPARENCY = "blueos_widget_transparency"
++    private const val BLUEOS_DEFAULT_WIDGET_TRANSPARENCY = 10
++
+     fun bind(
+         view: View,
+         optionsViewModel: ThemePickerCustomizationOptionsViewModel,
+@@ -128,6 +134,40 @@ object ColorsFloatingSheetBinder {
+         // As for dark mode: a click listener, so system updates of isChecked don't feed back
+         brightColorsToggle.setOnClickListener { colorsViewModel.toggleBrightColors() }
+ 
++        // BlueOS: transparency of the BlueOS widgets' cards; SystemUI watches the setting and
++        // tells the widgets (also in Clock, Calendar and Gallery) to redraw
++        val transparencySlider =
++            view.requireViewById<Slider>(R.id.blueos_widget_transparency_slider)
++        val resolver = view.context.contentResolver
++        transparencySlider.value =
++            (Settings.Secure.getInt(
++                    resolver,
++                    BLUEOS_WIDGET_TRANSPARENCY,
++                    BLUEOS_DEFAULT_WIDGET_TRANSPARENCY,
++                )
++                .coerceIn(0, 100) / 5 * 5)
++                .toFloat()
++        transparencySlider.setLabelFormatter { "${it.toInt()} %" }
++        var trackingTransparency = false
++        transparencySlider.addOnSliderTouchListener(
++            object : Slider.OnSliderTouchListener {
++                override fun onStartTrackingTouch(slider: Slider) {
++                    trackingTransparency = true
++                }
++
++                override fun onStopTrackingTouch(slider: Slider) {
++                    trackingTransparency = false
++                    Settings.Secure.putInt(resolver, BLUEOS_WIDGET_TRANSPARENCY, slider.value.toInt())
++                }
++            }
++        )
++        // Keys and accessibility move it without a touch; a drag is saved once, when let go
++        transparencySlider.addOnChangeListener { _, value, fromUser ->
++            if (fromUser && !trackingTransparency) {
++                Settings.Secure.putInt(resolver, BLUEOS_WIDGET_TRANSPARENCY, value.toInt())
++            }
++        }
++
+         lifecycleOwner.lifecycleScope.launch {
+             lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                 launch {

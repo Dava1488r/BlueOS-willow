@@ -1,0 +1,383 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 27 Oct 2026 06:30:26 +0100
+Subject: [PATCH 23/30] =?UTF-8?q?BlueOS:=20SystemUI:=200.7.1=20fixes=20?=
+ =?UTF-8?q?=E2=80=94=20Arona=20can=20be=20patted,=20looks=20at=20any=20tou?=
+ =?UTF-8?q?ch,=20chip=20above=20the=20UI,=20lobby=20forces=20the=20small?=
+ =?UTF-8?q?=20clock,=20weather=20retries,=20Summary=20redraw=20on=20theme?=
+ =?UTF-8?q?=20change?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Lock screen Arona: patting claims the gesture from the shade (a quick swipe up still unlocks);
+touches anywhere on the shade window are observed (AronaGaze) so she looks there; her reply chip
+lives in its own layer above the notifications and avoids the real clock, halo, fingerprint,
+shortcuts and notification cards. Arona big (lobby, dynamic grown, big custom place) → the
+keyguard clock is always small (KeyguardClockInteractor). Weather: retry as soon as the network,
+location or screen is there (was: 45 min after boot). Widgets: redraw on light/dark change.
+
+Change-Id: I6d08a0a10862fcf1f8e5c0d78bd80f2ae3e80a4a
+---
+ .../lockscreen/BlueOSCharacterSection.kt      | 92 +++++++++++++++++--
+ .../systemui/blueos/weather/BlueOSWeather.kt  | 35 +++++--
+ .../blueos/widgets/BlueOSWidgetStyle.kt       | 12 +++
+ .../interactor/KeyguardClockInteractor.kt     | 19 ++--
+ ...NotificationShadeWindowViewController.java |  2 +
+ 5 files changed, 137 insertions(+), 23 deletions(-)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt b/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt
+index 5675e7419c30..5811b2b09f46 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt
+@@ -11,6 +11,7 @@ import android.service.notification.StatusBarNotification
+ import android.view.Choreographer
+ import android.view.MotionEvent
+ import android.view.View
++import android.view.ViewGroup
+ import android.view.animation.PathInterpolator
+ import android.widget.FrameLayout
+ import androidx.constraintlayout.widget.ConstraintLayout
+@@ -22,11 +23,14 @@ import com.android.systemui.power.domain.interactor.PowerInteractor
+ import com.android.systemui.res.R
+ import com.android.systemui.shared.clocks.view.BlueOSHaloLive
+ import com.android.systemui.statusbar.NotificationListener
++import com.android.systemui.statusbar.notification.row.ExpandableView
+ import java.util.Calendar
+ import javax.inject.Inject
+ import kotlinx.coroutines.CoroutineScope
+ import kotlinx.coroutines.Job
++import kotlinx.coroutines.flow.MutableStateFlow
+ import kotlinx.coroutines.launch
++import org.blueos.arona.AronaGaze
+ import org.blueos.arona.AronaReplies
+ import org.blueos.arona.AronaTouch
+ import org.blueos.arona.AronaView
+@@ -34,9 +38,16 @@ import org.blueos.arona.BlueOSMotion
+ import org.blueos.arona.BlueOSSettings as K
+ import org.blueos.arona.ReplyChip
+ 
++/** BlueOS 0.7.1: lock screen state other parts of SystemUI follow. */
++object BlueOSLockState {
++    /** Arona stands big behind everything (lobby): the lock clock is always the small one. */
++    val lobby = MutableStateFlow(false)
++}
++
+ /**
+  * BlueOS 0.7: live Arona on the lock screen (approved mockup 2). Added first to the keyguard root, so the
+  * clock, fingerprint circle, shortcuts — and the notifications (drawn above the keyguard root) — are over her.
++ * Her reply chip lives in its own layer above the notifications (0.7.1).
+  * Modes: next to the clock, by the fingerprint, lobby, dynamic (grows with taps/pats) and custom.
+  */
+ class BlueOSCharacterSection
+@@ -66,6 +77,11 @@ constructor(
+         if (constraintLayout.findViewById<View>(R.id.blueos_arona_host) != null) return
+         val h = AronaHost(constraintLayout.context).apply { id = R.id.blueos_arona_host }
+         constraintLayout.addView(h, 0)         // lowest: everything else on the lock screen is above her
++        // the chip goes above the notifications (right after their container in the shade window)
++        val root = constraintLayout.parent as? ViewGroup
++        val notifs = root?.findViewById<View>(R.id.shared_notification_container)
++        if (root != null && notifs != null && notifs.parent === root) root.addView(h.chipLayer, root.indexOfChild(notifs) + 1)
++        else constraintLayout.addView(h.chipLayer)
+         host = h
+     }
+ 
+@@ -92,21 +108,34 @@ constructor(
+     override fun removeViews(constraintLayout: ConstraintLayout) {
+         jobs.forEach { it.cancel() }
+         jobs.clear()
+-        host?.release()
++        host?.let { h ->
++            h.release()
++            (h.chipLayer.parent as? ViewGroup)?.removeView(h.chipLayer)
++        }
+         constraintLayout.findViewById<View>(R.id.blueos_arona_host)?.let { constraintLayout.removeView(it) }
+         host = null
++        BlueOSLockState.lobby.value = false
+     }
+ }
+ 
+-/** Full-screen, transparent host: Arona + her reply chip. Touches that miss her pass through. */
++/** Full-screen, transparent host: Arona. Touches that miss her pass through. */
+ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.Listener, Choreographer.FrameCallback {
+     private val cr = context.contentResolver
+     private val dp = resources.displayMetrics.density
+     private val handler = Handler(Looper.getMainLooper())
+     private val arona = AronaView(context)
+     private val chip = ReplyChip(context)
+-    private val touch = AronaTouch(arona, this, chip, avoid = ::avoidRects, isNight = ::night, touched = ::touched)
++    /** 0.7.1: full-screen, never touchable layer above the notifications, only for the chip. */
++    val chipLayer = FrameLayout(context).apply {
++        clipChildren = false
++        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
++        addView(chip, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
++    }
++    private val touch = AronaTouch(arona, { chipLayer }, chip, avoid = ::avoidRects, isNight = ::night, touched = ::touched,
++        // patting: the shade / bouncer swipe must not steal the finger
++        grab = { on -> parent?.requestDisallowInterceptTouchEvent(on) })
+     private val unobserve: () -> Unit
++    private val unGaze: () -> Unit
+     private var motion: (() -> Unit)? = null
+ 
+     // where she stands, as fractions of the screen: centre x, top, height (measured on the phone, mockup 2)
+@@ -140,16 +169,20 @@ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.L
+     init {
+         clipChildren = false
+         addView(arona, LayoutParams(0, 0))
+-        addView(chip, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+         arona.tilt = { if (K.on(cr, K.ARONA_TILT)) BlueOSMotion.tilt else null }
+         arona.onReady = { update() }
+         unobserve = K.observe(context, listOf(K.ARONA_SHOW, K.ARONA_MODE, K.ARONA_CUSTOM, K.ARONA_SLEEP, K.ARONA_AOD)) {
+             setLevel(0); update()
+         }
++        // 0.7.1: she looks where Sensei touches the lock screen, not only at touches on her
++        unGaze = AronaGaze.add { a, x, y ->
++            if (showing && awake && !dozing && arona.visibility == VISIBLE) touch.gaze(a, x, y)
++        }
+     }
+ 
+     fun release() {
+         unobserve()
++        unGaze()
+         motion?.invoke()
+         motion = null
+         Choreographer.getInstance().removeFrameCallback(this)
+@@ -175,6 +208,7 @@ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.L
+     private fun update() {
+         // the host stays for the halo's touch even when Arona is off
+         visibility = if (showing) VISIBLE else INVISIBLE
++        chipLayer.visibility = if (showing && !dozing) VISIBLE else INVISIBLE
+         val show = K.on(cr, K.ARONA_SHOW) && showing && (!dozing || K.on(cr, K.ARONA_AOD))
+         arona.visibility = if (show) VISIBLE else INVISIBLE
+         arona.frozen = dozing
+@@ -182,6 +216,7 @@ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.L
+         arona.silhouette = if (dozing) (context.getColor(android.R.color.system_accent1_100) and 0x00ffffff) or 0x38000000 else null
+         arona.setSleeping(night())
+         moveTo(target())
++        updateLobby()
+         // sensors only while the lock screen is visible and the screen is on (Arona and the halo use them)
+         val sensors = showing && awake && !dozing
+         if (sensors && motion == null) {
+@@ -196,6 +231,11 @@ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.L
+         }
+     }
+ 
++    /** 0.7.1: big behind everything (lobby, dynamic grown to the lobby, a big custom place) → small clock. */
++    private fun updateLobby() {
++        BlueOSLockState.lobby.value = K.on(cr, K.ARONA_SHOW) && target().h >= 0.75f
++    }
++
+     private fun moveTo(p: Place) {
+         if (p == shown && arona.layoutParams.height > 0) return
+         val from = shown
+@@ -231,15 +271,48 @@ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.L
+         post { layoutArona(shown) }
+     }
+ 
+-    // the clock digits and the halo must stay readable (uiautomator, 1080x2400)
+-    private fun avoidRects(): List<RectF> = listOf(RectF(74f, 179f, 657f, 478f), RectF(450f, 172f, 650f, 268f))
+-        .map { RectF(it.left / 1080 * width, it.top / 2400 * height, it.right / 1080 * width, it.bottom / 2400 * height) }
++    // the halo over the small clock's minutes (uiautomator, 1080x2400) — for its swing on touch
++    private fun haloRect() = RectF(450f / 1080 * width, 172f / 2400 * height, 650f / 1080 * width, 268f / 2400 * height)
++
++    /**
++     * 0.7.1: what the chip must not cover, measured from the real views (in chip-layer px): every visible piece
++     * of the lock screen (clock incl. its halo, greeting, date, fingerprint, shortcuts, indication) and the
++     * notification cards that are really there.
++     */
++    private fun avoidRects(): List<RectF> {
++        val out = mutableListOf<RectF>()
++        val origin = IntArray(2).also { chipLayer.getLocationInWindow(it) }
++        val loc = IntArray(2)
++        fun add(v: View, h: Float, extraTop: Float) {
++            v.getLocationInWindow(loc)
++            val x = (loc[0] - origin[0]).toFloat()
++            val y = (loc[1] - origin[1]).toFloat()
++            out += RectF(x, y - extraTop, x + v.width, y + h)
++        }
++        val root = parent as? ViewGroup ?: return out
++        for (i in 0 until root.childCount) {
++            val v = root.getChildAt(i)
++            if (v === this || !v.isShown || v.alpha < 0.05f || v.width == 0 || v.height == 0) continue
++            if (v.width >= root.width * 0.9f && v.height >= root.height * 0.6f) continue      // full-screen layers
++            val name = if (v.id != View.NO_ID) runCatching { resources.getResourceEntryName(v.id) }.getOrNull() else null
++            if (name == "nssl_placeholder") continue                    // an empty box; the real cards are below
++            add(v, v.height.toFloat(), if (name?.startsWith("lockscreen_clock_view") == true) 40 * dp else 0f)
++        }
++        rootView.findViewById<ViewGroup>(R.id.notification_stack_scroller)?.let { nssl ->
++            for (i in 0 until nssl.childCount) {
++                val c = nssl.getChildAt(i) as? ExpandableView ?: continue
++                if (c.visibility != VISIBLE || c.actualHeight <= 0 || c.alpha < 0.05f) continue
++                add(c, c.actualHeight.toFloat(), 0f)
++            }
++        }
++        return out
++    }
+ 
+     override fun onTouchEvent(e: MotionEvent): Boolean {
+         if (visibility != VISIBLE || dozing) return false
+         // a tap on the halo makes it swing (no sound)
+         if (e.actionMasked == MotionEvent.ACTION_DOWN && K.on(cr, K.HALO_LIVE) && K.on(cr, K.HALO_TOUCH)) {
+-            val halo = avoidRects()[1]
++            val halo = haloRect()
+             halo.inset(-24 * dp, -24 * dp)
+             if (halo.contains(e.x, e.y)) {
+                 BlueOSHaloLive.swing(if (e.x < halo.centerX()) -1 else 1)
+@@ -277,6 +350,7 @@ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.L
+         if (l == 0) touches = 0
+         level = l
+         if (mode() == 3) moveTo(target())
++        updateLobby()
+     }
+ 
+     fun onNotification() {
+@@ -307,7 +381,7 @@ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.L
+         handler.postDelayed({ touch.say(AronaReplies.Kind.FALL) }, 250)
+     }
+ 
+-    // inertia: she lags a little behind the phone's motion and springs back
++    // inertia: she lags behind the phone's motion and springs back («Сила инерции»)
+     override fun doFrame(frameTimeNanos: Long) {
+         if (motion == null) return
+         val on = K.on(cr, K.INERTIA)
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/weather/BlueOSWeather.kt b/packages/SystemUI/src/com/android/systemui/blueos/weather/BlueOSWeather.kt
+index edcb4c83be2d..690aa1e6c32a 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/weather/BlueOSWeather.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/weather/BlueOSWeather.kt
+@@ -32,7 +32,13 @@ object BlueOSWeather {
+     private var started = false
+     private lateinit var ctx: Context
+     private lateinit var bg: Handler
+-    private var lastFetch = 0L
++    /** elapsedRealtime of the last good fetch; 0 = none since boot. */
++    @Volatile private var lastFetch = 0L
++
++    /** 0.7.1: no data yet or too old. (Was: "45 min since boot" — so right after install nothing showed.) */
++    private val stale get() = lastFetch == 0L || SystemClock.elapsedRealtime() - lastFetch > PERIOD
++
++    private fun refreshIfStale() { if (stale) { bg.removeCallbacksAndMessages(null); bg.post(::refresh) } }
+ 
+     fun start(context: Context) {
+         if (started) return
+@@ -44,17 +50,31 @@ object BlueOSWeather {
+         BlueOSSettings.observe(ctx, listOf(BlueOSSettings.WEATHER, BlueOSSettings.WEATHER_DATE, BlueOSSettings.WEATHER_F)) {
+             com.android.systemui.blueos.widgets.BlueOSWidgetStyle.notifyChanged(ctx)
+         }
++        // 0.7.1: try again as soon as it can work — screen on, the network is up, location got switched on
+         ctx.registerReceiver(object : BroadcastReceiver() {
+-            override fun onReceive(c: Context, i: Intent) {
+-                if (SystemClock.elapsedRealtime() - lastFetch > PERIOD) bg.post(::refresh)
+-            }
+-        }, IntentFilter(Intent.ACTION_SCREEN_ON))
++            override fun onReceive(c: Context, i: Intent) = refreshIfStale()
++        }, IntentFilter().apply {
++            addAction(Intent.ACTION_SCREEN_ON)
++            addAction(LocationManager.MODE_CHANGED_ACTION)
++            addAction(LocationManager.PROVIDERS_CHANGED_ACTION)
++        })
++        ctx.getSystemService(android.net.ConnectivityManager::class.java)?.registerDefaultNetworkCallback(
++            object : android.net.ConnectivityManager.NetworkCallback() {
++                override fun onAvailable(network: android.net.Network) = refreshIfStale()
++            }, bg)
+     }
+ 
+     private fun refresh() {
+         bg.removeCallbacksAndMessages(null)
+         bg.postDelayed(::refresh, PERIOD)
+-        val loc = location() ?: run { Log.i(TAG, "no location yet"); return }
++        val loc = location() ?: run {
++            Log.i(TAG, "no location yet")
++            // 0.7.1: soon, not in 45 min (with location off: when it gets switched on, see start())
++            val on = ctx.getSystemService(LocationManager::class.java)?.isLocationEnabled == true
++            bg.removeCallbacksAndMessages(null)
++            bg.postDelayed(::refresh, if (on) 2 * 60_000L else PERIOD)
++            return
++        }
+         val lat = String.format(Locale.US, "%.1f", loc.latitude)
+         val lon = String.format(Locale.US, "%.1f", loc.longitude)
+         val url = URL("https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
+@@ -84,7 +104,8 @@ object BlueOSWeather {
+             lastFetch = SystemClock.elapsedRealtime()
+         } catch (e: Exception) {
+             Log.w(TAG, "weather fetch failed: $e")
+-            bg.postDelayed(::refresh, 10 * 60_000L)     // retry sooner on a network error
++            bg.removeCallbacksAndMessages(null)
++            bg.postDelayed(::refresh, (if (lastFetch == 0L) 2 else 10) * 60_000L)     // retry sooner on a network error
+         }
+     }
+ 
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSWidgetStyle.kt b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSWidgetStyle.kt
+index 1c79d0c40e1b..4ef682dfc157 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSWidgetStyle.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSWidgetStyle.kt
+@@ -18,8 +18,11 @@ package com.android.systemui.blueos.widgets
+ 
+ import android.app.WallpaperColors
+ import android.app.WallpaperManager
++import android.content.BroadcastReceiver
+ import android.content.Context
+ import android.content.Intent
++import android.content.IntentFilter
++import android.content.res.Configuration
+ import android.database.ContentObserver
+ import android.os.Handler
+ import android.os.Looper
+@@ -60,6 +63,15 @@ object BlueOSWidgetStyle {
+             },
+             UserHandle.USER_ALL,
+         )
++        // 0.7.1: light ↔ dark theme: the «Сводка» picks its text layout by the theme, redraw it right away
++        // (it used to keep the old colours until the next greeting change)
++        var night = app.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
++        app.registerReceiver(object : BroadcastReceiver() {
++            override fun onReceive(c: Context, i: Intent) {
++                val n = app.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
++                if (n != night) { night = n; notifyChanged(app) }
++            }
++        }, IntentFilter(Intent.ACTION_CONFIGURATION_CHANGED))
+     }
+ 
+     /**
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/KeyguardClockInteractor.kt b/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/KeyguardClockInteractor.kt
+index 689b330a5948..61f60f24cd52 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/KeyguardClockInteractor.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/KeyguardClockInteractor.kt
+@@ -124,13 +124,18 @@ constructor(
+         }
+ 
+     val clockSize: StateFlow<ClockSize> =
+-        selectedClockSize
+-            .flatMapLatestConflated { selectedSize ->
+-                if (selectedSize == ClockSizeSetting.SMALL) {
+-                    flowOf(ClockSize.SMALL)
+-                } else {
+-                    dynamicClockSize
+-                }
++        combine(
++                selectedClockSize.flatMapLatestConflated { selectedSize ->
++                    if (selectedSize == ClockSizeSetting.SMALL) {
++                        flowOf(ClockSize.SMALL)
++                    } else {
++                        dynamicClockSize
++                    }
++                },
++                // BlueOS 0.7.1: Arona big behind everything (lobby) → always the small clock
++                com.android.systemui.blueos.lockscreen.BlueOSLockState.lobby,
++            ) { size, lobby ->
++                if (lobby) ClockSize.SMALL else size
+             }
+             .stateIn(
+                 scope = applicationScope,
+diff --git a/packages/SystemUI/src/com/android/systemui/shade/NotificationShadeWindowViewController.java b/packages/SystemUI/src/com/android/systemui/shade/NotificationShadeWindowViewController.java
+index 0bdb74495ac6..214bb85fce1e 100644
+--- a/packages/SystemUI/src/com/android/systemui/shade/NotificationShadeWindowViewController.java
++++ b/packages/SystemUI/src/com/android/systemui/shade/NotificationShadeWindowViewController.java
+@@ -449,6 +449,8 @@ public class NotificationShadeWindowViewController implements Dumpable {
+                 }
+ 
+                 mFalsingCollector.onTouchEvent(ev);
++                // BlueOS 0.7.1: Arona looks where Sensei touches (observed, never consumed)
++                org.blueos.arona.AronaGaze.dispatch(ev);
+                 mQQSGestureHandler.onTouchEvent(ev);
+                 // Pass touch events to the pulsing gesture listener only if it's dozing,
+                 // otherwise lockscreen DT2S and AOD DT2W will conflict.

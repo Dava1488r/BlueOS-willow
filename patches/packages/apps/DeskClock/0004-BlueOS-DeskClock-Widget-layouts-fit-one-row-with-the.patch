@@ -1,0 +1,94 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sun, 25 Oct 2026 10:26:41 +0100
+Subject: [PATCH 4/4] BlueOS: DeskClock: Widget layouts fit one row with the
+ margin
+
+The wide card from four columns; the narrow card hides the alarm where
+"date + alarm" doesn't fit (two columns of 5x6); the tile's digits follow
+the rows (30 / 40 / 56 sp) and it starts at 2x2.
+
+Change-Id: Ie53cd265e372e4b053ab846af0bddcb082661701
+---
+ res/xml/blueos_clock_widget_tile.xml          |  6 ++--
+ .../alarmclock/BlueOSClockWidgetProvider.java | 29 ++++++++++++++++---
+ 2 files changed, 28 insertions(+), 7 deletions(-)
+
+diff --git a/res/xml/blueos_clock_widget_tile.xml b/res/xml/blueos_clock_widget_tile.xml
+index e36d059ea..4e304b847 100644
+--- a/res/xml/blueos_clock_widget_tile.xml
++++ b/res/xml/blueos_clock_widget_tile.xml
+@@ -4,12 +4,12 @@
+     android:description="@string/blueos_clock_widget_tile_description"
+     android:initialLayout="@layout/blueos_clock_widget_tile"
+     android:minWidth="90dp"
+-    android:minHeight="110dp"
++    android:minHeight="90dp"
+     android:minResizeWidth="90dp"
+-    android:minResizeHeight="110dp"
++    android:minResizeHeight="90dp"
+     android:previewLayout="@layout/blueos_clock_widget_tile"
+     android:resizeMode="horizontal|vertical"
+     android:targetCellWidth="2"
+-    android:targetCellHeight="1"
++    android:targetCellHeight="2"
+     android:updatePeriodMillis="0"
+     android:widgetCategory="home_screen" />
+diff --git a/src/com/android/alarmclock/BlueOSClockWidgetProvider.java b/src/com/android/alarmclock/BlueOSClockWidgetProvider.java
+index bbcb84805..0c559190a 100644
+--- a/src/com/android/alarmclock/BlueOSClockWidgetProvider.java
++++ b/src/com/android/alarmclock/BlueOSClockWidgetProvider.java
+@@ -32,6 +32,7 @@ import android.provider.Settings;
+ import android.text.TextUtils;
+ import android.text.format.DateFormat;
+ import android.util.SizeF;
++import android.util.TypedValue;
+ import android.view.View;
+ import android.widget.RemoteViews;
+ 
+@@ -119,9 +120,16 @@ public abstract class BlueOSClockWidgetProvider extends AppWidgetProvider {
+         @Override
+         protected RemoteViews buildViews(Context context, boolean clickable) {
+             final Map<SizeF, RemoteViews> sized = new LinkedHashMap<>();
+-            sized.put(new SizeF(90f, 60f),
++            // Two columns of 5x6 (141.7 dp inside) fit the date but not "date + alarm" (~154 dp):
++            // the alarm hides there; two columns of 4x5 (181 dp) show both
++            final RemoteViews narrow = views(context, R.layout.blueos_clock_widget_card, clickable);
++            narrow.setViewVisibility(R.id.blueos_alarm_icon, View.GONE);
++            narrow.setViewVisibility(R.id.blueos_next_alarm, View.GONE);
++            sized.put(new SizeF(90f, 60f), narrow);
++            sized.put(new SizeF(176f, 60f),
+                     views(context, R.layout.blueos_clock_widget_card, clickable));
+-            sized.put(new SizeF(230f, 60f),
++            // Sizes include the 8 dp margin; time + date side by side need four columns
++            sized.put(new SizeF(300f, 60f),
+                     views(context, R.layout.blueos_clock_widget_card_wide, clickable));
+             return new RemoteViews(sized);
+         }
+@@ -144,11 +152,24 @@ public abstract class BlueOSClockWidgetProvider extends AppWidgetProvider {
+         }
+     }
+ 
+-    /** C: tile, hours over minutes, the halo on top. */
++    /** C: tile, hours over minutes, the halo on top; the digits grow with the rows. */
+     public static class Tile extends BlueOSClockWidgetProvider {
+         @Override
+         protected RemoteViews buildViews(Context context, boolean clickable) {
+-            return views(context, R.layout.blueos_clock_widget_tile, clickable);
++            final Map<SizeF, RemoteViews> sized = new LinkedHashMap<>();
++            // Inside the card: one row of 5x6 = 106.7 dp (halo 15 + 2 x 38 dp), one row of
++            // 4x5 = 129.5 dp (2 x 50 dp), two rows = 229+ dp (2 x 70 dp)
++            sized.put(new SizeF(90f, 90f), tile(context, clickable, 30f));
++            sized.put(new SizeF(90f, 140f), tile(context, clickable, 40f));
++            sized.put(new SizeF(90f, 180f), tile(context, clickable, 56f));
++            return new RemoteViews(sized);
++        }
++
++        private RemoteViews tile(Context context, boolean clickable, float digitsSp) {
++            final RemoteViews rv = views(context, R.layout.blueos_clock_widget_tile, clickable);
++            rv.setTextViewTextSize(R.id.blueos_hours, TypedValue.COMPLEX_UNIT_SP, digitsSp);
++            rv.setTextViewTextSize(R.id.blueos_minutes, TypedValue.COMPLEX_UNIT_SP, digitsSp);
++            return rv;
+         }
+     }
+ 

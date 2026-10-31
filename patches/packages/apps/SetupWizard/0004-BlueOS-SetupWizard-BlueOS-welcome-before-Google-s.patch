@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sat, 24 Oct 2026 20:35:16 +0200
+Subject: [PATCH 4/5] BlueOS: SetupWizard: BlueOS welcome before Google's
+
+With GMS the wizard script starts at Google's welcome, so the BlueOS welcome screen was never shown. Use the empty oem_pre_setup step for it.
+
+Change-Id: I8cfa7864807c8cff35df189e6996f0722a61286b
+---
+ app/src/main/AndroidManifest.xml       | 2 +-
+ app/src/main/res/raw/wizard_script.xml | 3 ++-
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/app/src/main/AndroidManifest.xml b/app/src/main/AndroidManifest.xml
+index 79f47ed..cdc68ac 100644
+--- a/app/src/main/AndroidManifest.xml
++++ b/app/src/main/AndroidManifest.xml
+@@ -106,7 +106,7 @@
+             android:label="@string/activity_label_empty"
+             android:configChanges="mcc|mnc"
+             android:immersive="true"
+-            android:exported="false"
++            android:exported="true"
+             android:windowSoftInputMode="stateAlwaysHidden">
+             <intent-filter>
+                 <action android:name="org.lineageos.setupwizard.LINEAGE_WELCOME" />
+diff --git a/app/src/main/res/raw/wizard_script.xml b/app/src/main/res/raw/wizard_script.xml
+index a954266..f348a46 100644
+--- a/app/src/main/res/raw/wizard_script.xml
++++ b/app/src/main/res/raw/wizard_script.xml
+@@ -14,9 +14,10 @@
+ -->
+ <WizardScript xmlns:wizard="http://schemas.android.com/apk/res/com.google.android.setupwizard"
+     wizard:version="2">
++    <!-- BlueOS: the BlueOS welcome screen first, then Google's welcome (language) -->
+     <WizardAction
+         id="oem_pre_setup"
+-        wizard:uri="intent:#Intent;action=com.android.setupwizard.OEM_PRE_SETUP;end" />
++        wizard:uri="intent:#Intent;package=org.lineageos.setupwizard;action=org.lineageos.setupwizard.LINEAGE_WELCOME;end" />
+     <WizardAction
+         id="welcome"
+         wizard:uri="intent:#Intent;package=com.google.android.setupwizard;action=com.android.setupwizard.WELCOME;end">

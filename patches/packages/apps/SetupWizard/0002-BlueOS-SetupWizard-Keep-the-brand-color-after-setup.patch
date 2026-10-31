@@ -1,0 +1,26 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sat, 24 Oct 2026 15:14:27 +0200
+Subject: [PATCH 2/5] BlueOS: SetupWizard: Keep the brand color after setup
+
+LineageOS switches a preset color source to wallpaper colors when setup finishes. BlueOS' default is a preset (brand color), so leave it.
+
+Change-Id: Ie309bf4ea4534540b99e4849436c0d500bc80a9e
+---
+ .../java/org/lineageos/setupwizard/util/SetupWizardUtils.kt    | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/app/src/main/java/org/lineageos/setupwizard/util/SetupWizardUtils.kt b/app/src/main/java/org/lineageos/setupwizard/util/SetupWizardUtils.kt
+index 69d99cd..5fd772a 100644
+--- a/app/src/main/java/org/lineageos/setupwizard/util/SetupWizardUtils.kt
++++ b/app/src/main/java/org/lineageos/setupwizard/util/SetupWizardUtils.kt
+@@ -214,7 +214,8 @@ object SetupWizardUtils {
+                     "This should not happen!",
+             )
+         }
+-        restoreWallpaperColorSource(contentResolver)
++        // BlueOS: keep the default preset (brand color "Голубой BA", framework theming_defaults)
++        // instead of switching to wallpaper colors with restoreWallpaperColorSource()
+         Settings.Secure.putInt(contentResolver, Settings.Secure.USER_SETUP_COMPLETE, 1)
+         if (hasLeanback(context)) {
+             Settings.Secure.putInt(contentResolver, Settings.Secure.TV_USER_SETUP_COMPLETE, 1)

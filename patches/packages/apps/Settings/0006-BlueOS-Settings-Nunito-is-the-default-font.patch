@@ -1,0 +1,74 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sat, 24 Oct 2026 20:38:40 +0200
+Subject: [PATCH 6/7] BlueOS: Settings: Nunito is the default font
+
+Change-Id: I5128715f3ff235310c07c7a51b6cd1ebe6039cc7
+---
+ res/values-ru/blueos_strings.xml                              | 4 ++--
+ res/values/blueos_arrays.xml                                  | 4 ++--
+ res/values/blueos_strings.xml                                 | 4 ++--
+ .../settings/display/BlueOSFontPreferenceController.java      | 2 +-
+ 4 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/res/values-ru/blueos_strings.xml b/res/values-ru/blueos_strings.xml
+index d3ab5d3f150..efab4f19d7a 100644
+--- a/res/values-ru/blueos_strings.xml
++++ b/res/values-ru/blueos_strings.xml
+@@ -12,9 +12,9 @@
+ 
+     <string name="blueos_font_title">Шрифт</string>
+     <string-array name="blueos_font_entries">
+-        <item>M PLUS Rounded 1c · BlueOS</item>
++        <item>Nunito · BlueOS</item>
+         <item>Google Sans Flex · Android</item>
+-        <item>Nunito</item>
++        <item>M PLUS Rounded 1c</item>
+         <item>Comfortaa</item>
+         <item>Manrope</item>
+         <item>Rubik</item>
+diff --git a/res/values/blueos_arrays.xml b/res/values/blueos_arrays.xml
+index a3b51baec2c..9bfa9f73697 100644
+--- a/res/values/blueos_arrays.xml
++++ b/res/values/blueos_arrays.xml
+@@ -12,9 +12,9 @@
+ 
+     <!-- persist.sys.blueos.font, read by SystemFonts (vendor/blueos/tools/make-fonts.py) -->
+     <string-array name="blueos_font_values" translatable="false">
+-        <item>mplusrounded1c</item>
+-        <item>googlesansflex</item>
+         <item>nunito</item>
++        <item>googlesansflex</item>
++        <item>mplusrounded1c</item>
+         <item>comfortaa</item>
+         <item>manrope</item>
+         <item>rubik</item>
+diff --git a/res/values/blueos_strings.xml b/res/values/blueos_strings.xml
+index 4d679cb1410..218e158a003 100644
+--- a/res/values/blueos_strings.xml
++++ b/res/values/blueos_strings.xml
+@@ -14,9 +14,9 @@
+     <!-- Display > Font -->
+     <string name="blueos_font_title">Font</string>
+     <string-array name="blueos_font_entries">
+-        <item>M PLUS Rounded 1c · BlueOS</item>
++        <item>Nunito · BlueOS</item>
+         <item>Google Sans Flex · Android</item>
+-        <item>Nunito</item>
++        <item>M PLUS Rounded 1c</item>
+         <item>Comfortaa</item>
+         <item>Manrope</item>
+         <item>Rubik</item>
+diff --git a/src/com/android/settings/display/BlueOSFontPreferenceController.java b/src/com/android/settings/display/BlueOSFontPreferenceController.java
+index 56f20b20ff8..67c2a495882 100644
+--- a/src/com/android/settings/display/BlueOSFontPreferenceController.java
++++ b/src/com/android/settings/display/BlueOSFontPreferenceController.java
+@@ -26,7 +26,7 @@ public class BlueOSFontPreferenceController extends BasePreferenceController
+ 
+     private static final String PROP_FONT = "persist.sys.blueos.font";
+     // keep in sync with SystemFonts and vendor/blueos/tools/make-fonts.py
+-    private static final String DEFAULT_VALUE = "mplusrounded1c";
++    private static final String DEFAULT_VALUE = "nunito";
+ 
+     public BlueOSFontPreferenceController(Context context, String key) {
+         super(context, key);

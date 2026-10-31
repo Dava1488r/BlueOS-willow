@@ -1,0 +1,1422 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Fri, 30 Oct 2026 11:33:45 +0100
+Subject: [PATCH 28/30] BlueOS: wallpaper look, live weather and equalizer on
+ the wallpaper
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- ImageWallpaper draws the home / lock look itself (pre-blurred, dimmed
+  hardware bitmaps; BlueOSWallpaperWeather) with the AOSP weather effects
+  over it, cross-fading lock <-> home; no launcher / shade blur floor.
+- Live weather pauses while the home screen moves (offsets / zoom) and
+  draws the slow effects at 15 fps: launcher late frames 68 % -> 1-2 %.
+- «Эквалайзер на обоях»: bars / wave / glow from below, «Волна под
+  часами», «Нимб в такт музыке» (BlueOSMusicPulse, BlueOSBeat).
+- The lock clock's live halo stops while the lock screen is hidden and
+  reads its settings twice a second, not every frame.
+- Fresh phones get every BlueOS switch as the user set them up
+  (BlueOSDefaults writes BlueOSSettings' table).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: I5e98a5bbaee53eb6b3c9a2c78956b75a430bec5d
+---
+ packages/SystemUI/Android.bp                  |   2 +
+ .../clocks/view/DigitalClockTextView.kt       |  37 +-
+ .../controller/FlexClockTextViewController.kt |   4 +
+ .../systemui/shared/clocks/view/BlueOSHalo.kt |  44 +-
+ .../wallpapers/ImageWallpaperTest.java        |   4 +-
+ .../res/values-ru/blueos_08_strings.xml       |   2 +-
+ .../SystemUI/res/values/blueos_08_strings.xml |   2 +-
+ .../android/systemui/blueos/BlueOSDefaults.kt |  14 +-
+ .../lockscreen/BlueOSCharacterSection.kt      |  27 +-
+ .../wallpaper/BlueOSWallpaperWeather.kt       | 701 ++++++++++++++++++
+ .../blueos/widgets/BlueOSVisualizerService.kt | 191 +++++
+ .../theme/ThemeOverlayController.java         |   2 +
+ .../systemui/wallpapers/ImageWallpaper.java   | 120 ++-
+ 13 files changed, 1135 insertions(+), 15 deletions(-)
+ create mode 100644 packages/SystemUI/src/com/android/systemui/blueos/wallpaper/BlueOSWallpaperWeather.kt
+
+diff --git a/packages/SystemUI/Android.bp b/packages/SystemUI/Android.bp
+index 79da8da3d3f9..75ec7d604331 100644
+--- a/packages/SystemUI/Android.bp
++++ b/packages/SystemUI/Android.bp
+@@ -491,6 +491,8 @@ android_library {
+         "SystemUI-res",
+         // BlueOS: live Arona, replies, weather icons, motion sensors (vendor/blueos/libs/arona)
+         "BlueOSAronaLib",
++        // BlueOS 0.8: live weather on the wallpaper (ImageWallpaper) — Google's rain / snow / fog / clouds / sun shaders
++        "WeatherEffectsGraphicsLib",
+         "WifiTrackerLib",
+         "WindowManager-Shell",
+         "PlatformAnimationLib",
+diff --git a/packages/SystemUI/customization/clocks/common/src/com/android/systemui/customization/clocks/view/DigitalClockTextView.kt b/packages/SystemUI/customization/clocks/common/src/com/android/systemui/customization/clocks/view/DigitalClockTextView.kt
+index 7e8f34fb18df..a4497b6c3c04 100644
+--- a/packages/SystemUI/customization/clocks/common/src/com/android/systemui/customization/clocks/view/DigitalClockTextView.kt
++++ b/packages/SystemUI/customization/clocks/common/src/com/android/systemui/customization/clocks/view/DigitalClockTextView.kt
+@@ -365,8 +365,41 @@ abstract class DigitalClockTextView(private val clockCtx: ClockContext) :
+         }
+     }
+ 
++    /**
++     * BlueOS 0.8: the minutes in their own colour on the lock screen («Минуты» in «Цвета» — accent by default, like
++     * the minutes everywhere in BlueOS); null = the hours' colour. Fades out towards AOD (AOD stays one grey).
++     */
++    var blueOSMinutesColor: Int? = null
++        set(value) {
++            field = value
++            invalidate()
++        }
++    private val blueOSTint = Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_ATOP) }
++
+     protected open fun drawAnimators(canvas: Canvas, drawTranslation: VPointF) {
+-        textAnimator.draw(canvas)
++        val minutes = blueOSMinutesColor
++        val l = layout
++        val colon = text?.indexOf(':') ?: -1
++        val k = 1f - dozeFraction.coerceIn(0f, 1f)
++        if (minutes == null || l == null || colon < 0 || isVertical || k <= 0f) {
++            textAnimator.draw(canvas)
++            return
++        }
++        // the hours and the colon as they are, the minutes once more through a tint of their colour
++        val split = l.getPrimaryHorizontal(colon + 1)
++        canvas.withSave {
++            clipRect(-BIG, -BIG, split, BIG)
++            textAnimator.draw(this)
++        }
++        canvas.withSave {
++            clipRect(split, -BIG, BIG, BIG)
++            val layer = saveLayer(null, null)
++            textAnimator.draw(this)
++            blueOSTint.color = minutes
++            blueOSTint.alpha = (k * Color.alpha(minutes)).toInt()
++            drawPaint(blueOSTint)
++            restoreToCount(layer)
++        }
+     }
+ 
+     override fun setVisibility(visibility: Int) {
+@@ -750,6 +783,8 @@ abstract class DigitalClockTextView(private val clockCtx: ClockContext) :
+ 
+     companion object {
+         private val TAG = DigitalClockTextView::class.simpleName!!
++        /** BlueOS: "everything" for a clip rectangle edge */
++        private const val BIG = 1e6f
+ 
+         val FIDGET_HAPTICS: VibrationEffect =
+             VibrationEffect.startComposition()
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockTextViewController.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockTextViewController.kt
+index c1beb613a8ee..39e86d707623 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockTextViewController.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockTextViewController.kt
+@@ -208,6 +208,10 @@ class FlexClockTextViewController(
+                     lockscreenColor = lockscreenColor,
+                     aodColor = theme.blueOSAodColor(clockCtx.context, lockscreenColor),
+                 )
++                // BlueOS 0.8: the minutes in their own role («Минуты» in «Цвета»), unless a clock colour is picked
++                view.blueOSMinutesColor =
++                    if (theme.seedColor == null) org.blueos.arona.BlueOSColorRoles.lockMinutes(clockCtx.context)
++                    else null
+                 refreshTime()
+             }
+ 
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt
+index 5f8b2a577226..5729caae14dc 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt
+@@ -142,6 +142,8 @@ internal fun drawHaloShape(
+             rotate(BlueOSHaloLive.angle, cx, cy)
+         }
+         rotate(HALO_ANGLE, cx, cy)
++        // 0.8 «Нимб в такт музыке»: a little bigger with every kick
++        if (live && BlueOSHaloLive.beat > 0.005f) (1f + 0.12f * BlueOSHaloLive.beat).let { scale(it, it, cx, cy) }
+         if (live) BlueOSHaloLive.drawGlow(this, oval, paint, color)
+         paint.alpha = (paint.alpha * if (live) BlueOSHaloLive.blackout else 1f).toInt()
+         paint.maskFilter = null
+@@ -178,8 +180,21 @@ object BlueOSHaloLive : android.view.Choreographer.FrameCallback {
+     var dy = 0f; private set
+     var angle = 0f; private set
+     var blackout = 1f; private set
++    /** 0.8: 0…1, the music's low end while «Нимб в такт музыке» is on. */
++    var beat = 0f; private set
+ 
+-    private fun on(key: String) = ctx?.let { org.blueos.arona.BlueOSSettings.on(it.contentResolver, key) } ?: false
++    // 0.8: read at most twice a second — a dozen Settings reads every frame were half of SystemUI's idle main thread
++    private val flags = HashMap<String, Boolean>()
++    private var flagsAt = 0L
++
++    private fun on(key: String): Boolean {
++        val c = ctx ?: return false
++        synchronized(flags) {
++            val now = android.os.SystemClock.uptimeMillis()
++            if (now - flagsAt > 500) { flags.clear(); flagsAt = now }
++            return flags.getOrPut(key) { org.blueos.arona.BlueOSSettings.on(c.contentResolver, key) }
++        }
++    }
+ 
+     fun register(view: View) {
+         ctx = view.context.applicationContext
+@@ -218,12 +233,21 @@ object BlueOSHaloLive : android.view.Choreographer.FrameCallback {
+         val c = ctx
+         // AOD / screen off: no per-frame redraws (battery); look again in a second
+         val interactive = c?.getSystemService(android.os.PowerManager::class.java)?.isInteractive ?: false
+-        active = interactive && c != null && on(org.blueos.arona.BlueOSSettings.HALO_LIVE)
++        // 0.8: the pulse works with the live halo off too (then it only pulses)
++        val pulse = on(org.blueos.arona.BlueOSSettings.HALO_BEAT) && org.blueos.arona.BlueOSBeat.playing
++        active = interactive && c != null && (on(org.blueos.arona.BlueOSSettings.HALO_LIVE) || pulse || beat > 0.005f)
+         if (!active) {
+             idle.removeCallbacks(wake)
+             idle.postDelayed(wake, 1000)
+             return
+         }
++        // 0.8: the lock screen hidden (the home screen, an app): its clock stays «shown» at alpha 0 and the halo kept
++        // redrawing it 15 times a second behind everything — look again in a moment instead
++        if (views.none { org.blueos.arona.BlueOSOnScreen.visible(it) }) {
++            idle.removeCallbacks(wake)
++            idle.postDelayed(wake, 200)
++            return
++        }
+         val dt = if (last == 0L) 0f else ((frameTimeNanos - last) / 1e9f).coerceIn(0f, 0.05f)
+         last = frameTimeNanos
+         step(c!!, dt)
+@@ -234,6 +258,13 @@ object BlueOSHaloLive : android.view.Choreographer.FrameCallback {
+     private fun step(c: Context, dt: Float) {
+         t += dt
+         val k = org.blueos.arona.BlueOSSettings
++        val target = if (on(k.HALO_BEAT) && org.blueos.arona.BlueOSBeat.playing) org.blueos.arona.BlueOSBeat.energy else 0f
++        beat += (target - beat) * (1f - kotlin.math.exp(-dt * if (target > beat) 30f else 9f))
++        if (!on(k.HALO_LIVE)) {
++            // only the pulse: the halo stays exactly where it is
++            dx = 0f; dy = 0f; angle = 0f; blackout = 1f
++            return
++        }
+         val float = on(k.HALO_FLOAT)
+         // swing (spring) + tilt lean + inertia (capped ±5 dp)
+         swingV += (-swingA * 90f - swingV * 3.4f) * dt
+@@ -280,11 +311,14 @@ object BlueOSHaloLive : android.view.Choreographer.FrameCallback {
+         val c = ctx ?: return
+         val k = org.blueos.arona.BlueOSSettings
+         val charge = charging && on(k.HALO_CHARGE)
+-        val g = when {
++        val breath = when {
+             charge -> 0.75f + 0.25f * kotlin.math.sin(t * 2f * Math.PI.toFloat() / 2.4f)
+-            on(k.HALO_GLOW) -> 0.5f + 0.5f * kotlin.math.sin(t * 2f * Math.PI.toFloat() / 4f)
+-            else -> return
++            on(k.HALO_GLOW) && on(k.HALO_LIVE) -> 0.5f + 0.5f * kotlin.math.sin(t * 2f * Math.PI.toFloat() / 4f)
++            else -> 0f
+         }
++        // 0.8: and with the music's kicks
++        val g = maxOf(breath, beat * 1.3f).coerceAtMost(1.3f)
++        if (g < 0.01f) return
+         val accent = org.blueos.arona.BlueOSColorRoles.lockGlow(c)          // 0.8: «Свечение нимба» in «Цвета»
+         glowPaint.style = Paint.Style.STROKE
+         glowPaint.strokeWidth = base.strokeWidth * (1.6f + g)
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/wallpapers/ImageWallpaperTest.java b/packages/SystemUI/multivalentTests/src/com/android/systemui/wallpapers/ImageWallpaperTest.java
+index 046b5d701ddf..73e8491b01e2 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/wallpapers/ImageWallpaperTest.java
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/wallpapers/ImageWallpaperTest.java
+@@ -185,7 +185,9 @@ public class ImageWallpaperTest extends SysuiTestCase {
+     }
+ 
+     private ImageWallpaper createImageWallpaper() {
+-        return new ImageWallpaper(mFakeExecutor, mUserTracker, mWindowManagerProvider) {
++        return new ImageWallpaper(mFakeExecutor, mUserTracker, mWindowManagerProvider,
++                org.mockito.Mockito.mock(
++                        com.android.systemui.statusbar.policy.KeyguardStateController.class)) {
+             @Override
+             public Engine onCreateEngine() {
+                 return new CanvasEngine() {
+diff --git a/packages/SystemUI/res/values-ru/blueos_08_strings.xml b/packages/SystemUI/res/values-ru/blueos_08_strings.xml
+index 09a6888e07b5..7dc617c001c6 100644
+--- a/packages/SystemUI/res/values-ru/blueos_08_strings.xml
++++ b/packages/SystemUI/res/values-ru/blueos_08_strings.xml
+@@ -2,7 +2,7 @@
+ <!-- BlueOS 0.8 widgets -->
+ <resources>
+     <string name="blueos_eq_idle">Тишина</string>
+-    <string name="blueos_eq_idle_d">включи музыку — оживут</string>
++    <string name="blueos_eq_idle_d">включи музыку</string>
+     <string name="blueos_toggles_label_flashlight">Фонарик</string>
+     <string name="blueos_toggles_label_dnd">Не беспок.</string>
+     <string name="blueos_toggles_label_rotate">Поворот</string>
+diff --git a/packages/SystemUI/res/values/blueos_08_strings.xml b/packages/SystemUI/res/values/blueos_08_strings.xml
+index 36e719df20d7..8052dc90c157 100644
+--- a/packages/SystemUI/res/values/blueos_08_strings.xml
++++ b/packages/SystemUI/res/values/blueos_08_strings.xml
+@@ -3,7 +3,7 @@
+ <resources>
+     <!-- the equalizer with no music: a calm state instead of an empty card -->
+     <string name="blueos_eq_idle">Silence</string>
+-    <string name="blueos_eq_idle_d">play some music and the bars come alive</string>
++    <string name="blueos_eq_idle_d">play some music</string>
+     <!-- short labels under the quick toggles (the long ones stay the content descriptions) -->
+     <string name="blueos_toggles_label_flashlight">Flashlight</string>
+     <string name="blueos_toggles_label_dnd">Silent</string>
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/BlueOSDefaults.kt b/packages/SystemUI/src/com/android/systemui/blueos/BlueOSDefaults.kt
+index 7c4774fee34a..f4566e68abfc 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/BlueOSDefaults.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/BlueOSDefaults.kt
+@@ -25,8 +25,8 @@ import org.json.JSONObject
+ /**
+  * BlueOS defaults that live in settings rather than resources: applied once, on a fresh phone
+  * (before the setup wizard finishes), so an update never overrides what the user chose.
+- * Light theme, the brand palette "Голубой BA" with "Яркие цвета", always-on display, widget
+- * cards 15 % transparent.
++ * Light theme, the brand palette "Голубой BA" with "Яркие цвета", always-on display, and (0.8) every
++ * BlueOS switch as the user set them up.
+  */
+ object BlueOSDefaults {
+     private const val TAG = "BlueOSDefaults"
+@@ -54,7 +54,15 @@ object BlueOSDefaults {
+                     )
+                 }
+                 Settings.Secure.putInt(cr, Settings.Secure.DOZE_ALWAYS_ON, 1)
+-                Settings.Secure.putInt(cr, "blueos_widget_transparency", 15)
++                // 0.8: every BlueOS switch as the user set them up (BlueOSSettings' table) — written out, because
++                // Clock, Calendar and the icon loader read some keys with defaults of their own (transparency 15…)
++                for ((key, value) in org.blueos.arona.BlueOSSettings.defaults()) {
++                    if (Settings.Secure.getString(cr, key) == null) Settings.Secure.putInt(cr, key, value)
++                }
++                if (Settings.Secure.getString(cr, org.blueos.arona.BlueOSSettings.ARONA_CUSTOM) == null) {
++                    Settings.Secure.putString(cr, org.blueos.arona.BlueOSSettings.ARONA_CUSTOM,
++                        org.blueos.arona.BlueOSSettings.DEFAULT_ARONA_CUSTOM)
++                }
+                 context
+                     .getSystemService(UiModeManager::class.java)
+                     ?.setNightMode(UiModeManager.MODE_NIGHT_NO)
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt b/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt
+index 6ca2105fd80f..a652063bdfdd 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt
+@@ -191,7 +191,32 @@ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.L
+     private var front = false
+     private var frontGesture = false
+     private var notifsHidden = false
+-    private val preDraw = ViewTreeObserver.OnPreDrawListener { applyFront(); true }
++    private val preDraw = ViewTreeObserver.OnPreDrawListener { applyFront(); publishTopBlock(); true }
++    private var topBlockAt = 0L
++
++    /**
++     * 0.8 «Волна под часами»: where the clock, greeting and date end (screen px), for the wallpaper's equalizer — from
++     * the real views, a few times a second, only while the wallpaper asks.
++     */
++    private fun publishTopBlock() {
++        if (!org.blueos.arona.BlueOSBeat.wantTopBlock || !showing || dozing) return
++        val now = SystemClock.uptimeMillis()
++        if (now - topBlockAt < 300) return
++        topBlockAt = now
++        val root = parent as? ViewGroup ?: return
++        val loc = IntArray(2)
++        var out: RectF? = null
++        for (i in 0 until root.childCount) {
++            val v = root.getChildAt(i)
++            if (v === this || !v.isShown || v.alpha < 0.05f || v.width == 0 || v.height == 0) continue
++            if (v.height > root.height * 0.5f) continue                         // full-screen layers
++            v.getLocationOnScreen(loc)
++            if (loc[1] < 40 * dp || loc[1] > root.height * 0.4f) continue      // the status bar; the lower half
++            val r = RectF(loc[0].toFloat(), loc[1].toFloat(), (loc[0] + v.width).toFloat(), (loc[1] + v.height).toFloat())
++            if (out == null) out = r else out.union(r)
++        }
++        org.blueos.arona.BlueOSBeat.topBlock = out
++    }
+ 
+     init {
+         clipChildren = false
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/wallpaper/BlueOSWallpaperWeather.kt b/packages/SystemUI/src/com/android/systemui/blueos/wallpaper/BlueOSWallpaperWeather.kt
+new file mode 100644
+index 000000000000..9a745f43300c
+--- /dev/null
++++ b/packages/SystemUI/src/com/android/systemui/blueos/wallpaper/BlueOSWallpaperWeather.kt
+@@ -0,0 +1,701 @@
++/*
++ * Copyright (C) 2026 BlueOS
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.systemui.blueos.wallpaper
++
++import android.content.Context
++import android.graphics.BlendMode
++import android.graphics.Bitmap
++import android.graphics.Canvas
++import android.graphics.Color
++import android.graphics.ColorSpace
++import android.graphics.HardwareBufferRenderer
++import android.graphics.Paint
++import android.graphics.Rect
++import android.graphics.RenderEffect
++import android.graphics.RenderNode
++import android.graphics.RuntimeShader
++import android.graphics.Shader
++import android.hardware.HardwareBuffer
++import android.hardware.display.DisplayManager
++import android.os.Handler
++import android.os.SystemClock
++import android.util.Log
++import android.util.SizeF
++import android.view.Choreographer
++import android.view.Display
++import com.android.wallpaper.weathereffects.graphics.WeatherEffect
++import com.android.wallpaper.weathereffects.graphics.clouds.CloudsEffect
++import com.android.wallpaper.weathereffects.graphics.clouds.CloudsEffectConfig
++import com.android.wallpaper.weathereffects.graphics.fog.FogEffect
++import com.android.wallpaper.weathereffects.graphics.fog.FogEffectConfig
++import com.android.wallpaper.weathereffects.graphics.rain.RainEffect
++import com.android.wallpaper.weathereffects.graphics.rain.RainEffectConfig
++import com.android.wallpaper.weathereffects.graphics.snow.SnowEffect
++import com.android.wallpaper.weathereffects.graphics.snow.SnowEffectConfig
++import com.android.wallpaper.weathereffects.graphics.sun.SunEffect
++import com.android.wallpaper.weathereffects.graphics.sun.SunEffectConfig
++import java.time.Duration
++import java.util.concurrent.CountDownLatch
++import java.util.concurrent.Executor
++import java.util.concurrent.TimeUnit
++import kotlin.math.PI
++import kotlin.math.exp
++import kotlin.math.max
++import kotlin.math.sin
++import org.blueos.arona.BlueOSSettings as K
++import org.blueos.arona.Weather
++
++/**
++ * BlueOS 0.8: the wallpaper's own look, drawn by the static wallpaper (ImageWallpaper) itself.
++ *
++ * - «Размытие / Затемнение обоев» (Цвета → Обои): the picture is blurred and dimmed ONCE on the GPU, one copy for the
++ *   home screen and one for the lock screen, and that copy is what the wallpaper shows; lock ↔ home cross-fades.
++ *   Before, the launcher and the shade blurred whatever was behind their windows every frame — the weather got
++ *   blurred with the picture, SurfaceFlinger re-blurred the whole screen 30 times a second (the lag), and after an
++ *   app closed the blur came back seconds later.
++ * - «Живая погода на обоях»: while the weather from the «Погода» widget asks for it, the picture is drawn every frame
++ *   with the weather in it — Google's own shaders from AOSP (rain on the glass, snow, fog, clouds, sun: the Pixel
++ *   weather wallpapers) plus BlueOS's: storm flashes, a blizzard, and for «Малооблачно» a sun that drifting clouds
++ *   cover now and then, light shafts breaking through the gaps (approved mockup mockups/blueos-weather.html). The
++ *   weather lies OVER the blurred picture, under every widget. Only while the wallpaper is visible and the screen on;
++ *   rain and snow ~30 fps, slow clouds / fog / sun ~15 fps, held still while the launcher or the shade moves
++ *   ([busy]). Off = the plain picture as before.
++ * - «Эквалайзер на обоях»: while music plays, bars or a wave along the bottom of the screen, or a glow from below
++ *   ([org.blueos.arona.BlueOSBeat]) — over the picture and the weather, under the widgets; on the lock screen also a
++ *   wave right under the clock. In the «Эквалайзер» colour role.
++ *
++ * Settings and the weather loop run on the engine's own thread ([handler]); [render] locks the wallpaper surface,
++ * draws, posts. The engine's own frames come through [drawInto] from its loader thread — state is under [lock], and
++ * [render] is never called while holding it (the engine takes its surface lock first).
++ */
++class BlueOSWallpaperWeather(
++    private val context: Context,
++    private val handler: Handler,
++    private val render: (draw: (Canvas) -> Unit) -> Boolean,
++    private val needBitmap: () -> Unit,
++) : Choreographer.FrameCallback {
++    private val cr = context.contentResolver
++    private val lock = Any()
++    private val executor = Executor { handler.post(it) }
++    private var choreographer: Choreographer? = null
++    private val unobserve = mutableListOf<() -> Unit>()
++
++    private var sharp: Bitmap? = null
++    private var foreground: Bitmap? = null
++    private var homeBmp: Bitmap? = null
++    private var lockBmp: Bitmap? = null
++    private var shown: Bitmap? = null
++    private var fadeFrom: Bitmap? = null
++    private var fadeStart = 0L
++    private var locked = false
++    private var size = SizeF(0f, 0f)
++    private var effect: WeatherEffect? = null
++    private var plan: Plan? = null
++    private var effectKind = NONE
++    private var visible = false
++    private var screenOn = true
++    private var running = false
++    private var lastFrame = 0L
++    private var t = 0f
++    private var nextStrike = 4f
++    private var strikeAt = -10f
++
++    /** What the weather asks for: one of Google's effects, how strong, and BlueOS's extras on top. */
++    private data class Plan(val kind: Int, val intensity: Float, val storm: Boolean = false, val shafts: Boolean = false)
++
++    /** The picture's look on one screen: blur in screen px, dimming 0…0.8. */
++    private data class Look(val blur: Float, val dim: Float) {
++        val plain get() = blur < 1f && dim <= 0f
++    }
++
++    /** Home screen: its blur + dimming. Lock screen: its own blur, or the home one with «Всегда»; never dimmed. */
++    private fun looks(): Pair<Look, Look> {
++        val home = Look(K.wallBlurPx(context, K.HOME_WALL_BLUR).toFloat(), K.wallDim(cr, K.HOME_WALL_DIM))
++        val always = K.int(cr, K.HOME_WALL_BLUR_MODE) == 1
++        val lockBlur = max(K.wallBlurPx(context, K.LOCK_WALL_BLUR).toFloat(), if (always) home.blur else 0f)
++        return home to Look(lockBlur, 0f)
++    }
++
++    /** On: we need the picture (the engine hands a copy over when it loads it). */
++    val wanted get() = K.on(cr, K.WALL_WEATHER) || K.int(cr, K.WALL_EQ) != 0 ||
++        looks().let { !it.first.plain || !it.second.plain }
++
++    // «Эквалайзер на обоях», read once per change (not per frame)
++    private val beat = org.blueos.arona.BlueOSBeat
++    @Volatile private var eqWhere = 0
++    @Volatile private var eqStyle = 0
++    @Volatile private var eqUnderClock = false
++    @Volatile private var eqStr = .6f
++    private var eqColor = 0
++    private var eqColorLocked = false
++    private var eqColorAt = 0L
++
++    private fun readEq() {
++        eqWhere = K.int(cr, K.WALL_EQ)
++        eqStyle = K.int(cr, K.WALL_EQ_STYLE)
++        eqUnderClock = K.int(cr, K.WALL_EQ_LOCK_POS) == 1
++        eqStr = K.int(cr, K.WALL_EQ_STR).coerceIn(20, 100) / 100f
++        beat.wantTopBlock = eqUnderClock && (eqWhere and 2) != 0
++        eqColorAt = 0L
++    }
++
++    /** The equalizer belongs on the screen showing now (home = bit 1, lock = bit 2). */
++    private fun eqHere() = (eqWhere and if (locked) 2 else 1) != 0
++
++    private val beatListener = Runnable { handler.post { updateRunning() } }
++
++    private val displayListener = object : DisplayManager.DisplayListener {
++        override fun onDisplayAdded(id: Int) {}
++        override fun onDisplayRemoved(id: Int) {}
++        override fun onDisplayChanged(id: Int) {
++            val d = context.display ?: return
++            if (id != d.displayId) return
++            // the always-on display keeps the wallpaper «visible» — nothing to animate there
++            val on = d.state == Display.STATE_ON
++            if (on == screenOn) return
++            screenOn = on
++            if (!on) finishFade()
++            updateRunning()
++        }
++    }
++
++    fun attach() {
++        readEq()
++        unobserve += K.observe(context, listOf(K.WEATHER, K.WALL_WEATHER, K.WALL_WEATHER_STR)) {
++            handler.post { update(reprocess = false) }
++        }
++        unobserve += K.observe(context, listOf(K.WALL_EQ, K.WALL_EQ_STYLE, K.WALL_EQ_LOCK_POS, K.WALL_EQ_STR, K.COLOR_EQ)) {
++            readEq()
++            handler.post { update(reprocess = false) }
++        }
++        beat.addListener(beatListener)
++        unobserve += { beat.removeListener(beatListener) }
++        unobserve += K.observe(context,
++            listOf(K.HOME_WALL_BLUR, K.HOME_WALL_DIM, K.HOME_WALL_BLUR_MODE, K.LOCK_WALL_BLUR)) {
++            handler.post { update(reprocess = true) }
++        }
++        context.getSystemService(DisplayManager::class.java)?.registerDisplayListener(displayListener, handler)
++        handler.post { update(reprocess = false) }
++    }
++
++    fun detach() {
++        unobserve.forEach { it() }
++        unobserve.clear()
++        context.getSystemService(DisplayManager::class.java)?.unregisterDisplayListener(displayListener)
++        handler.post {
++            setRunning(false)
++            synchronized(lock) {
++                releaseEffect()
++                sharp = null; foreground = null; homeBmp = null; lockBmp = null; shown = null; fadeFrom = null
++            }
++        }
++    }
++
++    /**
++     * The picture, as the engine loaded it — copied now (the engine recycles its own after drawing) and its home /
++     * lock looks made right away, so the engine's own frame that follows is already the right one.
++     */
++    fun setBitmap(picture: Bitmap, surfaceWidth: Int, surfaceHeight: Int) {
++        val copy = try { picture.copy(Bitmap.Config.ARGB_8888, false) } catch (e: Throwable) { null } ?: return
++        val (home, lck) = make(copy)
++        synchronized(lock) {
++            sharp = copy
++            // no cut-out of a person here (Pixel segments the photo): the whole picture stays behind the weather
++            foreground = Bitmap.createBitmap(copy.width, copy.height, Bitmap.Config.ALPHA_8)
++            size = SizeF(surfaceWidth.toFloat(), surfaceHeight.toFloat())
++            homeBmp = home
++            lockBmp = lck
++            releaseEffect()
++            snapShown()
++        }
++        handler.post { update(reprocess = false) }
++    }
++
++    /** The lock screen shows (or the unlock is under way = home). */
++    fun setLocked(l: Boolean) {
++        handler.post {
++            synchronized(lock) {
++                if (locked == l) return@post
++                locked = l
++                eqColorAt = 0L
++                // the look may stay the same while the equalizer comes or goes: run / draw anyway
++                val to = target()
++                if (to != null && to !== shown) {
++                    if (visible && screenOn && shown != null) {
++                        fadeFrom = shown
++                        shown = to
++                        fadeStart = SystemClock.uptimeMillis()
++                    } else {
++                        snapShown()
++                    }
++                }
++            }
++            updateRunning()
++            if (!running) render(::drawFrame)
++        }
++    }
++
++    fun setVisible(v: Boolean) {
++        handler.post {
++            visible = v
++            if (!v) finishFade()
++            updateRunning()
++        }
++    }
++
++    /** The engine's own frame: false = nothing of ours to draw, it draws the plain picture itself. */
++    fun drawInto(canvas: Canvas): Boolean {
++        synchronized(lock) {
++            if (sharp == null) return false
++            drawFrame(canvas)
++            return true
++        }
++    }
++
++    private fun currentPlan(): Plan? {
++        if (!K.on(cr, K.WALL_WEATHER)) return null
++        val w = Weather.read(cr)?.takeIf { it.fresh } ?: return null
++        val s = K.int(cr, K.WALL_WEATHER_STR).coerceIn(10, 100) / 100f
++        return when (w.kind) {
++            Weather.Kind.CLEAR -> if (w.day) Plan(SUN, s) else null
++            Weather.Kind.CLOUDY -> when (w.code) {
++                45, 48 -> Plan(FOG, s)
++                2 -> Plan(CLOUDS, .55f * s, shafts = w.day)
++                else -> Plan(CLOUDS, s)
++            }
++            Weather.Kind.RAIN -> Plan(RAIN, s * when (w.code) {
++                51, 53, 56, 61, 80 -> .55f
++                55, 57, 63, 66, 81 -> .8f
++                else -> 1f
++            })
++            Weather.Kind.STORM -> Plan(RAIN, s, storm = true)
++            // a blizzard is the heavy snow at full strength
++            Weather.Kind.SNOW -> Plan(SNOW, s * if (w.code == 75 || w.code == 86) 1f else .7f)
++        }
++    }
++
++    private fun update(reprocess: Boolean) {
++        if (!wanted) {
++            // back to the plain picture once, then let it go
++            val had = synchronized(lock) {
++                if (sharp == null) return@synchronized false
++                releaseEffect()
++                plan = null
++                homeBmp = sharp; lockBmp = sharp
++                snapShown()
++                true
++            }
++            if (!had) return
++            setRunning(false)
++            render(::drawFrame)
++            synchronized(lock) { sharp = null; foreground = null; homeBmp = null; lockBmp = null; shown = null }
++            return
++        }
++        val src = synchronized(lock) { sharp }
++        if (src == null) { needBitmap(); return }
++        if (reprocess) {
++            val (home, lck) = make(src)
++            synchronized(lock) { homeBmp = home; lockBmp = lck; snapShown() }
++        }
++        val p = currentPlan()
++        synchronized(lock) {
++            plan = p
++            if (p == null) {
++                releaseEffect()
++            } else {
++                if (effect == null || effectKind != p.kind) {
++                    releaseEffect()
++                    effect = create(p.kind, shown ?: src, foreground ?: return@synchronized)
++                    effectKind = p.kind
++                }
++                effect?.setIntensity(p.intensity)
++            }
++        }
++        updateRunning()
++        if (!running) render(::drawFrame)
++    }
++
++    // ------------------------------------------------------------- the picture's home / lock looks
++
++    private fun target(): Bitmap? = (if (locked) lockBmp else homeBmp) ?: sharp
++
++    /** Straight to the current look, no fade (under [lock]). */
++    private fun snapShown() {
++        fadeFrom = null
++        val to = target() ?: return
++        shown = to
++        foreground?.let { effect?.setBitmaps(it, to) }
++    }
++
++    private fun finishFade() = synchronized(lock) {
++        if (fadeFrom != null) snapShown()
++    }
++
++    private fun make(src: Bitmap): Pair<Bitmap, Bitmap> {
++        val (home, lck) = looks()
++        val h = process(src, home)
++        return h to if (lck == home) h else process(src, lck)
++    }
++
++    /** The picture blurred and dimmed, once, on the GPU (the result is a hardware bitmap); the picture itself if plain. */
++    private fun process(src: Bitmap, look: Look): Bitmap {
++        if (look.plain) return src
++        return try {
++            val w = src.width
++            val h = src.height
++            // the setting is in screen pixels; the picture is fitted to the screen's height
++            val screenH = context.resources.displayMetrics.heightPixels.coerceAtLeast(1)
++            val r = look.blur * h / screenH
++            val buffer = HardwareBuffer.create(w, h, HardwareBuffer.RGBA_8888, 1,
++                HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE or HardwareBuffer.USAGE_GPU_COLOR_OUTPUT)
++            val renderer = HardwareBufferRenderer(buffer)
++            val node = RenderNode("BlueOSWallLook").apply { setPosition(0, 0, w, h) }
++            renderer.setContentRoot(node)
++            if (r >= 1f) node.setRenderEffect(RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP))
++            val c = node.beginRecording()
++            c.drawBitmap(src, 0f, 0f, null)
++            if (look.dim > 0f) c.drawColor(Color.argb((look.dim * 255).toInt().coerceIn(0, 255), 0, 0, 0))
++            node.endRecording()
++            val done = CountDownLatch(1)
++            var ok = false
++            renderer.obtainRenderRequest().setColorSpace(SRGB).draw(Executor { it.run() }) { result ->
++                ok = result.status == HardwareBufferRenderer.RenderResult.SUCCESS &&
++                    result.fence.await(Duration.ofSeconds(2))
++                done.countDown()
++            }
++            done.await(3, TimeUnit.SECONDS)
++            renderer.close()
++            // the bitmap holds its own reference to the buffer
++            val bmp = if (ok) Bitmap.wrapHardwareBuffer(buffer, SRGB) else null
++            buffer.close()
++            bmp ?: src
++        } catch (e: Throwable) {
++            Log.w(TAG, "wallpaper look failed", e)
++            src
++        }
++    }
++
++    // ------------------------------------------------------------- the weather
++
++    private fun create(kind: Int, bg: Bitmap, fg: Bitmap): WeatherEffect? = try {
++        val a = context.assets
++        val d = context.resources.displayMetrics.density
++        when (kind) {
++            RAIN -> RainEffect(rainConfig = RainEffectConfig(a, d), foreground = fg, background = bg, intensity = 0f,
++                initialSurfaceSize = size, mainExecutor = executor, isPanAndZoomInExtendedWallpaperEffectsEnabled = false)
++            SNOW -> SnowEffect(snowConfig = SnowEffectConfig(a, d), foreground = fg, background = bg, intensity = 0f,
++                initialSurfaceSize = size, mainExecutor = executor, isPanAndZoomInExtendedWallpaperEffectsEnabled = false)
++            FOG -> FogEffect(fogConfig = FogEffectConfig(a, d), foreground = fg, background = bg, intensity = 0f,
++                initialSurfaceSize = size, isPanAndZoomInExtendedWallpaperEffectsEnabled = false)
++            CLOUDS -> CloudsEffect(cloudsConfig = CloudsEffectConfig(a, d), foreground = fg, background = bg, intensity = 0f,
++                initialSurfaceSize = size, isPanAndZoomInExtendedWallpaperEffectsEnabled = false)
++            SUN -> SunEffect(sunConfig = SunEffectConfig(a, d), foreground = fg, background = bg, intensity = 0f,
++                initialSurfaceSize = size, isPanAndZoomInExtendedWallpaperEffectsEnabled = false)
++            else -> null
++        }
++    } catch (e: Throwable) {
++        // never take the wallpaper down with it: the plain picture stays
++        Log.w(TAG, "weather effect $kind failed", e)
++        null
++    }
++
++    private fun releaseEffect() {
++        effect?.release()
++        effect = null
++        effectKind = NONE
++    }
++
++    private fun updateRunning() {
++        val busy = synchronized(lock) { effect != null || fadeFrom != null || (sharp != null && eqHere() && beat.visible) }
++        setRunning(visible && screenOn && busy)
++    }
++
++    private fun setRunning(want: Boolean) {
++        if (want == running) return
++        running = want
++        val c = choreographer ?: Choreographer.getInstance().also { choreographer = it }
++        if (want) {
++            lastFrame = 0L
++            c.postFrameCallback(this)
++        } else {
++            c.removeFrameCallback(this)
++        }
++    }
++
++    /**
++     * 0.8: the launcher or the shade is moving (pages, «Все приложения», an app opening, the shade pulled — they move
++     * the wallpaper's offsets / zoom): the weather holds its frame until it's calm again, so they get the GPU. With
++     * clouds running, 68 % of the launcher's frames were late while swiping pages (3–19 % without).
++     */
++    fun busy() { calmAt = SystemClock.uptimeMillis() + CALM_MS }
++
++    @Volatile private var calmAt = 0L
++
++    override fun doFrame(frameTimeNanos: Long) {
++        if (!running) return
++        val c = choreographer ?: return
++        val fading = synchronized(lock) { fadeFrom != null }
++        if (!fading && SystemClock.uptimeMillis() < calmAt) {
++            // held still: the time doesn't run either, it goes on from the same frame afterwards
++            lastFrame = frameTimeNanos
++            c.postFrameCallback(this)
++            return
++        }
++        // a lock ↔ home fade at the full frame rate; then rain / snow ~30 fps, the slow ones ~15 fps
++        val minMs = synchronized(lock) {
++            when {
++                fadeFrom != null -> 0L
++                effectKind == RAIN || effectKind == SNOW || (eqHere() && beat.visible) -> FRAME_MS_FAST
++                else -> FRAME_MS_SLOW
++            }
++        }
++        val dtMs = if (lastFrame == 0L) 0L else (frameTimeNanos - lastFrame) / 1_000_000L
++        if (lastFrame != 0L && dtMs < minMs) { c.postFrameCallback(this); return }
++        lastFrame = frameTimeNanos
++        t += dtMs.coerceAtMost(100L) / 1000f
++        synchronized(lock) { effect?.update(dtMs.coerceAtMost(100L), frameTimeNanos) }
++        if (!render(::drawFrame)) { running = false; return }
++        if (synchronized(lock) { effect == null && fadeFrom == null && !(eqHere() && beat.visible) }) {
++            running = false
++            return
++        }
++        c.postFrameCallback(this)
++    }
++
++    private val dst = Rect()
++    private val paint = Paint()
++    private val picPaint = Paint(Paint.FILTER_BITMAP_FLAG)
++
++    /**
++     * One frame: the weather effect (it draws the picture too), or the plain picture without one. A lock ↔ home fade
++     * mixes the two looks; with weather the effect switches its picture halfway, so the weather never blinks out.
++     */
++    private fun drawFrame(canvas: Canvas) = synchronized(lock) {
++        val cur = shown ?: sharp ?: return@synchronized
++        val from = fadeFrom
++        val k = if (from == null) 1f else ((SystemClock.uptimeMillis() - fadeStart) / FADE_MS.toFloat()).coerceIn(0f, 1f)
++        val fading = from != null && k < 1f
++        if (!fading) fadeFrom = null
++        dst.set(0, 0, canvas.width, canvas.height)
++        val e = effect
++        if (e == null) {
++            if (fading) {
++                canvas.drawBitmap(from!!, null, dst, picPaint)
++                picPaint.alpha = (k * 255).toInt()
++                canvas.drawBitmap(cur, null, dst, picPaint)
++                picPaint.alpha = 255
++            } else {
++                canvas.drawBitmap(cur, null, dst, picPaint)
++            }
++            if (eqHere()) drawEq(canvas)
++            return@synchronized
++        }
++        foreground?.let { e.setBitmaps(it, if (fading && k < .5f) from!! else cur) }
++        e.draw(canvas)
++        if (fading) {
++            picPaint.alpha = ((if (k < .5f) k else 1f - k) * 255).toInt()
++            canvas.drawBitmap(if (k < .5f) cur else from!!, null, dst, picPaint)
++            picPaint.alpha = 255
++        }
++        plan?.let { p ->
++            if (p.shafts) shafts(canvas, p.intensity / .55f)
++            if (p.storm) flash(canvas, p.intensity)
++        }
++        if (eqHere()) drawEq(canvas)
++    }
++
++    // ------------------------------------------------------------- «Эквалайзер на обоях»
++
++    private val eqPaint = Paint(Paint.ANTI_ALIAS_FLAG)
++    private val eqPath = android.graphics.Path()
++
++    private fun drawEq(canvas: Canvas) {
++        if (!beat.visible) return
++        val now = SystemClock.uptimeMillis()
++        if (now - eqColorAt > 1000 || eqColorLocked != locked) {
++            // the palette / theme may change any moment; a second late is fine
++            eqColor = org.blueos.arona.BlueOSColorRoles.eqOnWallpaper(context, locked)
++            eqColorLocked = locked
++            eqColorAt = now
++        }
++        val m = context.resources.displayMetrics
++        val s = canvas.height / m.heightPixels.coerceAtLeast(1).toFloat()   // the surface is the picture's size
++        val dp = m.density * s
++        val w = canvas.width.toFloat()
++        val h = canvas.height.toFloat()
++        val str = eqStr
++        val block = beat.topBlock
++        if (locked && eqUnderClock && block != null) {
++            // under the clock, greeting and date: a short wave as wide as they are
++            val ox = (w - m.widthPixels * s) / 2f
++            val left = ox + block.left * s
++            val right = ox + maxOf(block.right, block.left + 200f * m.density) * s
++            wave(canvas, left, right, block.bottom * s + 30 * dp, (16 + 22 * str) * dp, 1f, 2.5f * dp)
++            return
++        }
++        when (eqStyle) {
++            1 -> wave(canvas, 0f, w, h - (70 + 40 * str) * dp, (24 + 60 * str) * dp, 1f, 3f * dp)
++            2 -> glow(canvas, w, h, dp, str)
++            else -> bars(canvas, w, h, dp, str)
++        }
++    }
++
++    /** Classic bars standing on the bottom edge, bass on the left. */
++    private fun bars(canvas: Canvas, w: Float, h: Float, dp: Float, str: Float) {
++        val barW = 7 * dp
++        val gap = 5 * dp
++        val count = ((w - 24 * dp + gap) / (barW + gap)).toInt().coerceAtLeast(4)
++        val used = count * barW + (count - 1) * gap
++        var x = (w - used) / 2f + barW / 2f
++        val maxH = (90 + 170 * str) * dp
++        eqPaint.style = Paint.Style.STROKE
++        eqPaint.strokeCap = Paint.Cap.ROUND
++        eqPaint.strokeWidth = barW
++        eqPaint.shader = null
++        eqPaint.color = withAlpha(eqColor, .45f + .4f * str)
++        val bottom = h - 6 * dp - barW / 2f
++        for (i in 0 until count) {
++            val len = maxOf(.001f, beat.level(i / (count - 1f)) * maxH)
++            canvas.drawLine(x, bottom, x, bottom - len, eqPaint)
++            x += barW + gap
++        }
++    }
++
++    /** Two lines of a wave between [left] and [right] around [cy] (as the widgets' wave). */
++    private fun wave(canvas: Canvas, left: Float, right: Float, cy: Float, amp: Float, alpha: Float, stroke: Float) {
++        val t = SystemClock.uptimeMillis() / 1000f
++        val w = right - left
++        val unit = stroke / 3f                                         // ≈ 1 dp
++        eqPaint.style = Paint.Style.STROKE
++        eqPaint.strokeCap = Paint.Cap.ROUND
++        eqPaint.shader = null
++        for (line in 0..1) {
++            eqPath.reset()
++            val steps = maxOf(24, (w / (4 * unit)).toInt())
++            for (i in 0..steps) {
++                val f = i / steps.toFloat()
++                val env = sin(PI.toFloat() * f)
++                val lvl = if (line == 0) beat.level(f) else beat.level(1f - f)
++                val ph = if (line == 0) f * w / (14 * unit) + t * 7f else f * w / (20 * unit) - t * 5f
++                val y = cy + sin(ph) * env * lvl * amp * if (line == 0) 1f else .75f
++                if (i == 0) eqPath.moveTo(left + f * w, y) else eqPath.lineTo(left + f * w, y)
++            }
++            eqPaint.strokeWidth = if (line == 0) stroke else stroke * .66f
++            eqPaint.color = withAlpha(eqColor, (if (line == 0) .9f else .45f) * alpha)
++            canvas.drawPath(eqPath, eqPaint)
++        }
++    }
++
++    /** A soft light rising from the bottom edge, higher where the spectrum is — and with every kick. */
++    private fun glow(canvas: Canvas, w: Float, h: Float, dp: Float, str: Float) {
++        val e = beat.energy
++        val top = h - (120 + 260 * str) * dp * (.35f + .65f * e)
++        eqPaint.style = Paint.Style.FILL
++        eqPaint.shader = android.graphics.LinearGradient(0f, h, 0f, top,
++            intArrayOf(withAlpha(eqColor, (.35f + .45f * e) * (.5f + .5f * str)), withAlpha(eqColor, 0f)), null,
++            Shader.TileMode.CLAMP)
++        canvas.drawRect(0f, top, w, h, eqPaint)
++        eqPaint.shader = null
++        // the spectrum as a soft skyline in it
++        eqPath.reset()
++        eqPath.moveTo(0f, h)
++        val steps = 48
++        val maxH = (60 + 140 * str) * dp
++        for (i in 0..steps) {
++            val f = i / steps.toFloat()
++            eqPath.lineTo(f * w, h - beat.level(f) * maxH)
++        }
++        eqPath.lineTo(w, h)
++        eqPath.close()
++        eqPaint.color = withAlpha(eqColor, .22f + .2f * str)
++        canvas.drawPath(eqPath, eqPaint)
++    }
++
++    private fun withAlpha(c: Int, a: Float) = (c and 0x00ffffff) or ((a.coerceIn(0f, 1f) * 255).toInt() shl 24)
++
++    // ------------------------------------------------------------- «Малооблачно»: the sun behind passing clouds
++
++    private val shaftShader by lazy { RuntimeShader(SHAFTS) }
++    private val shaftPaint by lazy { Paint().apply { shader = shaftShader; blendMode = BlendMode.SCREEN } }
++
++    private fun shafts(canvas: Canvas, amt: Float) {
++        val w = canvas.width.toFloat()
++        val h = canvas.height.toFloat()
++        // a cloud drifts over the sun about every 20 s and stays a few seconds
++        val occ = smooth(.25f, .85f, .5f + .5f * sin(t * 2f * PI.toFloat() / 21f)) * (.75f + .25f * sin(t * .37f))
++        // the whole picture a little dimmer while the sun is covered
++        paint.color = Color.argb((occ * .14f * amt * 255).toInt().coerceIn(0, 255), 0, 0, 0)
++        canvas.drawRect(0f, 0f, w, h, paint)
++        shaftShader.setFloatUniform("uRes", w, h)
++        shaftShader.setFloatUniform("uSun", w * .82f, h * .07f)
++        shaftShader.setFloatUniform("uT", t)
++        shaftShader.setFloatUniform("uOcc", occ)
++        shaftShader.setFloatUniform("uAmt", amt.coerceIn(0f, 1.2f))
++        canvas.drawRect(0f, 0f, w, h, shaftPaint)
++    }
++
++    // ------------------------------------------------------------- «Гроза»: the sky lights up from inside the clouds
++
++    private fun flash(canvas: Canvas, amt: Float) {
++        if (t > nextStrike) { strikeAt = t; nextStrike = t + 5f + (Math.random() * 7).toFloat() }
++        val d = t - strikeAt
++        val f = exp(-((d - .05f) * (d - .05f)) / .0012f) * .9f + exp(-((d - .3f) * (d - .3f)) / .004f) * .6f +
++            if (d > 0f && d < 1.2f) exp(-d * 3.5f) * .15f else 0f
++        val a = (f * .55f * amt).coerceIn(0f, .8f)
++        if (a < .01f) return
++        paint.color = Color.argb((a * 255).toInt(), 214, 222, 255)
++        canvas.drawRect(0f, 0f, canvas.width.toFloat(), canvas.height.toFloat(), paint)
++    }
++
++    private fun smooth(e0: Float, e1: Float, x: Float): Float {
++        val k = ((x - e0) / (e1 - e0)).coerceIn(0f, 1f)
++        return k * k * (3 - 2 * k)
++    }
++
++    companion object {
++        private const val TAG = "BlueOSWallWeather"
++        private const val NONE = 0
++        private const val RAIN = 1
++        private const val SNOW = 2
++        private const val FOG = 3
++        private const val CLOUDS = 4
++        private const val SUN = 5
++        // vsync is 16.7 ms: < 30 → every 2nd frame (30 fps), < 62 → every 4th (15 fps)
++        private const val FRAME_MS_FAST = 30L
++        private const val FRAME_MS_SLOW = 62L
++        private const val CALM_MS = 600L
++        private const val FADE_MS = 350L
++        private val SRGB: ColorSpace = ColorSpace.get(ColorSpace.Named.SRGB)
++
++        /** Light shafts from the sun: strong while a cloud covers it (light breaking through), a hint in the open. */
++        private const val SHAFTS = """
++            uniform float2 uRes; uniform float2 uSun; uniform float uT; uniform float uOcc; uniform float uAmt;
++            float h1(float x) { return fract(sin(x * 127.1) * 43758.5453); }
++            float n1(float x) { float i = floor(x); float f = fract(x); f = f * f * (3.0 - 2.0 * f); return mix(h1(i), h1(i + 1.0), f); }
++            half4 main(float2 p) {
++                float2 d = p - uSun;
++                float r = length(d) / uRes.y;
++                float a = atan(d.y, d.x);
++                float rays = n1(a * 14.0 + uT * 0.15) * 0.6 + n1(a * 31.0 - uT * 0.1) * 0.4;
++                rays = smoothstep(0.35, 1.0, rays);
++                float s = rays * exp(-r * 2.8) * (0.12 + 1.0 * uOcc) * 0.5 + exp(-r * 9.0) * (1.0 - uOcc * 0.85) * 0.4;
++                s = clamp(s * uAmt, 0.0, 1.0);
++                return half4(half3(1.0, 0.92, 0.75) * s, s);
++            }
++        """
++    }
++}
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSVisualizerService.kt b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSVisualizerService.kt
+index 4f4f53c4dd9a..7ee4061980cd 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSVisualizerService.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSVisualizerService.kt
+@@ -273,3 +273,194 @@ class BlueOSVisualizerService : Service() {
+         const val REST_LEVEL = 0.03f
+     }
+ }
++
++/**
++ * 0.8: the spectrum for the equalizer on the wallpaper and the halo's pulse ([org.blueos.arona.BlueOSBeat]) — the same
++ * service the widgets use, attached from SystemUI itself. Listens only while one of them is on, the screen is on and
++ * music plays (checked once a second); smoothed like the widgets' bars; when the player can't be heard, the widgets'
++ * made-up beat.
++ */
++object BlueOSMusicPulse {
++    private const val TICK_MS = 25L
++    private lateinit var ctx: android.content.Context
++    private lateinit var handler: Handler
++    private val beat = org.blueos.arona.BlueOSBeat
++    private val token = Binder()
++    private var service: IBinder? = null
++    private var binding = false
++    private var shared: SharedMemory? = null
++    private var buffer: ByteBuffer? = null
++    private val target = FloatArray(org.blueos.arona.BlueOSBeat.BANDS)
++    private var lastTick = 0L
++    private var silentSince = 0L
++    private var ticking = false
++
++    private val connection = object : android.content.ServiceConnection {
++        override fun onServiceConnected(name: android.content.ComponentName?, binder: IBinder?) {
++            handler.post { service = binder; attach() }
++        }
++        override fun onServiceDisconnected(name: android.content.ComponentName?) {
++            handler.post { service = null; release() }
++        }
++    }
++
++    fun start(context: android.content.Context) {
++        if (::ctx.isInitialized) return
++        ctx = context.applicationContext
++        val thread = HandlerThread("BlueOSMusicPulse", Process.THREAD_PRIORITY_DISPLAY)
++        thread.start()
++        handler = Handler(thread.looper)
++        val k = org.blueos.arona.BlueOSSettings
++        k.observe(ctx, listOf(k.WALL_EQ, k.HALO_BEAT)) { handler.post(check) }
++        ctx.registerReceiver(object : android.content.BroadcastReceiver() {
++            override fun onReceive(c: android.content.Context?, i: Intent?) { handler.post(check) }
++        }, android.content.IntentFilter().apply {
++            addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF)
++        })
++        handler.post(check)
++    }
++
++    private fun wanted(): Boolean {
++        val k = org.blueos.arona.BlueOSSettings
++        val cr = ctx.contentResolver
++        return k.int(cr, k.WALL_EQ) != 0 || k.on(cr, k.HALO_BEAT)
++    }
++
++    private val check: Runnable = object : Runnable {
++        override fun run() {
++            handler.removeCallbacks(this)
++            val on = wanted() && (ctx.getSystemService(android.os.PowerManager::class.java)?.isInteractive ?: false)
++            val playing = on && (ctx.getSystemService(android.media.AudioManager::class.java)?.isMusicActive ?: false)
++            if (playing) connect() else disconnect()
++            if (beat.playing != playing) {
++                beat.playing = playing
++                silentSince = 0L
++                startTicking()
++                beat.changed()
++            }
++            if (on) handler.postDelayed(this, 1000)
++        }
++    }
++
++    private fun connect() {
++        if (binding) return
++        binding = true
++        try {
++            val intent = Intent(BlueOSVisualizerView.ACTION_VISUALIZER_SERVICE).setPackage(ctx.packageName)
++            if (!ctx.bindService(intent, connection, android.content.Context.BIND_AUTO_CREATE)) {
++                binding = false
++                ctx.unbindService(connection)
++            }
++        } catch (e: RuntimeException) {
++            binding = false
++            Log.w("BlueOSMusicPulse", "Can't bind the visualizer", e)
++        }
++    }
++
++    private fun attach() {
++        val s = service ?: return
++        val data = Parcel.obtain()
++        val reply = Parcel.obtain()
++        try {
++            data.writeStrongBinder(token)
++            s.transact(BlueOSVisualizerView.TRANSACTION_ATTACH, data, reply, 0)
++            if (reply.readInt() != 0) {
++                release()
++                shared = SharedMemory.CREATOR.createFromParcel(reply)
++                buffer = shared?.mapReadOnly()
++            }
++        } catch (e: Exception) {
++            Log.w("BlueOSMusicPulse", "Can't attach to the visualizer", e)
++            release()
++        } finally {
++            data.recycle()
++            reply.recycle()
++        }
++    }
++
++    private fun disconnect() {
++        service?.let { s ->
++            val data = Parcel.obtain()
++            try {
++                data.writeStrongBinder(token)
++                s.transact(BlueOSVisualizerView.TRANSACTION_DETACH, data, null, IBinder.FLAG_ONEWAY)
++            } catch (e: Exception) {
++            } finally {
++                data.recycle()
++            }
++        }
++        if (binding) runCatching { ctx.unbindService(connection) }
++        binding = false
++        service = null
++        release()
++    }
++
++    private fun release() {
++        buffer?.let { SharedMemory.unmap(it) }
++        buffer = null
++        shared?.close()
++        shared = null
++    }
++
++    private fun startTicking() {
++        if (ticking) return
++        ticking = true
++        lastTick = 0L
++        handler.post(tick)
++    }
++
++    private val tick: Runnable = object : Runnable {
++        override fun run() {
++            val now = android.os.SystemClock.uptimeMillis()
++            val dt = if (lastTick == 0L) 1f else ((now - lastTick) / 16.67f).coerceAtMost(4f)
++            lastTick = now
++            if (!beat.playing) target.fill(0f) else if (!read(now)) fake(now)
++            var moving = false
++            for (i in target.indices) {
++                val t = target[i]
++                val k = if (t > beat.shown[i]) 0.55f else 0.14f
++                beat.shown[i] += (t - beat.shown[i]) * (1f - (1f - k).pow(dt))
++                if (beat.shown[i] > 0.004f) moving = true
++            }
++            // the low end: the first quarter of the bands
++            var low = 0f
++            for (i in 0 until 8) low += beat.shown[i]
++            beat.energy = (low / 8f).coerceIn(0f, 1f)
++            if (beat.playing || moving) {
++                handler.postDelayed(this, TICK_MS)
++            } else {
++                beat.shown.fill(0f)
++                beat.energy = 0f
++                ticking = false
++                beat.changed()
++            }
++        }
++    }
++
++    /** From the service; false when there's nothing real (no service, or a long silence while «playing»). */
++    private fun read(now: Long): Boolean {
++        val b = buffer ?: return false
++        if ((b.getInt(BlueOSVisualizerView.OFFSET_FLAGS) and BlueOSVisualizerView.FLAG_UNAVAILABLE) != 0) return false
++        var silent = true
++        for (i in target.indices) {
++            val v = b.getFloat(BlueOSVisualizerView.OFFSET_BANDS + i * 4)
++            target[i] = v
++            if (v > 0.02f) silent = false
++        }
++        if (!silent) { silentSince = 0L; return true }
++        if (silentSince == 0L) silentSince = now
++        return now - silentSince < 1500
++    }
++
++    /** The widgets' made-up spectrum: a 120 bpm kick, hi-hats and a slow melody. */
++    private fun fake(now: Long) {
++        val t = now / 1000f
++        val kick = kotlin.math.exp(-((t % 0.5f) / 0.11f))
++        val hat = kotlin.math.exp(-(((t + 0.25f) % 0.5f) / 0.05f))
++        for (i in target.indices) {
++            val f = i / (target.size - 1f)
++            val melody = 0.5f + 0.5f * (kotlin.math.sin(t * 3.1f + f * 9f) * kotlin.math.sin(t * 1.7f + f * 4f))
++            target[i] = minOf(1f, 0.1f + kick * (1 - f) * 0.7f + hat * f * 0.4f + melody * 0.3f * (0.4f + f * 0.6f))
++        }
++    }
++}
+diff --git a/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java b/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java
+index a3e80c814b15..2520e0fdf6cc 100644
+--- a/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java
++++ b/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java
+@@ -513,6 +513,8 @@ public class ThemeOverlayController implements CoreStartable, Dumpable {
+         BlueOSWidgetStyle.INSTANCE.start(mContext);
+         // BlueOS 0.7: weather (Open-Meteo) for the lock clock, widgets and Arona
+         BlueOSWeather.INSTANCE.start(mContext);
++        // BlueOS 0.8: the music for the wallpaper's equalizer and the halo's pulse
++        com.android.systemui.blueos.widgets.BlueOSMusicPulse.INSTANCE.start(mContext);
+         final IntentFilter filter = new IntentFilter();
+         filter.addAction(Intent.ACTION_PROFILE_ADDED);
+         filter.addAction(Intent.ACTION_WALLPAPER_CHANGED);
+diff --git a/packages/SystemUI/src/com/android/systemui/wallpapers/ImageWallpaper.java b/packages/SystemUI/src/com/android/systemui/wallpapers/ImageWallpaper.java
+index 95f086694658..b213849d8471 100644
+--- a/packages/SystemUI/src/com/android/systemui/wallpapers/ImageWallpaper.java
++++ b/packages/SystemUI/src/com/android/systemui/wallpapers/ImageWallpaper.java
+@@ -80,13 +80,18 @@ public class ImageWallpaper extends WallpaperService {
+     // wait at least this duration before unloading the bitmap
+     private static final int DELAY_UNLOAD_BITMAP = 2000;
+ 
++    // BlueOS 0.8: the wallpaper's home / lock look (its own blur) follows the lock screen
++    private final com.android.systemui.statusbar.policy.KeyguardStateController mKeyguardStateController;
++
+     @Inject
+     public ImageWallpaper(@LongRunning DelayableExecutor longExecutor, UserTracker userTracker,
+-            WindowManagerProvider windowManagerProvider) {
++            WindowManagerProvider windowManagerProvider,
++            com.android.systemui.statusbar.policy.KeyguardStateController keyguardStateController) {
+         super();
+         mLongExecutor = longExecutor;
+         mUserTracker = userTracker;
+         mWindowManagerProvider = windowManagerProvider;
++        mKeyguardStateController = keyguardStateController;
+     }
+ 
+     @Override
+@@ -121,6 +126,8 @@ public class ImageWallpaper extends WallpaperService {
+         static final int MIN_SURFACE_HEIGHT = 128;
+         private Bitmap mBitmap;
+         private boolean mWideColorGamut = false;
++        // BlueOS 0.8: «Живая погода на обоях» — draws the picture with the weather in it, frame by frame
++        private com.android.systemui.blueos.wallpaper.BlueOSWallpaperWeather mBlueOSWeather;
+ 
+         /*
+          * Counter to unload the bitmap as soon as possible.
+@@ -199,11 +206,113 @@ public class ImageWallpaper extends WallpaperService {
+             getDisplayContext().getSystemService(DisplayManager.class)
+                     .registerDisplayListener(this, null);
+             getDisplaySizeAndUpdateColorExtractor();
++
++            mBlueOSWeather = new com.android.systemui.blueos.wallpaper.BlueOSWallpaperWeather(
++                    getDisplayContext(),
++                    new android.os.Handler(mWorker != null ? mWorker.getLooper()
++                            : android.os.Looper.getMainLooper()),
++                    draw -> blueOSRender(draw),
++                    () -> {
++                        blueOSFeedWeather();
++                        return kotlin.Unit.INSTANCE;
++                    });
++            mBlueOSWeather.attach();
++            mBlueOSKeyguard = new com.android.systemui.statusbar.policy.KeyguardStateController.Callback() {
++                @Override
++                public void onKeyguardShowingChanged() {
++                    blueOSLocked();
++                }
++
++                @Override
++                public void onKeyguardGoingAwayChanged() {
++                    blueOSLocked();
++                }
++            };
++            new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
++                mKeyguardStateController.addCallback(mBlueOSKeyguard);
++                blueOSLocked();
++            });
+             Trace.endSection();
+         }
+ 
++        /** BlueOS 0.8: one weather frame on the wallpaper surface; false = no surface right now. */
++        private boolean blueOSRender(
++                kotlin.jvm.functions.Function1<? super Canvas, kotlin.Unit> draw) {
++            synchronized (mSurfaceLock) {
++                if (mSurfaceHolder == null) return false;
++                Surface surface = mSurfaceHolder.getSurface();
++                if (surface == null || !surface.isValid()) return false;
++                Canvas canvas;
++                try {
++                    canvas = mWideColorGamut
++                            ? surface.lockHardwareWideColorGamutCanvas()
++                            : surface.lockHardwareCanvas();
++                } catch (IllegalStateException e) {
++                    return false;
++                }
++                try {
++                    draw.invoke(canvas);
++                } finally {
++                    surface.unlockCanvasAndPost(canvas);
++                }
++                return true;
++            }
++        }
++
++        private com.android.systemui.statusbar.policy.KeyguardStateController.Callback mBlueOSKeyguard;
++
++        /** BlueOS 0.8: the lock screen's look while it shows; the home look from the start of the unlock. */
++        private void blueOSLocked() {
++            if (mBlueOSWeather == null) return;
++            mBlueOSWeather.setLocked(mKeyguardStateController.isShowing()
++                    && !mKeyguardStateController.isKeyguardGoingAway());
++        }
++
++        /** BlueOS 0.8: the weather wants the picture — hand it the loaded one, or load it again. */
++        private void blueOSFeedWeather() {
++            mLongExecutor.execute(() -> {
++                synchronized (mLock) {
++                    if (isBitmapLoaded()) {
++                        blueOSGiveBitmap(mBitmap);
++                    } else {
++                        mDrawn = false;
++                        loadWallpaperAndDrawFrameInternal();
++                    }
++                }
++            });
++        }
++
++        private void blueOSGiveBitmap(Bitmap bitmap) {
++            if (mBlueOSWeather == null || !mBlueOSWeather.getWanted() || bitmap == null) return;
++            Rect frame;
++            synchronized (mSurfaceLock) {
++                if (mSurfaceHolder == null) return;
++                frame = mSurfaceHolder.getSurfaceFrame();
++            }
++            // makes the home / lock looks on the GPU right here, before the engine draws its frame
++            mBlueOSWeather.setBitmap(bitmap, frame.width(), frame.height());
++        }
++
++        @Override
++        public void onVisibilityChanged(boolean visible) {
++            if (mBlueOSWeather != null) mBlueOSWeather.setVisible(visible);
++        }
++
++        // BlueOS 0.8: the launcher / shade zooms the wallpaper (an app opening, «Все приложения», the shade):
++        // the weather holds still meanwhile, the animation gets the GPU
++        @Override
++        public void onZoomChanged(float zoom) {
++            if (mBlueOSWeather != null) mBlueOSWeather.busy();
++        }
++
+         @Override
+         public void onDestroy() {
++            if (mBlueOSWeather != null) mBlueOSWeather.detach();
++            if (mBlueOSKeyguard != null) {
++                com.android.systemui.statusbar.policy.KeyguardStateController.Callback cb = mBlueOSKeyguard;
++                new android.os.Handler(android.os.Looper.getMainLooper()).post(
++                        () -> mKeyguardStateController.removeCallback(cb));
++            }
+             Context context = getDisplayContext();
+             if (context != null) {
+                 DisplayManager displayManager = context.getSystemService(DisplayManager.class);
+@@ -298,7 +407,10 @@ public class ImageWallpaper extends WallpaperService {
+             if (canvas != null) {
+                 Rect dest = mSurfaceHolder.getSurfaceFrame();
+                 try {
+-                    canvas.drawBitmap(bitmap, null, dest, null);
++                    // BlueOS 0.8: the picture's blurred / dimmed look and the weather, when they're on
++                    if (mBlueOSWeather == null || !mBlueOSWeather.drawInto(canvas)) {
++                        canvas.drawBitmap(bitmap, null, dest, null);
++                    }
+                     mDrawn = true;
+                 } finally {
+                     surface.unlockCanvasAndPost(canvas);
+@@ -398,6 +510,8 @@ public class ImageWallpaper extends WallpaperService {
+                 Trace.beginSection("WPMS.wallpaperSupportsWcg");
+                 mWideColorGamut = mWallpaperManager.wallpaperSupportsWcg(getSourceFlag());
+                 Trace.endSection();
++                // BlueOS 0.8: the live weather keeps its own copy (this one is unloaded after drawing)
++                blueOSGiveBitmap(bitmap);
+ 
+                 // +2 usages for the color extraction and the delayed unload.
+                 mBitmapUsages += 2;
+@@ -482,6 +596,8 @@ public class ImageWallpaper extends WallpaperService {
+         public void onOffsetsChanged(float xOffset, float yOffset,
+                 float xOffsetStep, float yOffsetStep,
+                 int xPixelOffset, int yPixelOffset) {
++            // BlueOS 0.8: the home screen pages are being swiped — the weather holds still meanwhile
++            if (mBlueOSWeather != null) mBlueOSWeather.busy();
+             final int pages;
+             if (xOffsetStep > 0 && xOffsetStep <= 1) {
+                 pages = Math.round(1 / xOffsetStep) + 1;

@@ -1,0 +1,84 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 27 Oct 2026 18:04:40 +0100
+Subject: [PATCH 26/30] =?UTF-8?q?BlueOS:=20SystemUI:=20lock=20text=20?=
+ =?UTF-8?q?=C2=AB=D0=92=D1=81=D0=B5=D0=B3=D0=B4=D0=B0=20=D1=81=D0=B2=D0=B5?=
+ =?UTF-8?q?=D1=82=D0=BB=D1=8B=D0=B9=C2=BB,=20the=20clock=20asks=20the=20sy?=
+ =?UTF-8?q?stem=20for=20the=20theme?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In the light theme the clock's digits stayed light while the greeting and the date went dark: the clock read the
+theme from its context, which kept saying «dark» after a switch to the light theme; the greeting read the system's
+configuration. Both read the system's configuration now and decide the same way.
+«Цвет текста на блокировке» gets «Всегда светлый» (the default): clock, halo, greeting and date light in both
+themes on any wallpaper.
+
+Change-Id: Iec7852bf5549eeb9b9ec54fc4a7aa7dbaabf1508
+---
+ .../android/keyguard/ClockEventController.kt    | 17 +++++++++++------
+ .../keyguard/KeyguardSliceViewController.java   | 14 ++++++++------
+ 2 files changed, 19 insertions(+), 12 deletions(-)
+
+diff --git a/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt b/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt
+index 99a1fb61cca0..6a56222ffd10 100644
+--- a/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt
++++ b/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt
+@@ -268,12 +268,17 @@ constructor(
+ 
+     private fun updateColors() {
+         val isDarkTheme = isDarkTheme()
+-        // BlueOS 0.7.2: «Цвет текста на блокировке» — «По теме» (default): the dark theme keeps the clock (and its
+-        // halo) light like stock Android, only the light theme follows the wallpaper under the clock; «По обоям»:
+-        // always the wallpaper (0.5–0.7.1: a light wallpaper made everything dark even in the dark theme)
+-        if (regionSamplingEnabled && isDarkTheme &&
+-            org.blueos.arona.BlueOSSettings.int(context.contentResolver,
+-                org.blueos.arona.BlueOSSettings.LOCK_TEXT_COLOR) == 0) {
++        // BlueOS 0.7.2: «Цвет текста на блокировке» — «Всегда светлый» (default): the clock (and its halo) light on
++        // any wallpaper in both themes; «По теме»: the dark theme keeps it light like stock Android, only the light
++        // theme follows the wallpaper under the clock; «По обоям»: always the wallpaper (0.5–0.7.1: a light wallpaper
++        // made everything dark even in the dark theme). The theme comes from the system's configuration, like the
++        // greeting's (KeyguardSliceViewController): this context's theme kept saying «dark» after a switch to the
++        // light theme (measured: light digits over a dark greeting).
++        val textColor = org.blueos.arona.BlueOSSettings.int(context.contentResolver,
++            org.blueos.arona.BlueOSSettings.LOCK_TEXT_COLOR)
++        val systemDark = (android.content.res.Resources.getSystem().configuration.uiMode and
++            android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
++        if (regionSamplingEnabled && (textColor == 2 || (textColor == 0 && systemDark))) {
+             clock?.run {
+                 smallClock.updateTheme { it.copy(isDarkTheme = true) }
+                 largeClock.updateTheme { it.copy(isDarkTheme = true) }
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java
+index 1d173ffb6191..37fb00b5c578 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java
+@@ -102,9 +102,10 @@ public class KeyguardSliceViewController extends ViewController<KeyguardSliceVie
+     private kotlin.jvm.functions.Function0<kotlin.Unit> mUnobserveBlueOS;
+ 
+     /**
+-     * BlueOS 0.7.2: «Цвет текста на блокировке» — «По теме» (default): the dark theme keeps the greeting and the
+-     * date light (like the clock, ClockEventController), the light theme follows the wallpaper under them;
+-     * «По обоям»: always the wallpaper (0.5–0.7.1: dark on a light wallpaper even in the dark theme).
++     * BlueOS 0.7.2: «Цвет текста на блокировке» — «Всегда светлый» (default): the greeting and the date light on
++     * any wallpaper in both themes, like the clock (ClockEventController decides the same way); «По теме»: the dark
++     * theme keeps them light, the light theme follows the wallpaper under them; «По обоям»: always the wallpaper
++     * (0.5–0.7.1: dark on a light wallpaper even in the dark theme).
+      */
+     private void applyTextColor() {
+         if (mRegionSampler == null) return;
+@@ -112,10 +113,11 @@ public class KeyguardSliceViewController extends ViewController<KeyguardSliceVie
+         final boolean dark = (android.content.res.Resources.getSystem().getConfiguration().uiMode
+                 & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                 == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+-        final boolean byTheme = org.blueos.arona.BlueOSSettings.getInt(
++        final int textColor = org.blueos.arona.BlueOSSettings.getInt(
+                 mView.getContext().getContentResolver(),
+-                org.blueos.arona.BlueOSSettings.LOCK_TEXT_COLOR) == 0;
+-        mView.setTextColor(dark && byTheme ? Color.WHITE : mRegionSampler.currentForegroundColor());
++                org.blueos.arona.BlueOSSettings.LOCK_TEXT_COLOR);
++        final boolean light = textColor == 2 || (textColor == 0 && dark);
++        mView.setTextColor(light ? Color.WHITE : mRegionSampler.currentForegroundColor());
+     }
+ 
+     Observer<Slice> mObserver = new Observer<Slice>() {

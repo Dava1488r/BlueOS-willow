@@ -1,0 +1,282 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sat, 24 Oct 2026 18:12:28 +0200
+Subject: [PATCH 08/30] BlueOS: SystemUI: Halo lock screen clock
+
+A clock face next to the default one (Wallpaper and style > Clock): Outfit digits, semi-bold on the lock screen and thin on AOD, minutes in the accent color and a halo over the hours. Font family blueos-clock from vendor/blueos/tools/make-fonts.py.
+
+Change-Id: Ic7fde898abd751b4b991905f591b6322f48bd585
+---
+ .../res/values-ru/blueos_strings.xml          |  5 ++
+ .../res/values/blueos_strings.xml             |  6 ++
+ .../shared/clocks/DefaultClockProvider.kt     | 22 ++++++-
+ .../shared/clocks/FlexClockContext.kt         |  8 ++-
+ .../shared/clocks/view/FlexClockTextView.kt   | 15 ++++-
+ .../shared/clocks/view/FlexClockViewGroup.kt  | 64 +++++++++++++++++++
+ 6 files changed, 116 insertions(+), 4 deletions(-)
+ create mode 100644 packages/SystemUI/customization/res/values-ru/blueos_strings.xml
+ create mode 100644 packages/SystemUI/customization/res/values/blueos_strings.xml
+
+diff --git a/packages/SystemUI/customization/res/values-ru/blueos_strings.xml b/packages/SystemUI/customization/res/values-ru/blueos_strings.xml
+new file mode 100644
+index 000000000000..0b7846392341
+--- /dev/null
++++ b/packages/SystemUI/customization/res/values-ru/blueos_strings.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <string name="clock_blueos_halo_name">Ореол</string>
++    <string name="clock_blueos_halo_description">Часы BlueOS с ореолом</string>
++</resources>
+diff --git a/packages/SystemUI/customization/res/values/blueos_strings.xml b/packages/SystemUI/customization/res/values/blueos_strings.xml
+new file mode 100644
+index 000000000000..48ca6c689f14
+--- /dev/null
++++ b/packages/SystemUI/customization/res/values/blueos_strings.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS lock screen clock -->
++<resources>
++    <string name="clock_blueos_halo_name">Halo</string>
++    <string name="clock_blueos_halo_description">BlueOS clock with a halo</string>
++</resources>
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/DefaultClockProvider.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/DefaultClockProvider.kt
+index 379a414206da..313350684032 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/DefaultClockProvider.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/DefaultClockProvider.kt
+@@ -40,6 +40,9 @@ import com.android.systemui.shared.clocks.controller.FlexClockController.Compani
+ private val TAG = DefaultClockProvider::class.simpleName
+ const val DEFAULT_CLOCK_ID = "DEFAULT"
+ const val FLEX_CLOCK_ID = "DIGITAL_CLOCK_FLEX"
++// BlueOS "Halo" clock: the default clock with Outfit digits (the BlueOS logo font),
++// minutes in the accent color and a halo over the hours
++const val BLUEOS_HALO_CLOCK_ID = "BLUEOS_HALO"
+ 
+ /** Provides the default system clock */
+ class DefaultClockProvider
+@@ -60,6 +63,7 @@ constructor(
+         return listOf(
+             ClockMetadata(DEFAULT_CLOCK_ID),
+             ClockMetadata(FLEX_CLOCK_ID, isDeprecated = true, replacementTarget = DEFAULT_CLOCK_ID),
++            ClockMetadata(BLUEOS_HALO_CLOCK_ID),
+         )
+     }
+ 
+@@ -69,11 +73,12 @@ constructor(
+         }
+ 
+         val buffers = messageBuffers ?: ClockMessageBuffers(ClockLogger.DEFAULT_MESSAGE_BUFFER)
++        val isHalo = settings.clockId == BLUEOS_HALO_CLOCK_ID
+         val fontAxes = getDefaultAxes(settings).merge(settings.axes)
+         val clockSettings = settings.copy(axes = ClockAxisStyle(fontAxes))
+         val typefaceCache =
+             TypefaceCache<Unit>(buffers.infraMessageBuffer, NUM_CLOCK_FONT_ANIMATION_STEPS) {
+-                FLEX_TYPEFACE
++                if (isHalo) HALO_TYPEFACE else FLEX_TYPEFACE
+             }
+         return FlexClockController(
+             FlexClockContext(
+@@ -87,6 +92,7 @@ constructor(
+                     timeKeeperFactory(),
+                     isAnimationEnabled = true,
+                 ),
++                isBlueOSHalo = isHalo,
+             ),
+             buffers,
+         )
+@@ -97,6 +103,17 @@ constructor(
+             throw IllegalArgumentException("${settings.clockId} is unsupported by $TAG")
+         }
+ 
++        if (settings.clockId == BLUEOS_HALO_CLOCK_ID) {
++            // fixed weights (Outfit has no width / roundness axes), so no font controls
++            return ClockPickerConfig(
++                BLUEOS_HALO_CLOCK_ID,
++                resources.getString(R.string.clock_blueos_halo_name),
++                resources.getString(R.string.clock_blueos_halo_description),
++                resources.getDrawable(R.drawable.clock_default_thumbnail, null),
++                isReactiveToTone = true,
++            )
++        }
++
+         val fontAxes = getDefaultAxes(settings).merge(settings.axes)
+         return ClockPickerConfig(
+             settings.clockId ?: DEFAULT_CLOCK_ID,
+@@ -125,5 +142,8 @@ constructor(
+             // TODO(b/364680873): Move constant to config_clockFontFamily when shipping
+             Typeface.create("google-sans-flex-clock", Typeface.NORMAL)
+         }
++
++        // "blueos-clock" family = Outfit (vendor/blueos/tools/make-fonts.py)
++        val HALO_TYPEFACE: Typeface by lazy { Typeface.create("blueos-clock", Typeface.NORMAL) }
+     }
+ }
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/FlexClockContext.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/FlexClockContext.kt
+index 2d25817dadca..2d19a6420140 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/FlexClockContext.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/FlexClockContext.kt
+@@ -21,8 +21,14 @@ import com.android.systemui.log.core.MessageBuffer
+ class FlexClockContext(
+     val typefaceCache: TypefaceCache<Unit>,
+     private val innerCtx: ClockContextImpl,
++    /** BlueOS "Halo" clock: Outfit digits, minutes in the accent color, a halo on top */
++    val isBlueOSHalo: Boolean = false,
+ ) : ClockContext by innerCtx {
+     fun copy(messageBuffer: MessageBuffer): FlexClockContext {
+-        return FlexClockContext(typefaceCache, innerCtx.copy(messageBuffer = messageBuffer))
++        return FlexClockContext(
++            typefaceCache,
++            innerCtx.copy(messageBuffer = messageBuffer),
++            isBlueOSHalo,
++        )
+     }
+ }
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt
+index be79342799e9..870d0f73f635 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt
+@@ -28,12 +28,14 @@ import com.android.systemui.shared.clocks.FlexClockContext
+ class FlexClockTextView(clockCtx: FlexClockContext, private val isLargeClock: Boolean) :
+     DigitalClockTextView(clockCtx) {
+     private val isLegacyFlex: Boolean = clockCtx.settings.clockId == FLEX_CLOCK_ID
++    private val isBlueOSHalo: Boolean = clockCtx.isBlueOSHalo
+     override val typefaceCache = clockCtx.typefaceCache.getVariantCache(Unit)
+     override var fontVariations: FontVariations
+ 
+     private val fixedAodAxes: ClockAxisStyle
+         get() {
+             return when {
++                isBlueOSHalo -> fromAxes(HALO_AOD_WEIGHT_AXIS)
+                 !isLegacyFlex -> fromAxes(AOD_WEIGHT_AXIS, WIDTH_AXIS)
+                 isLargeClock -> fromAxes(FLEX_AOD_LARGE_WEIGHT_AXIS, FLEX_AOD_WIDTH_AXIS)
+                 else -> fromAxes(FLEX_AOD_SMALL_WEIGHT_AXIS, FLEX_AOD_WIDTH_AXIS)
+@@ -43,13 +45,18 @@ class FlexClockTextView(clockCtx: FlexClockContext, private val isLargeClock: Bo
+     init {
+         val roundAxis = if (!isLegacyFlex) ROUND_AXIS else FLEX_ROUND_AXIS
+         val lsFontAxes =
+-            if (!isLegacyFlex) fromAxes(LS_WEIGHT_AXIS, WIDTH_AXIS, ROUND_AXIS, SLANT_AXIS)
++            if (isBlueOSHalo) fromAxes(HALO_LS_WEIGHT_AXIS)
++            else if (!isLegacyFlex) fromAxes(LS_WEIGHT_AXIS, WIDTH_AXIS, ROUND_AXIS, SLANT_AXIS)
+             else fromAxes(FLEX_LS_WEIGHT_AXIS, FLEX_LS_WIDTH_AXIS, FLEX_ROUND_AXIS, SLANT_AXIS)
+-        val aodAxes = fixedAodAxes.copyWith(fromAxes(roundAxis, SLANT_AXIS))
++        val aodAxes =
++            if (isBlueOSHalo) fixedAodAxes
++            else fixedAodAxes.copyWith(fromAxes(roundAxis, SLANT_AXIS))
+         fontVariations = buildFontVariations(lsFontAxes, aodAxes)
+     }
+ 
+     override fun updateFontVariations(lsAxes: ClockAxisStyle): FontVariations {
++        // BlueOS Halo: Outfit only has a weight axis, the weights are fixed
++        if (isBlueOSHalo) return fontVariations
+         val aodAxes = lsAxes.copyWith(fixedAodAxes)
+         return buildFontVariations(lsAxes, aodAxes)
+     }
+@@ -82,6 +89,10 @@ class FlexClockTextView(clockCtx: FlexClockContext, private val isLargeClock: Bo
+         private val FLEX_AOD_WIDTH_AXIS = GSFAxes.WIDTH to 43f
+         private val FLEX_ROUND_AXIS = GSFAxes.ROUND to 100f
+ 
++        // BlueOS Halo clock (Outfit): semi-bold on the lock screen, thin on AOD
++        private val HALO_LS_WEIGHT_AXIS = GSFAxes.WEIGHT to 600f
++        private val HALO_AOD_WEIGHT_AXIS = GSFAxes.WEIGHT to 200f
++
+         private fun fromAxes(vararg axes: Pair<AxisDefinition, Float>): ClockAxisStyle {
+             return ClockAxisStyle(axes.associate { (def, value) -> def.tag to value })
+         }
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt
+index cd3f16977011..709a6b0fe382 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt
+@@ -18,6 +18,9 @@ package com.android.systemui.shared.clocks.view
+ 
+ import android.annotation.SuppressLint
+ import android.graphics.Canvas
++import android.graphics.Color
++import android.graphics.Paint
++import android.graphics.RectF
+ import android.icu.text.NumberFormat
+ import android.util.MathUtils.constrainedMap
+ import android.view.View
+@@ -108,8 +111,55 @@ class FlexClockViewGroup(clockCtx: FlexClockContext) :
+                 child.draw(this)
+             }
+         }
++        if (isBlueOSHalo) drawHalo(canvas)
+     }
+ 
++    // BlueOS Halo clock: a tilted halo over the hours, like the one over the "O" of the logo
++    private val isBlueOSHalo = clockCtx.isBlueOSHalo
++    private var isHaloDozing = false
++    private var haloLockscreenColor = Color.WHITE
++    private var haloAodColor = Color.WHITE
++    private val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
++    private val haloOval = RectF()
++
++    private fun isHourView(id: Int) =
++        id == ClockViewIds.HOUR_DIGIT_PAIR ||
++            id == ClockViewIds.HOUR_FIRST_DIGIT ||
++            id == ClockViewIds.HOUR_SECOND_DIGIT
++
++    private fun isMinuteView(id: Int) =
++        id == ClockViewIds.MINUTE_DIGIT_PAIR ||
++            id == ClockViewIds.MINUTE_FIRST_DIGIT ||
++            id == ClockViewIds.MINUTE_SECOND_DIGIT
++
++    private fun drawHalo(canvas: Canvas) {
++        val hours = children.filter { isHourView(it.id) }.toList()
++        if (hours.isEmpty()) return
++        val left = hours.minOf { it.position.x }
++        val right = hours.maxOf { it.position.x + it.measuredSize.x }
++        val top = hours.minOf { it.position.y }
++        val height = hours.maxOf { it.measuredSize.y }
++        val rx = (right - left) * 0.3f
++        if (rx <= 0f || height <= 0f) return
++        val ry = rx * 0.29f
++        val cx = (left + right) / 2f
++        val cy = top + height * 0.12f
++        haloPaint.strokeWidth = rx * if (isHaloDozing) 0.08f else 0.18f
++        haloPaint.color = if (isHaloDozing) haloAodColor else haloLockscreenColor
++        haloOval.set(cx - rx, cy - ry, cx + rx, cy + ry)
++        canvas.withSave {
++            rotate(-10f, cx, cy)
++            drawOval(haloOval, haloPaint)
++        }
++    }
++
++    /** Accent tone that reads on the clock's background (light digits = dark background). */
++    private fun accentFor(digitColor: Int): Int =
++        context.getColor(
++            if (Color.luminance(digitColor) > 0.5f) android.R.color.system_accent1_200
++            else android.R.color.system_accent1_700
++        )
++
+     override fun refreshTime() {
+         logger.refreshTime()
+         children.forEach { textView -> textView.refreshText() }
+@@ -121,6 +171,16 @@ class FlexClockViewGroup(clockCtx: FlexClockContext) :
+     }
+ 
+     override fun updateColor(lockscreenColor: Int, aodColor: Int) {
++        if (isBlueOSHalo) {
++            haloLockscreenColor = accentFor(lockscreenColor)
++            haloAodColor = accentFor(aodColor)
++            children.forEach { view ->
++                if (isMinuteView(view.id)) view.updateColor(haloLockscreenColor, haloAodColor)
++                else view.updateColor(lockscreenColor, aodColor)
++            }
++            invalidate()
++            return
++        }
+         children.forEach { view -> view.updateColor(lockscreenColor, aodColor) }
+         invalidate()
+     }
+@@ -135,6 +195,10 @@ class FlexClockViewGroup(clockCtx: FlexClockContext) :
+     }
+ 
+     override fun animateDoze(isDozing: Boolean, isAnimated: Boolean) {
++        if (isBlueOSHalo && isHaloDozing != isDozing) {
++            isHaloDozing = isDozing
++            invalidate()
++        }
+         fun executeDozeAnimation() {
+             children.forEach { view -> view.animateDoze(isDozing, isAnimated) }
+         }

@@ -1,0 +1,642 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 27 Oct 2026 06:30:26 +0100
+Subject: [PATCH 3/9] =?UTF-8?q?BlueOS:=20Launcher3:=200.7.1=20fixes=20?=
+ =?UTF-8?q?=E2=80=94=20materials=20stay,=20real=20glass=20blur=20+=20blur?=
+ =?UTF-8?q?=20slider,=20Arona=20widget=20pat/gaze/chip/text,=20readable=20?=
+ =?UTF-8?q?new=20widgets,=20no=20reload=20on=20material=20change?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Our RemoteViews widgets are applied synchronously and re-dressed before any frame that lost the
+material (reapply every minute, theme change); the blur is created from the attached window.
+Arona widget: reply chip floats in the drag layer (crashed when it didn't fit the card), patting
+claims the gesture from the pager and cancels the long press, she looks at touches anywhere
+(BaseDragLayer → AronaGaze), text full / status / none, phrases over the day. Weather widget: the
+digits like «Дата» (wght 600, primary). Icons: the theme reloads only when the plate changes.
+
+Change-Id: I93f7a3912686090458f6e77d87e5e8c1c2c1283a
+---
+ res/values-ru/blueos_strings.xml              |  27 ++++
+ res/values/blueos_strings.xml                 |  28 +++++
+ .../launcher3/blueos/BlueOSAronaWidget.kt     | 108 +++++++++++++---
+ .../android/launcher3/blueos/BlueOSIcons.kt   |   7 ++
+ .../launcher3/blueos/BlueOSWeatherWidget.kt   |  16 ++-
+ .../launcher3/blueos/BlueOSWidgetDecorator.kt | 117 ++++++++++++++----
+ .../launcher3/graphics/ThemeManager.kt        |  12 +-
+ .../launcher3/views/BaseDragLayer.java        |   2 +
+ .../widget/LauncherAppWidgetHostView.java     |   3 +
+ 9 files changed, 268 insertions(+), 52 deletions(-)
+
+diff --git a/res/values-ru/blueos_strings.xml b/res/values-ru/blueos_strings.xml
+index c1f646c280..ae73216b2f 100644
+--- a/res/values-ru/blueos_strings.xml
++++ b/res/values-ru/blueos_strings.xml
+@@ -14,4 +14,31 @@
+     <string name="blueos_weather_rain">Дождь</string>
+     <string name="blueos_weather_snow">Снег</string>
+     <string name="blueos_weather_storm">Гроза</string>
++    <!-- 0.7.1: «Разные фразы» of the Arona widget, "status|hint", change every 20 min -->
++    <string-array name="blueos_arona_phr_morning">
++        <item>Доброе утро!|завтрак — это важно</item>
++        <item>Проснулась|готова к работе!</item>
++        <item>Пьёт клубничное молоко|так начинается утро</item>
++    </string-array>
++    <string-array name="blueos_arona_phr_day">
++        <item>Ждёт тебя|погладь меня</item>
++        <item>Разбирает документы|их так много…</item>
++        <item>Готова помочь|нажми на меня</item>
++        <item>Скучает|загляни ко мне</item>
++        <item>Пьёт клубничное молоко|хочешь тоже?</item>
++    </string-array>
++    <string-array name="blueos_arona_phr_evening">
++        <item>Ждёт тебя|как прошёл день?</item>
++        <item>Отдыхает|погладь меня</item>
++        <item>Читает отчёты|почти всё…</item>
++    </string-array>
++    <string-array name="blueos_arona_phr_night">
++        <item>Спит|тсс…</item>
++        <item>Видит сны|…клубничное молоко…</item>
++        <item>Дремлет|не буди её</item>
++    </string-array>
++    <string-array name="blueos_arona_phr_music">
++        <item>Слушает ♪|хорошая песня!</item>
++        <item>Покачивается ♪|не в такт, зато от души</item>
++    </string-array>
+ </resources>
+diff --git a/res/values/blueos_strings.xml b/res/values/blueos_strings.xml
+index d72c27a691..0dba839c5c 100644
+--- a/res/values/blueos_strings.xml
++++ b/res/values/blueos_strings.xml
+@@ -17,4 +17,32 @@
+     <string name="blueos_weather_storm">Thunderstorm</string>
+     <item type="id" name="blueos_original_bg" />
+     <item type="id" name="blueos_decorator" />
++    <item type="id" name="blueos_applied_material" />
++    <!-- 0.7.1: «Разные фразы» of the Arona widget, "status|hint", change every 20 min -->
++    <string-array name="blueos_arona_phr_morning">
++        <item>Good morning!|breakfast matters</item>
++        <item>Awake|ready to work!</item>
++        <item>Strawberry milk time|that\'s how mornings start</item>
++    </string-array>
++    <string-array name="blueos_arona_phr_day">
++        <item>Waiting for you|pat me</item>
++        <item>Sorting documents|so many of them…</item>
++        <item>Ready to help|tap me</item>
++        <item>Missing you|come say hi</item>
++        <item>Drinking strawberry milk|want some too?</item>
++    </string-array>
++    <string-array name="blueos_arona_phr_evening">
++        <item>Waiting for you|how was your day?</item>
++        <item>Resting|pat me</item>
++        <item>Reading reports|almost done…</item>
++    </string-array>
++    <string-array name="blueos_arona_phr_night">
++        <item>Asleep|shh…</item>
++        <item>Dreaming|…strawberry milk…</item>
++        <item>Dozing|don\'t wake her</item>
++    </string-array>
++    <string-array name="blueos_arona_phr_music">
++        <item>Listening ♪|nice song!</item>
++        <item>Swaying ♪|off the beat, but with feeling</item>
++    </string-array>
+ </resources>
+diff --git a/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt b/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt
+index f335e4c001..b1bd5df856 100644
+--- a/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt
++++ b/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt
+@@ -4,6 +4,7 @@ import android.appwidget.AppWidgetHostView
+ import android.appwidget.AppWidgetProviderInfo
+ import android.content.Context
+ import android.graphics.Outline
++import android.graphics.RectF
+ import android.graphics.Typeface
+ import android.media.AudioManager
+ import android.os.Handler
+@@ -13,15 +14,18 @@ import android.view.Choreographer
+ import android.view.Gravity
+ import android.view.MotionEvent
+ import android.view.View
++import android.view.ViewGroup
+ import android.view.ViewOutlineProvider
+ import android.widget.FrameLayout
+ import android.widget.LinearLayout
+ import android.widget.TextView
+ import com.android.launcher3.R
++import com.android.launcher3.views.ActivityContext
+ import com.android.launcher3.widget.LauncherAppWidgetHostView
+ import com.android.launcher3.widget.LauncherAppWidgetProviderInfo
+ import com.android.launcher3.widget.custom.CustomWidget
+ import java.util.Calendar
++import org.blueos.arona.AronaGaze
+ import org.blueos.arona.AronaReplies
+ import org.blueos.arona.AronaTouch
+ import org.blueos.arona.AronaView
+@@ -50,7 +54,12 @@ object BlueOSAronaWidget : CustomWidget {
+         BlueOSAronaWidgetView(context)
+ }
+ 
+-/** A card like every BlueOS widget (8 dp margin, the shared material) with Arona and her status. */
++/**
++ * A card like every BlueOS widget (8 dp margin, the shared material) with Arona and her status.
++ * 0.7.1: her reply floats above the card (in the drag layer — it used to be cut by the card and crashed the
++ * launcher when it didn't fit), she can be patted (the pager / long press no longer take the finger), she looks
++ * where Sensei touches the home screen; the text can be full / status only / none, with phrases over the day.
++ */
+ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(context),
+     BlueOSMotion.Listener, Choreographer.FrameCallback {
+     private val cr = context.contentResolver
+@@ -60,12 +69,20 @@ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(contex
+     private val content = FrameLayout(context)
+     private val arona = AronaView(context).apply { viewport = AronaView.UPPER_BODY }
+     private val chip = ReplyChip(context)
+-    private val title = text(11f, false)
++    private val texts = LinearLayout(context)
++    private val title = text(12f, false)
+     private val status = text(17f, true)
+-    private val sub = text(11f, false)
+-    private val touch = AronaTouch(arona, this, chip, isNight = ::night)
++    private val sub = text(12f, false)
++    private val dragLayer: ViewGroup?
++        get() = runCatching { val ac: ActivityContext = ActivityContext.lookupContext(context); ac.dragLayer }.getOrNull()
++    private val touch = AronaTouch(arona, { chip.parent as? View ?: this }, chip, avoid = { listOf(cardRect()) }, isNight = ::night,
++        // patting: the home screen pager / swipes must not steal the finger (the widget itself still sees it)
++        grab = { on -> parent?.requestDisallowInterceptTouchEvent(on) },
++        dragged = { cancelLongPress() },
++        outside = ::cardRect)
+     private var motion: (() -> Unit)? = null
+     private var unobserve: (() -> Unit)? = null
++    private var unGaze: (() -> Unit)? = null
+ 
+     private fun text(sp: Float, bold: Boolean) = TextView(context).apply {
+         setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
+@@ -82,16 +99,13 @@ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(contex
+         }
+         addView(card, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+         card.addView(content, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+-        val texts = LinearLayout(context).apply {
+-            orientation = LinearLayout.VERTICAL
+-            gravity = Gravity.CENTER_VERTICAL
+-            addView(title); addView(status); addView(sub)
+-        }
++        texts.orientation = LinearLayout.VERTICAL
++        texts.gravity = Gravity.CENTER_VERTICAL
++        texts.addView(title); texts.addView(status); texts.addView(sub)
+         content.addView(texts, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.MATCH_PARENT).apply {
+             marginStart = (16 * dp).toInt()
+         })
+         content.addView(arona, FrameLayout.LayoutParams(0, 0, Gravity.END or Gravity.BOTTOM).apply { marginEnd = (6 * dp).toInt() })
+-        addView(chip, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+         content.setOnTouchListener { _, e -> onAronaTouch(e) }
+         title.text = context.getString(R.string.blueos_widget_arona)
+         arona.tilt = { if (K.on(cr, K.HOME_TILT) && K.on(cr, K.TILT_ARONA)) BlueOSMotion.tilt else null }
+@@ -106,6 +120,16 @@ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(contex
+         return handled
+     }
+ 
++    /** The card in the chip host's coordinates (the drag layer): the chip goes above or below it. */
++    private fun cardRect(): RectF {
++        val h = chip.parent as? View ?: return RectF()
++        val a = IntArray(2).also { card.getLocationInWindow(it) }
++        val b = IntArray(2).also { h.getLocationInWindow(it) }
++        val x = (a[0] - b[0]).toFloat()
++        val y = (a[1] - b[1]).toFloat()
++        return RectF(x, y, x + card.width, y + card.height)
++    }
++
+     private fun night(): Boolean {
+         if (!K.on(cr, K.ARONA_SLEEP)) return false
+         val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+@@ -113,13 +137,28 @@ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(contex
+     }
+ 
+     private fun applyColors() {
+-        card.background = BlueOSMaterial.background(card, K.int(cr, K.WIDGET_MATERIAL))
+-        title.setTextColor(BlueOSColors.onSurfaceVariant(context))
++        // the blur needs the window: until attached, a plain card
++        card.background = BlueOSMaterial.background(this, K.int(cr, K.WIDGET_MATERIAL))
++            ?: BlueOSMaterial.background(card, 2)
++        // like the other BlueOS widgets: one accent (her name), the status in on-surface, the hint dimmer
++        title.setTextColor(BlueOSColors.primary(context))
+         status.setTextColor(BlueOSColors.onSurface(context))
+         sub.setTextColor(BlueOSColors.onSurfaceVariant(context))
+         chip.applyColors()
+     }
+ 
++    /** «Текст в виджете»: 0 name + status + hint, 1 status only, 2 no text (Arona alone, in the middle). */
++    private fun applyLayout() {
++        val mode = K.int(cr, K.ARONA_WIDGET_TEXT)
++        texts.visibility = if (mode == 2) GONE else VISIBLE
++        title.visibility = if (mode == 0) VISIBLE else GONE
++        (arona.layoutParams as FrameLayout.LayoutParams).let {
++            val g = if (mode == 2) Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM else Gravity.END or Gravity.BOTTOM
++            if (it.gravity != g) { it.gravity = g; arona.layoutParams = it }
++        }
++        tick.run()
++    }
++
+     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+         super.onSizeChanged(w, h, oldw, oldh)
+         post {
+@@ -129,37 +168,69 @@ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(contex
+                 height = (ch * 0.96f).toInt()
+                 width = (height * vp.w / vp.h).toInt()
+             }
++            // the text never runs under her
++            texts.layoutParams = (texts.layoutParams as FrameLayout.LayoutParams).apply {
++                width = (card.width - arona.layoutParams.width - (28 * dp).toInt()).coerceAtLeast(0)
++            }
+         }
+     }
+ 
+     override fun onAttachedToWindow() {
+         super.onAttachedToWindow()
+         applyColors()                                          // glass needs the window for the blur
+-        unobserve = K.observe(context, listOf(K.WIDGET_MATERIAL, K.ARONA_SLEEP, "blueos_widget_transparency")) { applyColors() }
++        dragLayer?.let { if (chip.parent == null) it.addView(chip) }
++        unobserve = K.observe(context, listOf(K.WIDGET_MATERIAL, K.WIDGET_BLUR, K.ARONA_SLEEP, K.ARONA_WIDGET_TEXT,
++            K.ARONA_WIDGET_PHRASES, "blueos_widget_transparency")) { applyColors(); applyLayout() }
++        unGaze = AronaGaze.add { a, x, y -> if (isShown) touch.gaze(a, x, y) }
+         motion = BlueOSMotion.acquire(context, this)
+         Choreographer.getInstance().postFrameCallback(this)
+-        tick.run()
++        applyLayout()
+     }
+ 
+     override fun onDetachedFromWindow() {
+         super.onDetachedFromWindow()
+         unobserve?.invoke(); unobserve = null
++        unGaze?.invoke(); unGaze = null
+         motion?.invoke(); motion = null
++        (chip.parent as? ViewGroup)?.removeView(chip)
+         Choreographer.getInstance().removeFrameCallback(this)
+         handler.removeCallbacks(tick)
+     }
+ 
++    /** One status: from the phrases of the time of day (changes every 20 min), or the three fixed ones. */
++    private fun phrase(asleep: Boolean, playing: Boolean): Pair<String, String> {
++        if (!K.on(cr, K.ARONA_WIDGET_PHRASES)) return when {
++            asleep -> context.getString(R.string.blueos_arona_sleeping) to context.getString(R.string.blueos_arona_shh)
++            playing -> context.getString(R.string.blueos_arona_listening) to ""
++            else -> context.getString(R.string.blueos_arona_waiting) to context.getString(R.string.blueos_arona_pat_me)
++        }
++        val c = Calendar.getInstance()
++        val h = c.get(Calendar.HOUR_OF_DAY)
++        val pool = when {
++            asleep -> R.array.blueos_arona_phr_night
++            playing -> R.array.blueos_arona_phr_music
++            h in 7..10 -> R.array.blueos_arona_phr_morning
++            h in 11..17 -> R.array.blueos_arona_phr_day
++            else -> R.array.blueos_arona_phr_evening
++        }
++        val all = resources.getStringArray(pool)
++        val line = all[(h * 3 + c.get(Calendar.MINUTE) / 20) % all.size].split('|')
++        return line[0] to line.getOrElse(1) { "" }
++    }
++
+     /** Status once a second: asleep at night, listening while music plays (she sways, not on the beat). */
+     private val tick = object : Runnable {
+         override fun run() {
++            handler.removeCallbacks(this)
+             val asleep = night()
+             if (arona.sleeping != asleep) arona.setSleeping(asleep)
+             val playing = context.getSystemService(AudioManager::class.java).isMusicActive
+             arona.music = playing && K.on(cr, K.LIVE_WIDGETS) && K.on(cr, K.ARONA_MUSIC)
+-            status.setText(when { asleep -> R.string.blueos_arona_sleeping; playing -> R.string.blueos_arona_listening; else -> R.string.blueos_arona_waiting })
+-            sub.text = when { asleep -> context.getString(R.string.blueos_arona_shh); playing -> ""; else -> context.getString(R.string.blueos_arona_pat_me) }
+-            sub.visibility = if (sub.text.isNullOrEmpty()) GONE else VISIBLE
+-            handler.postDelayed(this, 1000)
++            val (s, hint) = phrase(asleep, playing)
++            if (status.text != s) status.text = s
++            if (sub.text != hint) sub.text = hint
++            sub.visibility = if (hint.isEmpty() || K.int(cr, K.ARONA_WIDGET_TEXT) != 0) GONE else VISIBLE
++            if (isAttachedToWindow) handler.postDelayed(this, 1000)
+         }
+     }
+ 
+@@ -180,5 +251,6 @@ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(contex
+     override fun onFall() {
+         if (!K.on(cr, K.FALL_ARONA) || !isShown) return
+         arona.startle()
++        handler.postDelayed({ touch.say(AronaReplies.Kind.FALL) }, 250)
+     }
+ }
+diff --git a/src/com/android/launcher3/blueos/BlueOSIcons.kt b/src/com/android/launcher3/blueos/BlueOSIcons.kt
+index e1c9c116a5..895f423c96 100644
+--- a/src/com/android/launcher3/blueos/BlueOSIcons.kt
++++ b/src/com/android/launcher3/blueos/BlueOSIcons.kt
+@@ -26,4 +26,11 @@ object BlueOSIcons {
+     fun mask(context: Context): String? = roundness(context).let { if (it >= 100) null else roundedPath(it) }
+ 
+     val KEYS = listOf(K.ICON_ROUNDNESS, K.ICON_MATERIAL, K.WIDGET_MATERIAL)
++
++    /** The plate material the icons really use: their own, or the widgets' («как у виджетов», -1). */
++    fun plate(context: Context): Int {
++        val cr = context.contentResolver
++        val m = K.int(cr, K.ICON_MATERIAL)
++        return if (m == -1) K.int(cr, K.WIDGET_MATERIAL) else m
++    }
+ }
+diff --git a/src/com/android/launcher3/blueos/BlueOSWeatherWidget.kt b/src/com/android/launcher3/blueos/BlueOSWeatherWidget.kt
+index 6feb063fc5..3f851885db 100644
+--- a/src/com/android/launcher3/blueos/BlueOSWeatherWidget.kt
++++ b/src/com/android/launcher3/blueos/BlueOSWeatherWidget.kt
+@@ -73,8 +73,11 @@ class BlueOSWeatherWidgetView(context: Context) : LauncherAppWidgetHostView(cont
+             override fun getOutline(v: View, o: Outline) = o.setRoundRect(0, 0, v.width, v.height, BlueOSColors.radius(context))
+         }
+         addView(card, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+-        big.setTextSize(TypedValue.COMPLEX_UNIT_SP, 44f)
+-        big.typeface = Typeface.create("blueos-clock", Typeface.BOLD)   // the digits font of the BlueOS widgets
++        // 0.7.1: exactly like «27» in «Дата»: the digits font at weight 600, 40 sp (Typeface.BOLD of the variable
++        // font gave its thinnest weight — the number was barely visible)
++        big.setTextSize(TypedValue.COMPLEX_UNIT_SP, 40f)
++        big.typeface = Typeface.create("blueos-clock", Typeface.NORMAL)
++        big.fontVariationSettings = "'wght' 600"
+         big.includeFontPadding = false
+         val captions = LinearLayout(context).apply {
+             orientation = LinearLayout.VERTICAL
+@@ -101,10 +104,12 @@ class BlueOSWeatherWidgetView(context: Context) : LauncherAppWidgetHostView(cont
+     }
+ 
+     private fun bind() {
+-        card.background = BlueOSMaterial.background(card, K.int(cr, K.WIDGET_MATERIAL))
++        // the blur needs the window: until attached, a plain card
++        card.background = BlueOSMaterial.background(this, K.int(cr, K.WIDGET_MATERIAL)) ?: BlueOSMaterial.background(card, 2)
+         val onS = BlueOSColors.onSurface(context)
+         val variant = BlueOSColors.onSurfaceVariant(context)
+-        big.setTextColor(onS); name.setTextColor(onS); hiLo.setTextColor(variant); feels.setTextColor(variant)
++        // one accent, like «Дата»: the big value
++        big.setTextColor(BlueOSColors.primary(context)); name.setTextColor(onS); hiLo.setTextColor(variant); feels.setTextColor(variant)
+         icon.color = onS
+         icon.live = K.on(cr, K.LIVE_WIDGETS) && K.on(cr, K.WEATHER_LIVE)
+         val w = Weather.read(cr)
+@@ -129,7 +134,8 @@ class BlueOSWeatherWidgetView(context: Context) : LauncherAppWidgetHostView(cont
+     override fun onAttachedToWindow() {
+         super.onAttachedToWindow()
+         bind()
+-        unobserve = K.observe(context, listOf(K.WEATHER, K.WEATHER_F, K.WEATHER_LIVE, K.LIVE_WIDGETS, K.WIDGET_MATERIAL, "blueos_widget_transparency")) { bind() }
++        unobserve = K.observe(context, listOf(K.WEATHER, K.WEATHER_F, K.WEATHER_LIVE, K.LIVE_WIDGETS, K.WIDGET_MATERIAL,
++            K.WIDGET_BLUR, "blueos_widget_transparency")) { bind() }
+         motion = BlueOSMotion.acquire(context)
+         Choreographer.getInstance().postFrameCallback(this)
+     }
+diff --git a/src/com/android/launcher3/blueos/BlueOSWidgetDecorator.kt b/src/com/android/launcher3/blueos/BlueOSWidgetDecorator.kt
+index cce5807b74..4a91b82965 100644
+--- a/src/com/android/launcher3/blueos/BlueOSWidgetDecorator.kt
++++ b/src/com/android/launcher3/blueos/BlueOSWidgetDecorator.kt
+@@ -15,6 +15,7 @@ import android.graphics.RadialGradient
+ import android.graphics.Rect
+ import android.graphics.RectF
+ import android.graphics.Shader
++import android.graphics.drawable.ColorDrawable
+ import android.graphics.drawable.Drawable
+ import android.graphics.drawable.GradientDrawable
+ import android.graphics.drawable.LayerDrawable
+@@ -26,6 +27,7 @@ import android.view.Choreographer
+ import android.view.MotionEvent
+ import android.view.View
+ import android.view.ViewGroup
++import android.view.ViewTreeObserver
+ import android.widget.FrameLayout
+ import android.widget.ImageView
+ import android.widget.TextView
+@@ -44,6 +46,8 @@ object BlueOSColors {
+     fun onSurface(c: Context) = c.getColor(if (dark(c)) android.R.color.system_on_surface_dark else android.R.color.system_on_surface_light)
+     fun onSurfaceVariant(c: Context) = c.getColor(if (dark(c)) android.R.color.system_on_surface_variant_dark else android.R.color.system_on_surface_variant_light)
+     fun accent(c: Context) = c.getColor(if (dark(c)) android.R.color.system_accent1_200 else android.R.color.system_accent1_600)
++    /** The big value of the RemoteViews widgets («27» in «Дата»): @color/blueos_widget_primary there. */
++    fun primary(c: Context) = c.getColor(if (dark(c)) android.R.color.system_primary_dark else android.R.color.system_primary_light)
+     fun withAlpha(color: Int, a: Float) = (color and 0x00ffffff) or ((a.coerceIn(0f, 1f) * 255).toInt() shl 24)
+     fun mix(a: Int, b: Int, f: Float) = Color.rgb(
+         (Color.red(a) * f + Color.red(b) * (1 - f)).toInt(),
+@@ -51,41 +55,65 @@ object BlueOSColors {
+         (Color.blue(a) * f + Color.blue(b) * (1 - f)).toInt())
+     /** The widgets' transparency slider (Обои и стиль → Палитра), 0…1 opacity of the card. */
+     fun cardOpacity(c: Context) = 1f - Settings.Secure.getInt(c.contentResolver, "blueos_widget_transparency", 15) / 100f
++    /** The card's image alpha exactly as the widget providers set it (BlueOSWidgetStyle.cardAlpha). */
++    fun cardAlpha(c: Context) =
++        (255 * (100 - Settings.Secure.getInt(c.contentResolver, "blueos_widget_transparency", 10).coerceIn(0, 100)) + 50) / 100
+     fun radius(c: Context) = c.resources.getDimension(android.R.dimen.system_app_widget_background_radius)
+ }
+ 
+-/** The five card materials: 0 matte (as before), 1 glass, 2 solid, 3 outline, 4 accent. */
++/**
++ * The five card materials: 0 matte (as before), 1 glass, 2 solid, 3 outline, 4 accent — each over a blur of the
++ * wallpaper («Размытие под виджетами», 0.7.1; not under solid). 0.7.1: glass and outline keep a tinted fill of the
++ * card colour, so the text stays readable on any wallpaper (light text over a light wallpaper was invisible).
++ */
+ object BlueOSMaterial {
+-    /** A drawable for a card of [material] (glass needs the view, for the cross-window blur of the wallpaper). */
+-    fun background(view: View, material: Int): Drawable {
+-        val c = view.context
++    /** Blur radius in px; glass is always a little blurred. */
++    fun blurRadius(c: Context, material: Int): Float {
++        val p = K.int(c.contentResolver, K.WIDGET_BLUR).coerceIn(0, 100)
++        return (if (material == 1) maxOf(p, 15) else p) / 100f * 50f * c.resources.displayMetrics.density
++    }
++
++    /**
++     * A drawable for a card of [material]. [root] = any view of the window: the blur needs its ViewRootImpl, so
++     * this returns null until [root] is attached — call again from onAttachedToWindow / a pre-draw.
++     */
++    fun background(root: View, material: Int): Drawable? {
++        val c = root.context
+         val r = BlueOSColors.radius(c)
+         val onS = BlueOSColors.onSurface(c)
++        val card = BlueOSColors.card(c)
+         fun shape(fill: Int, stroke: Int = 0, strokeW: Float = 0f) = GradientDrawable().apply {
+             cornerRadius = r
+             setColor(fill)
+             if (stroke != 0) setStroke(strokeW.toInt().coerceAtLeast(1), stroke)
+         }
+         val dp = c.resources.displayMetrics.density
+-        return when (material) {
+-            1 -> {
+-                val edge = shape(BlueOSColors.withAlpha(onS, 0.07f), BlueOSColors.withAlpha(onS, 0.14f), dp)
+-                blur(view, r)?.let { LayerDrawable(arrayOf(it, edge)) } ?: shape(BlueOSColors.withAlpha(BlueOSColors.card(c), 0.55f), BlueOSColors.withAlpha(onS, 0.14f), dp)
+-            }
+-            2 -> shape(BlueOSColors.card(c))
+-            3 -> shape(BlueOSColors.withAlpha(Color.BLACK, 0.15f), BlueOSColors.withAlpha(onS, 0.24f), 1.5f * dp)
+-            4 -> shape(BlueOSColors.withAlpha(BlueOSColors.mix(BlueOSColors.accent(c), BlueOSColors.card(c), 0.26f), BlueOSColors.cardOpacity(c)))
+-            else -> shape(BlueOSColors.withAlpha(BlueOSColors.card(c), BlueOSColors.cardOpacity(c)))
++        val content = when (material) {
++            1 -> shape(BlueOSColors.withAlpha(card, 0.55f), BlueOSColors.withAlpha(onS, 0.16f), dp)
++            2 -> return shape(card)
++            3 -> shape(BlueOSColors.withAlpha(card, 0.45f), BlueOSColors.withAlpha(onS, 0.32f), 1.5f * dp)
++            4 -> shape(BlueOSColors.withAlpha(BlueOSColors.mix(BlueOSColors.accent(c), card, 0.26f), BlueOSColors.cardOpacity(c)))
++            else -> shape(BlueOSColors.withAlpha(card, BlueOSColors.cardOpacity(c)))
+         }
++        return withBlur(root, content, blurRadius(c, material))
++    }
++
++    /** [content] over the blurred wallpaper (or alone without blur); null = the window isn't there yet. */
++    fun withBlur(root: View, content: Drawable?, radiusPx: Float): Drawable? {
++        if (radiusPx < 1f) return content ?: ColorDrawable(Color.TRANSPARENT)
++        if (!root.isAttachedToWindow) return null
++        val blur = blur(root, BlueOSColors.radius(root.context), radiusPx)
++            ?: return content ?: ColorDrawable(Color.TRANSPARENT)                // no blur here (battery saver…)
++        return if (content == null) blur else LayerDrawable(arrayOf(blur, content))
+     }
+ 
+     /** Cross-window blur of what is behind the launcher window (the wallpaper); null if unavailable. */
+-    private fun blur(view: View, r: Float): Drawable? = try {
++    private fun blur(view: View, r: Float, radiusPx: Float): Drawable? = try {
+         val root = View::class.java.getMethod("getViewRootImpl").invoke(view) ?: return null
+         val d = root.javaClass.getMethod("createBackgroundBlurDrawable").invoke(root) as Drawable
+-        d.javaClass.getMethod("setBlurRadius", Int::class.javaPrimitiveType).invoke(d, (30 * view.resources.displayMetrics.density).toInt())
++        d.javaClass.getMethod("setBlurRadius", Int::class.javaPrimitiveType).invoke(d, radiusPx.toInt())
+         d.javaClass.getMethod("setCornerRadius", Float::class.javaPrimitiveType).invoke(d, r)
+-        d.javaClass.getMethod("setColor", Int::class.javaPrimitiveType).invoke(d, BlueOSColors.withAlpha(BlueOSColors.card(view.context), 0.3f))
++        d.javaClass.getMethod("setColor", Int::class.javaPrimitiveType).invoke(d, Color.TRANSPARENT)
+         d
+     } catch (t: Throwable) {
+         null
+@@ -139,7 +167,9 @@ class BlueOSWidgetDecorator(private val host: AppWidgetHostView) : Choreographer
+ 
+     private fun id(name: String): Int {
+         val p = pkg ?: return 0
+-        return try { ctx.packageManager.getResourcesForApplication(p).getIdentifier(name, "id", p) } catch (e: Exception) { 0 }
++        return ids.getOrPut("$p/$name") {
++            try { ctx.packageManager.getResourcesForApplication(p).getIdentifier(name, "id", p) } catch (e: Exception) { 0 }
++        }
+     }
+     private fun <T : View> find(name: String): T? = id(name).takeIf { it != 0 }?.let { host.findViewById<T>(it) }
+     private fun findAll(name: String): List<View> {
+@@ -170,23 +200,49 @@ class BlueOSWidgetDecorator(private val host: AppWidgetHostView) : Choreographer
+         updateRunning()
+     }
+ 
++    /** What the cards were last dressed for; a card without this tag (new views, a reapply) gets dressed again. */
++    private var signature = ""
++
+     private fun applyMaterial() {
+         val m = K.int(cr, K.WIDGET_MATERIAL)
++        signature = "$m|${K.int(cr, K.WIDGET_BLUR)}|${BlueOSColors.cardOpacity(ctx)}|${BlueOSColors.dark(ctx)}"
+         for (card in cards) {
+             val iv = card as? ImageView ?: continue
++            if (iv.getTag(TAG_ORIGINAL) == null) iv.setTag(TAG_ORIGINAL, iv.background ?: NO_BG)
++            val original = iv.getTag(TAG_ORIGINAL) as? Drawable
++            // matte = exactly as the widget itself draws its card (its alpha = the transparency slider), blurred under it
++            val bg = if (m == 0) BlueOSMaterial.withBlur(host, original, BlueOSMaterial.blurRadius(ctx, 0))
++                     else BlueOSMaterial.background(host, m)
++            if (bg == null) { iv.setTag(TAG_APPLIED, null); continue }     // window not there yet: the pre-draw retries
+             if (m == 0) {
+-                // matte = exactly as the widget itself draws it
+-                (iv.getTag(TAG_ORIGINAL) as? Drawable)?.let { iv.background = it; iv.setTag(TAG_ORIGINAL, null) }
+-                iv.imageAlpha = (BlueOSColors.cardOpacity(ctx) * 255).toInt()   // the transparency slider
+-                continue
++                if (iv.imageAlpha == 0) iv.imageAlpha = BlueOSColors.cardAlpha(ctx)
++            } else {
++                iv.imageAlpha = 0                                   // the widget's own card shape is replaced
++                iv.alpha = 1f
+             }
+-            if (iv.getTag(TAG_ORIGINAL) == null) iv.setTag(TAG_ORIGINAL, iv.background ?: GradientDrawable())
+-            iv.imageAlpha = 0                                   // the widget's own card shape is replaced
+-            iv.alpha = 1f
+-            iv.background = BlueOSMaterial.background(iv, m)
++            iv.background = bg
++            iv.setTag(TAG_APPLIED, signature)
+         }
+     }
+ 
++    /**
++     * 0.7.1: anything that undid the material or the live icons — a reapply of the RemoteViews (every minute, a
++     * theme change), new views, a window that wasn't there yet for the blur. Cheap, checked before every frame.
++     */
++    private fun stale(): Boolean {
++        if (cards.any { !it.isAttachedToWindow } || weatherIcons.any { !it.first.isAttachedToWindow }) return true
++        val m0 = signature.substringBefore('|') != "0"
++        return cards.any { c ->
++            val iv = c as? ImageView ?: return@any false
++            iv.getTag(TAG_APPLIED) != signature || (m0 && iv.imageAlpha != 0)
++        } || weatherIcons.any { (src, _) -> (src as? ImageView)?.let { it.imageAlpha != 0 } == true }
++    }
++
++    private val preDraw = ViewTreeObserver.OnPreDrawListener {
++        if (isOurs && stale()) onUpdated()
++        true
++    }
++
+     /** Live weather icons over the widgets' static ones (Сводка / Дата). */
+     private fun attachWeatherIcons() {
+         weatherIcons.forEach { (_, w) -> host.removeView(w) }
+@@ -218,10 +274,13 @@ class BlueOSWidgetDecorator(private val host: AppWidgetHostView) : Choreographer
+     fun onAttached(on: Boolean) {
+         attached = on
+         if (on && unobserve == null) {
+-            unobserve = K.observe(ctx, listOf(K.LIVE_WIDGETS, K.LIVE_SAVER, K.WIDGET_MATERIAL, K.WEATHER, K.WEATHER_LIVE,
+-                "blueos_widget_transparency")) { if (isOurs) onUpdated() }
++            unobserve = K.observe(ctx, listOf(K.LIVE_WIDGETS, K.LIVE_SAVER, K.WIDGET_MATERIAL, K.WIDGET_BLUR, K.WEATHER,
++                K.WEATHER_LIVE, "blueos_widget_transparency")) { if (isOurs) onUpdated() }
++            host.viewTreeObserver.addOnPreDrawListener(preDraw)
++            if (isOurs) onUpdated()                             // the blur needed the window
+         } else if (!on) {
+             unobserve?.invoke(); unobserve = null
++            host.viewTreeObserver.removeOnPreDrawListener(preDraw)
+         }
+         updateRunning()
+     }
+@@ -398,5 +457,9 @@ class BlueOSWidgetDecorator(private val host: AppWidgetHostView) : Choreographer
+ 
+     companion object {
+         private val TAG_ORIGINAL = com.android.launcher3.R.id.blueos_original_bg
++        // the decorator's own bookkeeping on the card views (any unique key works; a resource id is safe)
++        private val TAG_APPLIED = com.android.launcher3.R.id.blueos_applied_material
++        private val NO_BG = Any()
++        private val ids = HashMap<String, Int>()
+     }
+ }
+diff --git a/src/com/android/launcher3/graphics/ThemeManager.kt b/src/com/android/launcher3/graphics/ThemeManager.kt
+index eb0ad9163b..4c3488981d 100644
+--- a/src/com/android/launcher3/graphics/ThemeManager.kt
++++ b/src/com/android/launcher3/graphics/ThemeManager.kt
+@@ -105,11 +105,19 @@ constructor(
+         }
+         prefs.addListener(prefListener, PREF_ICON_SHAPE)
+         lifecycle.addCloseable(themePreference.forEach(mainExecutor) { verifyIconState() })
+-        // BlueOS 0.7: icon roundness / plate material changed in Обои и стиль → redraw the icons
++        // BlueOS 0.7: icon roundness / plate material changed in Обои и стиль → redraw the icons.
++        // 0.7.1: reload only when the plate really changed — a widget material change used to reload the whole
++        // home screen (the "blink") even with the icons' own material
++        fun blueOSIcons() = com.android.launcher3.blueos.BlueOSIcons.let { "${it.plate(context)}|${it.roundness(context)}" }
++        var blueOSPlate = blueOSIcons()
+         val unobserveBlueOS = org.blueos.arona.BlueOSSettings.observe(
+             context, com.android.launcher3.blueos.BlueOSIcons.KEYS) {
+             verifyIconState()
+-            listeners.forEach { it.onThemeChanged() }
++            val plate = blueOSIcons()
++            if (plate != blueOSPlate) {
++                blueOSPlate = plate
++                listeners.forEach { it.onThemeChanged() }
++            }
+         }
+         lifecycle.addCloseable { unobserveBlueOS() }
+         lifecycle.addCloseable {
+diff --git a/src/com/android/launcher3/views/BaseDragLayer.java b/src/com/android/launcher3/views/BaseDragLayer.java
+index e354bfd797..6c12534592 100644
+--- a/src/com/android/launcher3/views/BaseDragLayer.java
++++ b/src/com/android/launcher3/views/BaseDragLayer.java
+@@ -302,6 +302,8 @@ public abstract class BaseDragLayer<T extends Context & ActivityContext>
+ 
+     @Override
+     public boolean dispatchTouchEvent(MotionEvent ev) {
++        // BlueOS 0.7.1: the Arona widget looks where Sensei touches (observed, never consumed)
++        org.blueos.arona.AronaGaze.dispatch(ev);
+         switch (ev.getAction()) {
+             case ACTION_DOWN: {
+                 if ((mTouchDispatchState & TOUCH_DISPATCHING_TO_VIEW_IN_PROGRESS) != 0) {
+diff --git a/src/com/android/launcher3/widget/LauncherAppWidgetHostView.java b/src/com/android/launcher3/widget/LauncherAppWidgetHostView.java
+index c5c529b54a..4f5ddabb95 100644
+--- a/src/com/android/launcher3/widget/LauncherAppWidgetHostView.java
++++ b/src/com/android/launcher3/widget/LauncherAppWidgetHostView.java
+@@ -168,6 +168,9 @@ public class LauncherAppWidgetHostView extends BaseLauncherAppWidgetHostView
+             return;
+         }
+ 
++        // BlueOS 0.7.1: our own widgets are applied right here (not asynchronously), so the material is put
++        // on the views that are really shown (it used to land on the old ones and vanish a moment later)
++        if (mBlueOS.isOurs()) setExecutor(null);
+         super.updateAppWidget(remoteViews);
+         mBlueOS.onUpdated();
+ 

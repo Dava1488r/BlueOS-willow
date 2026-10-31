@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- BlueOS framework config -->
+<resources>
+    <!-- Default system colors (Android 17 ThemeManager): the BlueOS brand color "Голубой BA"
+         as a preset instead of LineageOS' teal (#63a3ad). Format: hardware color|style|source -->
+    <string-array name="theming_defaults" translatable="false">
+        <item>*|TONAL_SPOT|#128AFA</item>
+    </string-array>
+</resources>

@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sun, 25 Oct 2026 00:06:19 +0200
+Subject: [PATCH 12/30] BlueOS: SystemUI: Tell the Clock app about wallpaper
+ color changes
+
+The BlueOS halo clock widget (DeskClock) has no card and picks dark or light
+text from the home wallpaper; an explicit broadcast reaches its manifest
+receiver even when the app isn't running.
+
+Change-Id: I711a538d2302f8ed891943ac517cd8c8627ca50b
+---
+ .../android/systemui/theme/ThemeOverlayController.java    | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java b/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java
+index 495df3297a3e..2cf7afb0d397 100644
+--- a/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java
++++ b/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java
+@@ -131,6 +131,11 @@ public class ThemeOverlayController implements CoreStartable, Dumpable {
+     private static final boolean DEBUG = false;
+     // BlueOS brand color "Голубой BA"
+     private static final String BLUEOS_DEFAULT_SEED_COLOR = "128AFA";
++    // BlueOS: tells the Clock app that the home wallpaper colors changed (its halo widget picks
++    // dark or light text from them); explicit, so its manifest receiver gets it while not running
++    private static final String ACTION_BLUEOS_WALLPAPER_COLORS_CHANGED =
++            "org.blueos.intent.action.WALLPAPER_COLORS_CHANGED";
++    private static final String BLUEOS_CLOCK_PACKAGE = "com.android.deskclock";
+ 
+     private static final String KEY_COLOR_PALETTE_VERSION = "global_color_palette_version";
+ 
+@@ -225,6 +230,9 @@ public class ThemeOverlayController implements CoreStartable, Dumpable {
+             if (wallpaperColors != null && wallpaperColors.equals(currentColors)) {
+                 return;
+             }
++            // Not deferred like the theme below: widgets should follow the wallpaper right away
++            mContext.sendBroadcastAsUser(new Intent(ACTION_BLUEOS_WALLPAPER_COLORS_CHANGED)
++                    .setPackage(BLUEOS_CLOCK_PACKAGE), UserHandle.of(userId));
+             boolean currentUser = userId == mUserTracker.getUserId();
+             boolean isAsleep = themeOverlayControllerWakefulnessDeprecation()
+                     ? ThemeOverlayController.this.mIsKeyguardOnAsleepState.getValue()

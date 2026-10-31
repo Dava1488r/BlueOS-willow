@@ -1,0 +1,70 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 27 Oct 2026 16:19:42 +0100
+Subject: [PATCH 08/12] =?UTF-8?q?BlueOS:=20ThemePicker:=200.7.2=20?=
+ =?UTF-8?q?=E2=80=94=20=C2=AB=D0=9D=D0=B0=D0=BF=D0=B5=D0=B2=D0=B0=D0=B5?=
+ =?UTF-8?q?=D1=82=20=D0=B2=D1=81=D0=BB=D1=83=D1=85=C2=BB,=20=C2=AB=D0=A6?=
+ =?UTF-8?q?=D0=B2=D0=B5=D1=82=20=D1=82=D0=B5=D0=BA=D1=81=D1=82=D0=B0=20?=
+ =?UTF-8?q?=D0=BD=D0=B0=20=D0=B1=D0=BB=D0=BE=D0=BA=D0=B8=D1=80=D0=BE=D0=B2?=
+ =?UTF-8?q?=D0=BA=D0=B5=C2=BB?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Change-Id: If59bc9c47e0c8fc45ad7a4b8bc98e3a2833a892f
+---
+ res/values-ru/blueos_07_strings.xml                          | 5 +++++
+ res/values/blueos_07_strings.xml                             | 5 +++++
+ .../android/customization/blueos/BlueOSSettingsActivity.kt   | 4 ++++
+ 3 files changed, 14 insertions(+)
+
+diff --git a/res/values-ru/blueos_07_strings.xml b/res/values-ru/blueos_07_strings.xml
+index 4fe82bf0..69976f20 100644
+--- a/res/values-ru/blueos_07_strings.xml
++++ b/res/values-ru/blueos_07_strings.xml
+@@ -240,4 +240,9 @@
+     <string name="blueos_s_c_date">Дата и погода</string>
+     <string name="blueos_s_style_android">Как в Android</string>
+     <string name="blueos_s_style_summary">Как в «Сводке»</string>
++    <string name="blueos_s_desk_voice">Напевает вслух</string>
++    <string name="blueos_s_desk_voice_d">Когда садится на парту, напевает голосом (если звук реплик включён и телефон не на беззвучном)</string>
++    <string name="blueos_s_c_textcolor">Цвет текста на блокировке</string>
++    <string name="blueos_s_tc_theme">По теме (в тёмной — светлый)</string>
++    <string name="blueos_s_tc_wall">По обоям под часами</string>
+ </resources>
+diff --git a/res/values/blueos_07_strings.xml b/res/values/blueos_07_strings.xml
+index 97796501..d0e1be5e 100644
+--- a/res/values/blueos_07_strings.xml
++++ b/res/values/blueos_07_strings.xml
+@@ -240,4 +240,9 @@
+     <string name="blueos_s_c_date">Date and weather</string>
+     <string name="blueos_s_style_android">As in Android</string>
+     <string name="blueos_s_style_summary">Like the Summary widget</string>
++    <string name="blueos_s_desk_voice">Hums out loud</string>
++    <string name="blueos_s_desk_voice_d">When she sits down on her desk, she hums with her voice (if reply sounds are on and the phone is not on silent)</string>
++    <string name="blueos_s_c_textcolor">Lock screen text colour</string>
++    <string name="blueos_s_tc_theme">By the theme (light in the dark theme)</string>
++    <string name="blueos_s_tc_wall">By the wallpaper under the clock</string>
+ </resources>
+diff --git a/src/com/android/customization/blueos/BlueOSSettingsActivity.kt b/src/com/android/customization/blueos/BlueOSSettingsActivity.kt
+index e9aefedd..76902312 100644
+--- a/src/com/android/customization/blueos/BlueOSSettingsActivity.kt
++++ b/src/com/android/customization/blueos/BlueOSSettingsActivity.kt
+@@ -132,6 +132,8 @@ class BlueOSSettingsActivity : Activity() {
+             Item.Sw(K.ARONA_MUSIC, R.string.blueos_s_aw_music, R.string.blueos_s_aw_music_d, dep = { on(K.LIVE_WIDGETS) }),
+             Item.Sw(K.ARONA_DESK, R.string.blueos_s_desk, R.string.blueos_s_desk_d,
+                 dep = { on(K.LIVE_WIDGETS) && int(K.CHARACTER) == 0 }),
++            Item.Sw(K.ARONA_DESK_VOICE, R.string.blueos_s_desk_voice, R.string.blueos_s_desk_voice_d, sub = true,
++                dep = { on(K.ARONA_DESK) && on(K.LIVE_WIDGETS) && int(K.CHARACTER) == 0 }),
+         )
+     }
+ 
+@@ -152,6 +154,8 @@ class BlueOSSettingsActivity : Activity() {
+                 R.string.blueos_s_style_android to 0, R.string.blueos_s_style_summary to 1)),
+             Item.Choice(K.LOCK_DATE_STYLE, R.string.blueos_s_c_date, listOf(
+                 R.string.blueos_s_style_android to 0, R.string.blueos_s_style_summary to 1)),
++            Item.Choice(K.LOCK_TEXT_COLOR, R.string.blueos_s_c_textcolor, listOf(
++                R.string.blueos_s_tc_theme to 0, R.string.blueos_s_tc_wall to 1)),
+         )
+     }
+ 

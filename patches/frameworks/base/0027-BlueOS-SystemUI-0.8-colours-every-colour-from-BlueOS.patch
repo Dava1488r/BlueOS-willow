@@ -1,0 +1,1588 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Thu, 29 Oct 2026 18:11:22 +0100
+Subject: [PATCH 27/30] =?UTF-8?q?BlueOS:=20SystemUI:=200.8=20colours=20?=
+ =?UTF-8?q?=E2=80=94=20every=20colour=20from=20BlueOSColorRoles,=20lock=20?=
+ =?UTF-8?q?protection,=20=C2=AB=D0=A3=D0=B2=D0=B5=D0=B4=D0=BE=D0=BC=D0=BB?=
+ =?UTF-8?q?=D0=B5=D0=BD=D0=B8=D1=8F=20=D0=B2=20=D0=BB=D0=BE=D0=B1=D0=B1?=
+ =?UTF-8?q?=D0=B8=C2=BB,=20widget=20fixes,=20=C2=AB=D0=AD=D0=BA=D0=B2?=
+ =?UTF-8?q?=D0=B0=D0=BB=D0=B0=D0=B9=D0=B7=D0=B5=D1=80:=20=D0=BF=D0=BB?=
+ =?UTF-8?q?=D0=B5=D0=B5=D1=80=C2=BB=20options?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Lock clock, halo, greeting, date and weather decided by BlueOSColorRoles (roles instead of colours) and recoloured on theme / palette changes; AOD neutral grey with outline / shadow and a 500 ms cross-fade from the lock screen; BlueOSLockProtection dims the wallpaper under light lock text («Защита читаемости», «Сила защиты») under the status bar; «Уведомления в лобби» (as usual / hidden / a tap decides); widgets: «Сводка» text colours resolved by the launcher's theme (it lagged after light <-> dark), music note primary, titles break after _ . -, toggles with labels, narrow equalizer player, «Тишина», back / forward buttons and a wave for «Эквалайзер: плеер».
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: I9ac6a63248aeffb1abd1f418ceebdcc08a4a334e
+---
+ .../clocks/view/DigitalClockTextView.kt       |  20 +-
+ .../controller/FlexClockTextViewController.kt |  11 +-
+ .../FlexClockViewGroupController.kt           |  11 +-
+ .../systemui/shared/clocks/view/BlueOSHalo.kt |  36 +++-
+ .../shared/clocks/view/FlexClockTextView.kt   |   2 +-
+ .../shared/clocks/view/FlexClockViewGroup.kt  |  17 +-
+ .../res/drawable/blueos_ic_music_note.xml     |   2 +-
+ .../res/layout/blueos_eq_widget_bars.xml      |  31 +++
+ .../res/layout/blueos_eq_widget_full.xml      |  25 +++
+ .../layout/blueos_eq_widget_full_narrow.xml   | 129 ++++++++++++
+ .../res/layout/blueos_media_widget_square.xml |   3 +-
+ .../layout/blueos_toggles_widget_labels.xml   | 177 ++++++++++++++++
+ .../res/values-night/blueos_widget_colors.xml |   1 +
+ .../res/values-ru/blueos_08_strings.xml       |  11 +
+ .../SystemUI/res/values/blueos_08_strings.xml |  13 ++
+ .../res/values/blueos_widget_colors.xml       |   2 +
+ .../android/keyguard/ClockEventController.kt  |  13 +-
+ .../android/keyguard/KeyguardSliceView.java   |  53 ++++-
+ .../keyguard/KeyguardSliceViewController.java |  25 ++-
+ .../lockscreen/BlueOSCharacterSection.kt      | 155 +++++++++++++-
+ .../blueos/lockscreen/BlueOSLockProtection.kt | 193 ++++++++++++++++++
+ .../widgets/BlueOSMediaWidgetProvider.kt      |  32 ++-
+ .../widgets/BlueOSSummaryWidgetProvider.kt    |  22 +-
+ .../widgets/BlueOSTogglesWidgetProvider.kt    |  13 +-
+ .../blueos/widgets/BlueOSWidgetStyle.kt       |  25 +--
+ 25 files changed, 945 insertions(+), 77 deletions(-)
+ create mode 100644 packages/SystemUI/res/layout/blueos_eq_widget_full_narrow.xml
+ create mode 100644 packages/SystemUI/res/layout/blueos_toggles_widget_labels.xml
+ create mode 100644 packages/SystemUI/res/values-ru/blueos_08_strings.xml
+ create mode 100644 packages/SystemUI/res/values/blueos_08_strings.xml
+ create mode 100644 packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSLockProtection.kt
+
+diff --git a/packages/SystemUI/customization/clocks/common/src/com/android/systemui/customization/clocks/view/DigitalClockTextView.kt b/packages/SystemUI/customization/clocks/common/src/com/android/systemui/customization/clocks/view/DigitalClockTextView.kt
+index b4a57bf0159b..7e8f34fb18df 100644
+--- a/packages/SystemUI/customization/clocks/common/src/com/android/systemui/customization/clocks/view/DigitalClockTextView.kt
++++ b/packages/SystemUI/customization/clocks/common/src/com/android/systemui/customization/clocks/view/DigitalClockTextView.kt
+@@ -223,13 +223,29 @@ abstract class DigitalClockTextView(private val clockCtx: ClockContext) :
+             }
+         }
+ 
++    /** BlueOS 0.8: where the last doze animation was heading (the digits of a clock group never get a dozeFraction). */
++    private var dozeTarget: Boolean? = null
++
+     fun updateColor(lockscreenColor: Int, aodColor: Int = Color.WHITE) {
+         this.lockscreenColor = lockscreenColor
+         this.aodColor = aodColor
+         lockscreenPaint.color = lockscreenColor
+ 
++        // BlueOS 0.8: a colour-only style cancelled a running doze animation half way, so after a palette or theme
++        // change while waking up the digits stayed AOD-thin on the lock screen (7 of 12 test shots). Keep heading to
++        // the same weight and size, and finish the way there.
++        val dozing = dozeTarget ?: (dozeFraction >= 0.5f)
++        if (!this::textAnimator.isInitialized) return
+         textAnimator.setTextStyle(
+-            TextAnimator.Style(color = if (dozeFraction < 0.5f) lockscreenColor else aodColor)
++            TextAnimator.Style(
++                fVar = fontVariations.getStandard(dozing),
++                color = if (dozing) aodColor else lockscreenColor,
++            ),
++            TextAnimator.Animation(
++                animate = textAnimator.isRunning && isAnimationEnabled,
++                duration = aodStyle.transitionDuration,
++                interpolator = aodDozingInterpolator,
++            ),
+         )
+         invalidate()
+     }
+@@ -391,6 +407,7 @@ abstract class DigitalClockTextView(private val clockCtx: ClockContext) :
+     }
+ 
+     fun animateDoze(isDozing: Boolean, isAnimated: Boolean) {
++        dozeTarget = isDozing
+         if (!this::textAnimator.isInitialized) return
+         logger.animateDoze(isDozing, isAnimated)
+         val isAnimated = isAnimated && isAnimationEnabled
+@@ -679,6 +696,7 @@ abstract class DigitalClockTextView(private val clockCtx: ClockContext) :
+             return
+         }
+ 
++        val isDozing = dozeTarget ?: isDozing                      // BlueOS 0.8: see updateColor
+         setInterpolatorPaint(
+             isDozing,
+             TextAnimator.Style(
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockTextViewController.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockTextViewController.kt
+index 392b8476e2fd..c1beb613a8ee 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockTextViewController.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockTextViewController.kt
+@@ -43,6 +43,8 @@ import com.android.systemui.plugins.keyguard.ui.clocks.ThemeConfig
+ import com.android.systemui.plugins.keyguard.ui.clocks.TimeFormatKind
+ import com.android.systemui.shared.clocks.FlexClockContext
+ import com.android.systemui.shared.clocks.view.FlexClockTextView
++import com.android.systemui.shared.clocks.view.blueOSAodColor
++import com.android.systemui.shared.clocks.view.blueOSDefaultColor
+ import com.android.systemui.shared.clocks.view.blueOSHaloDefaultColor
+ import java.util.Locale
+ 
+@@ -199,11 +201,12 @@ class FlexClockTextViewController(
+             override fun onThemeChanged(theme: ThemeConfig) {
+                 // BlueOS Halo: a clock color picked by the user replaces the accent
+                 view.haloUsesAccent = theme.seedColor == null
++                val lockscreenColor =
++                    if (clockCtx.isBlueOSHalo) theme.blueOSHaloDefaultColor(clockCtx.context)
++                    else theme.blueOSDefaultColor(clockCtx.context)
+                 view.updateColor(
+-                    lockscreenColor =
+-                        if (clockCtx.isBlueOSHalo) theme.blueOSHaloDefaultColor(clockCtx.context)
+-                        else theme.getDefaultColor(clockCtx.context),
+-                    aodColor = theme.getAodColor(clockCtx.context),
++                    lockscreenColor = lockscreenColor,
++                    aodColor = theme.blueOSAodColor(clockCtx.context, lockscreenColor),
+                 )
+                 refreshTime()
+             }
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockViewGroupController.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockViewGroupController.kt
+index b2e847ca6b62..683c72e65d5b 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockViewGroupController.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockViewGroupController.kt
+@@ -42,6 +42,8 @@ import com.android.systemui.shared.Flags.enableAiClocks
+ import com.android.systemui.shared.clocks.FlexClockContext
+ import com.android.systemui.shared.clocks.view.BitmapClockViewGroup
+ import com.android.systemui.shared.clocks.view.FlexClockViewGroup
++import com.android.systemui.shared.clocks.view.blueOSAodColor
++import com.android.systemui.shared.clocks.view.blueOSDefaultColor
+ import com.android.systemui.shared.clocks.view.blueOSHaloDefaultColor
+ import java.util.Locale
+ 
+@@ -193,11 +195,12 @@ constructor(
+             override fun onThemeChanged(theme: ThemeConfig) {
+                 // BlueOS Halo: a clock color picked by the user replaces the accent
+                 (view as? FlexClockViewGroup)?.haloUsesAccent = theme.seedColor == null
++                val lockscreenColor =
++                    if (clockCtx.isBlueOSHalo) theme.blueOSHaloDefaultColor(clockCtx.context)
++                    else theme.blueOSDefaultColor(clockCtx.context)
+                 view.updateColor(
+-                    lockscreenColor =
+-                        if (clockCtx.isBlueOSHalo) theme.blueOSHaloDefaultColor(clockCtx.context)
+-                        else theme.getDefaultColor(clockCtx.context),
+-                    aodColor = theme.getAodColor(clockCtx.context),
++                    lockscreenColor = lockscreenColor,
++                    aodColor = theme.blueOSAodColor(clockCtx.context, lockscreenColor),
+                 )
+             }
+ 
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt
+index 70d0e5d9c5ba..5f8b2a577226 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt
+@@ -87,14 +87,28 @@ internal fun withVisibility(color: Int, visibility: Float): Int =
+ /**
+  * Halo clock digit color. A clock color picked by the user is used in a tone that reads on the
+  * wallpaper under the clock (the stock clocks use the picked color as is, which can vanish on a
+- * light wallpaper).
++ * light wallpaper). BlueOS 0.8: light digits are the role chosen in «Цвета» (default: the tint, a near-white
++ * with the wallpaper's hue — the accent's tone 90 was neon with «Яркие цвета»).
+  */
+ fun ThemeConfig.blueOSHaloDefaultColor(context: Context): Int {
+-    val seed = seedColor ?: return getDefaultColor(context)
++    val seed = seedColor
++        ?: return if (isDarkTheme) org.blueos.arona.BlueOSColorRoles.lockDigits(context) else getDefaultColor(context)
+     val palette = ColorScheme(seed, isDarkTheme).accent1
+     return if (isDarkTheme) palette.s100 else palette.s700
+ }
+ 
++/** BlueOS 0.8: the stock Flex clocks' light digits follow «Цифры часов» in «Цвета» too (a picked clock color wins). */
++fun ThemeConfig.blueOSDefaultColor(context: Context): Int =
++    if (seedColor == null && isDarkTheme) org.blueos.arona.BlueOSColorRoles.lockDigits(context)
++    else getDefaultColor(context)
++
++/**
++ * BlueOS 0.8: AOD digits of every Flex clock — neutral grey at the AOD brightness, the same on any wallpaper
++ * (stock: the accent's tone 90, so a teal wallpaper made a teal AOD). «Как на блокировке» dims [lockColor] instead.
++ */
++fun ThemeConfig.blueOSAodColor(context: Context, lockColor: Int): Int =
++    org.blueos.arona.BlueOSColorRoles.aodColor(context, if (seedColor == null) lockColor else getAodColor(context))
++
+ /** Horizontal radius of the halo, as a part of the width of the hours */
+ internal const val HALO_RX_FRACTION = 0.3f
+ 
+@@ -271,7 +285,7 @@ object BlueOSHaloLive : android.view.Choreographer.FrameCallback {
+             on(k.HALO_GLOW) -> 0.5f + 0.5f * kotlin.math.sin(t * 2f * Math.PI.toFloat() / 4f)
+             else -> return
+         }
+-        val accent = c.getColor(android.R.color.system_accent1_200)
++        val accent = org.blueos.arona.BlueOSColorRoles.lockGlow(c)          // 0.8: «Свечение нимба» in «Цвета»
+         glowPaint.style = Paint.Style.STROKE
+         glowPaint.strokeWidth = base.strokeWidth * (1.6f + g)
+         glowPaint.color = withVisibility(accent, (if (charge) 0.55f else 0.35f) * g * blackout * Color.alpha(color) / 255f)
+@@ -302,9 +316,13 @@ internal fun View.liveHalo() {
+     )
+ }
+ 
+-/** Accent tone that reads on the clock's background (light digits = dark background). */
+-internal fun haloAccentFor(context: Context, digitColor: Int): Int =
+-    context.getColor(
+-        if (Color.luminance(digitColor) > 0.5f) android.R.color.system_accent1_200
+-        else android.R.color.system_accent1_700
+-    )
++/**
++ * The halo's colour next to [digitColor]. BlueOS 0.8: light digits → the role chosen for the halo in «Цвета» (default
++ * the accent, brighter where the wallpaper under it is light); AOD → the AOD halo (grey unless «Нимб акцентом»);
++ * dark digits («По обоям» on a light wallpaper) → a deep accent.
++ */
++internal fun haloAccentFor(context: Context, digitColor: Int, dozing: Boolean): Int = when {
++    dozing -> org.blueos.arona.BlueOSColorRoles.aodHalo(context)
++    Color.luminance(digitColor) > 0.5f -> org.blueos.arona.BlueOSColorRoles.lockHalo(context)
++    else -> context.getColor(android.R.color.system_accent1_700)
++}
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt
+index 84f9530c92c2..94753904a339 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt
+@@ -104,7 +104,7 @@ class FlexClockTextView(clockCtx: FlexClockContext, private val isLargeClock: Bo
+         // BlueOS 0.7.2: the colour the digits are really drawn with (the text animator's), not lockscreenColor —
+         // after a theme change in AOD the digits kept their light AOD colour while the halo took the dark one
+         val digitColor = drawnDigitColor() ?: if (isDozing) aodColor else lockscreenColor
+-        val color = if (haloUsesAccent) haloAccentFor(context, digitColor) else digitColor
++        val color = if (haloUsesAccent) haloAccentFor(context, digitColor, isDozing) else digitColor
+         drawHaloShape(canvas, minutesStart + minutesWidth / 2f, extraTopSpace / 2f, rx, isDozing,
+             haloPaint, haloOval, withVisibility(color, visibility))
+     }
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt
+index 302a6d6b930a..ccdf944a07c0 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt
+@@ -157,11 +157,6 @@ class FlexClockViewGroup(clockCtx: FlexClockContext) :
+             id == ClockViewIds.HOUR_FIRST_DIGIT ||
+             id == ClockViewIds.HOUR_SECOND_DIGIT
+ 
+-    private fun isMinuteView(id: Int) =
+-        id == ClockViewIds.MINUTE_DIGIT_PAIR ||
+-            id == ClockViewIds.MINUTE_FIRST_DIGIT ||
+-            id == ClockViewIds.MINUTE_SECOND_DIGIT
+-
+     private fun drawHalo(canvas: Canvas) {
+         val hours = children.filter { isHourView(it.id) }.toList()
+         if (hours.isEmpty()) return
+@@ -176,7 +171,6 @@ class FlexClockViewGroup(clockCtx: FlexClockContext) :
+             haloPaint, haloOval, withVisibility(color, visibility))
+     }
+ 
+-    private fun accentFor(digitColor: Int): Int = haloAccentFor(context, digitColor)
+ 
+     override fun refreshTime() {
+         logger.refreshTime()
+@@ -190,12 +184,11 @@ class FlexClockViewGroup(clockCtx: FlexClockContext) :
+ 
+     override fun updateColor(lockscreenColor: Int, aodColor: Int) {
+         if (isBlueOSHalo) {
+-            haloLockscreenColor = if (haloUsesAccent) accentFor(lockscreenColor) else lockscreenColor
+-            haloAodColor = if (haloUsesAccent) accentFor(aodColor) else aodColor
+-            children.forEach { view ->
+-                if (isMinuteView(view.id)) view.updateColor(haloLockscreenColor, haloAodColor)
+-                else view.updateColor(lockscreenColor, aodColor)
+-            }
++            // BlueOS 0.8: the halo is the one accent; hours and minutes share the digits' colour (approved mockup —
++            // 0.7 painted the minutes in the halo's accent, a second loud colour in the same block)
++            haloLockscreenColor = if (haloUsesAccent) haloAccentFor(context, lockscreenColor, false) else lockscreenColor
++            haloAodColor = if (haloUsesAccent) haloAccentFor(context, aodColor, true) else aodColor
++            children.forEach { view -> view.updateColor(lockscreenColor, aodColor) }
+             invalidate()
+             return
+         }
+diff --git a/packages/SystemUI/res/drawable/blueos_ic_music_note.xml b/packages/SystemUI/res/drawable/blueos_ic_music_note.xml
+index f81574febdcc..d58a61a167af 100644
+--- a/packages/SystemUI/res/drawable/blueos_ic_music_note.xml
++++ b/packages/SystemUI/res/drawable/blueos_ic_music_note.xml
+@@ -8,7 +8,7 @@
+         android:viewportWidth="24"
+         android:viewportHeight="24">
+         <path
+-            android:fillColor="@color/blueos_widget_primary"
++            android:fillColor="@color/blueos_widget_on_primary_container"
+             android:pathData="M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z" />
+     </vector>
+ </inset>
+diff --git a/packages/SystemUI/res/layout/blueos_eq_widget_bars.xml b/packages/SystemUI/res/layout/blueos_eq_widget_bars.xml
+index 68895fc828dc..01862a558312 100644
+--- a/packages/SystemUI/res/layout/blueos_eq_widget_bars.xml
++++ b/packages/SystemUI/res/layout/blueos_eq_widget_bars.xml
+@@ -27,5 +27,36 @@
+             android:layout_width="match_parent"
+             android:layout_height="match_parent"
+             android:padding="16dp" />
++
++        <!-- 0.8: no music — one big word and a small caption over the resting bars (the card isn't empty) -->
++        <LinearLayout
++            android:id="@+id/blueos_eq_idle"
++            android:layout_width="match_parent"
++            android:layout_height="wrap_content"
++            android:orientation="vertical"
++            android:paddingHorizontal="16dp"
++            android:paddingTop="14dp"
++            android:visibility="gone">
++
++            <TextView
++                android:layout_width="match_parent"
++                android:layout_height="wrap_content"
++                android:ellipsize="end"
++                android:fontFamily="google-sans-text-medium"
++                android:singleLine="true"
++                android:text="@string/blueos_eq_idle"
++                android:textColor="@color/blueos_widget_on_surface"
++                android:textSize="16sp" />
++
++            <TextView
++                android:layout_width="match_parent"
++                android:layout_height="wrap_content"
++                android:ellipsize="end"
++                android:fontFamily="google-sans-text"
++                android:maxLines="2"
++                android:text="@string/blueos_eq_idle_d"
++                android:textColor="@color/blueos_widget_on_surface_variant"
++                android:textSize="12sp" />
++        </LinearLayout>
+     </FrameLayout>
+ </FrameLayout>
+diff --git a/packages/SystemUI/res/layout/blueos_eq_widget_full.xml b/packages/SystemUI/res/layout/blueos_eq_widget_full.xml
+index bc3cfd5a7556..3b2319abbea2 100644
+--- a/packages/SystemUI/res/layout/blueos_eq_widget_full.xml
++++ b/packages/SystemUI/res/layout/blueos_eq_widget_full.xml
+@@ -87,6 +87,19 @@
+                         android:textSize="12sp" />
+                 </LinearLayout>
+ 
++                <!-- 0.8: back / forward, shown with «Кнопки «Назад» и «Вперёд»» (Виджеты и значки) -->
++                <ImageView
++                    android:id="@+id/blueos_media_previous"
++                    android:layout_width="36dp"
++                    android:layout_height="36dp"
++                    android:layout_marginStart="4dp"
++                    android:background="?android:attr/selectableItemBackgroundBorderless"
++                    android:contentDescription="@string/blueos_media_widget_previous"
++                    android:padding="7dp"
++                    android:src="@drawable/blueos_ic_skip_previous"
++                    android:tint="@color/blueos_widget_on_surface"
++                    android:visibility="gone" />
++
+                 <ImageView
+                     android:id="@+id/blueos_media_play_pause"
+                     android:layout_width="40dp"
+@@ -97,6 +110,18 @@
+                     android:padding="9dp"
+                     android:src="@drawable/blueos_ic_play"
+                     android:tint="@color/blueos_widget_on_primary" />
++
++                <ImageView
++                    android:id="@+id/blueos_media_next"
++                    android:layout_width="36dp"
++                    android:layout_height="36dp"
++                    android:layout_marginStart="4dp"
++                    android:background="?android:attr/selectableItemBackgroundBorderless"
++                    android:contentDescription="@string/blueos_media_widget_next"
++                    android:padding="7dp"
++                    android:src="@drawable/blueos_ic_skip_next"
++                    android:tint="@color/blueos_widget_on_surface"
++                    android:visibility="gone" />
+             </LinearLayout>
+ 
+             <android.widget.BlueOSVisualizerView
+diff --git a/packages/SystemUI/res/layout/blueos_eq_widget_full_narrow.xml b/packages/SystemUI/res/layout/blueos_eq_widget_full_narrow.xml
+new file mode 100644
+index 000000000000..926cd4747ab8
+--- /dev/null
++++ b/packages/SystemUI/res/layout/blueos_eq_widget_full_narrow.xml
+@@ -0,0 +1,129 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS 0.8 equalizer widget «Музыка + эквалайзер», narrow (2 cells): the art and play / pause on top, the title
++     and artist on their own full-width lines (squeezed between them it was cut to «The…»), then the bars -->
++<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
++    android:layout_width="match_parent"
++    android:layout_height="match_parent"
++    android:padding="8dp">
++
++    <FrameLayout
++        android:id="@android:id/background"
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:background="@drawable/blueos_widget_outline"
++        android:clipToOutline="true">
++
++        <ImageView
++            android:id="@+id/blueos_widget_bg"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitXY"
++            android:src="@drawable/blueos_widget_card" />
++
++        <LinearLayout
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:orientation="vertical"
++            android:paddingHorizontal="12dp"
++            android:paddingVertical="10dp">
++
++            <LinearLayout
++                android:layout_width="match_parent"
++                android:layout_height="wrap_content"
++                android:gravity="center_vertical"
++                android:orientation="horizontal">
++
++                <FrameLayout
++                    android:layout_width="40dp"
++                    android:layout_height="40dp"
++                    android:background="@drawable/blueos_media_art_bg"
++                    android:clipToOutline="true">
++
++                    <ImageView
++                        android:id="@+id/blueos_media_placeholder"
++                        android:layout_width="match_parent"
++                        android:layout_height="match_parent"
++                        android:contentDescription="@null"
++                        android:padding="2dp"
++                        android:src="@drawable/blueos_ic_music_note" />
++
++                    <ImageView
++                        android:id="@+id/blueos_media_art"
++                        android:layout_width="match_parent"
++                        android:layout_height="match_parent"
++                        android:contentDescription="@null"
++                        android:scaleType="centerCrop"
++                        android:visibility="gone" />
++                </FrameLayout>
++
++                <View
++                    android:layout_width="0dp"
++                    android:layout_height="1dp"
++                    android:layout_weight="1" />
++
++                <!-- 0.8: back / forward (a bit smaller here: art + 3 buttons fit the 2-cell width) -->
++                <ImageView
++                    android:id="@+id/blueos_media_previous"
++                    android:layout_width="30dp"
++                    android:layout_height="30dp"
++                    android:background="?android:attr/selectableItemBackgroundBorderless"
++                    android:contentDescription="@string/blueos_media_widget_previous"
++                    android:padding="5dp"
++                    android:src="@drawable/blueos_ic_skip_previous"
++                    android:tint="@color/blueos_widget_on_surface"
++                    android:visibility="gone" />
++
++                <ImageView
++                    android:id="@+id/blueos_media_play_pause"
++                    android:layout_width="40dp"
++                    android:layout_height="40dp"
++                    android:background="@drawable/blueos_media_play_bg"
++                    android:contentDescription="@string/blueos_media_widget_play"
++                    android:padding="9dp"
++                    android:src="@drawable/blueos_ic_play"
++                    android:tint="@color/blueos_widget_on_primary" />
++
++                <ImageView
++                    android:id="@+id/blueos_media_next"
++                    android:layout_width="30dp"
++                    android:layout_height="30dp"
++                    android:background="?android:attr/selectableItemBackgroundBorderless"
++                    android:contentDescription="@string/blueos_media_widget_next"
++                    android:padding="5dp"
++                    android:src="@drawable/blueos_ic_skip_next"
++                    android:tint="@color/blueos_widget_on_surface"
++                    android:visibility="gone" />
++            </LinearLayout>
++
++            <TextView
++                android:id="@+id/blueos_media_title"
++                android:layout_width="match_parent"
++                android:layout_height="wrap_content"
++                android:layout_marginTop="6dp"
++                android:ellipsize="end"
++                android:fontFamily="google-sans-text-medium"
++                android:singleLine="true"
++                android:text="@string/blueos_media_widget_idle"
++                android:textColor="@color/blueos_widget_on_surface"
++                android:textSize="14sp" />
++
++            <TextView
++                android:id="@+id/blueos_media_artist"
++                android:layout_width="match_parent"
++                android:layout_height="wrap_content"
++                android:ellipsize="end"
++                android:fontFamily="google-sans-text"
++                android:singleLine="true"
++                android:textColor="@color/blueos_widget_on_surface_variant"
++                android:textSize="12sp" />
++
++            <android.widget.BlueOSVisualizerView
++                android:id="@+id/blueos_eq_view"
++                android:layout_width="match_parent"
++                android:layout_height="0dp"
++                android:layout_marginTop="4dp"
++                android:layout_weight="1" />
++        </LinearLayout>
++    </FrameLayout>
++</FrameLayout>
+diff --git a/packages/SystemUI/res/layout/blueos_media_widget_square.xml b/packages/SystemUI/res/layout/blueos_media_widget_square.xml
+index fe90b1727407..bbfee6689c30 100644
+--- a/packages/SystemUI/res/layout/blueos_media_widget_square.xml
++++ b/packages/SystemUI/res/layout/blueos_media_widget_square.xml
+@@ -29,7 +29,8 @@
+             android:layout_gravity="center"
+             android:layout_marginBottom="16dp"
+             android:contentDescription="@null"
+-            android:src="@drawable/blueos_ic_music_note" />
++            android:src="@drawable/blueos_ic_music_note"
++            android:tint="@color/blueos_widget_primary" />
+ 
+         <ImageView
+             android:id="@+id/blueos_media_art"
+diff --git a/packages/SystemUI/res/layout/blueos_toggles_widget_labels.xml b/packages/SystemUI/res/layout/blueos_toggles_widget_labels.xml
+new file mode 100644
+index 000000000000..0aa33c10ed39
+--- /dev/null
++++ b/packages/SystemUI/res/layout/blueos_toggles_widget_labels.xml
+@@ -0,0 +1,177 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS 0.8 quick toggles, 4 columns and more: bigger buttons with a label each (the 0.7 card was two thirds empty) -->
++<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
++    android:layout_width="match_parent"
++    android:layout_height="match_parent"
++    android:padding="8dp">
++
++    <FrameLayout
++        android:id="@android:id/background"
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:background="@drawable/blueos_widget_outline"
++        android:clipToOutline="true">
++
++        <ImageView
++            android:id="@+id/blueos_widget_bg"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitXY"
++            android:src="@drawable/blueos_widget_card" />
++
++        <LinearLayout
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:gravity="center_vertical"
++            android:orientation="horizontal"
++            android:paddingHorizontal="6dp">
++
++            <LinearLayout
++                android:layout_width="0dp"
++                android:layout_height="wrap_content"
++                android:layout_weight="1"
++                android:gravity="center_horizontal"
++                android:orientation="vertical">
++
++                <ImageView
++                    android:id="@+id/blueos_toggle_flashlight"
++                    android:layout_width="56dp"
++                    android:layout_height="56dp"
++                    android:background="@drawable/blueos_toggle_off"
++                    android:contentDescription="@string/blueos_toggles_flashlight"
++                    android:padding="15dp"
++                    android:src="@drawable/blueos_ic_flashlight"
++                    android:tint="@color/blueos_widget_on_surface" />
++
++                <TextView
++                    android:layout_width="match_parent"
++                    android:layout_height="wrap_content"
++                    android:layout_marginTop="6dp"
++                    android:ellipsize="end"
++                    android:fontFamily="google-sans-text-medium"
++                    android:gravity="center_horizontal"
++                    android:singleLine="true"
++                    android:text="@string/blueos_toggles_label_flashlight"
++                    android:textColor="@color/blueos_widget_on_surface_variant"
++                    android:textSize="12sp" />
++            </LinearLayout>
++            <LinearLayout
++                android:layout_width="0dp"
++                android:layout_height="wrap_content"
++                android:layout_weight="1"
++                android:gravity="center_horizontal"
++                android:orientation="vertical">
++
++                <ImageView
++                    android:id="@+id/blueos_toggle_dnd"
++                    android:layout_width="56dp"
++                    android:layout_height="56dp"
++                    android:background="@drawable/blueos_toggle_off"
++                    android:contentDescription="@string/blueos_toggles_dnd"
++                    android:padding="15dp"
++                    android:src="@drawable/blueos_ic_dnd"
++                    android:tint="@color/blueos_widget_on_surface" />
++
++                <TextView
++                    android:layout_width="match_parent"
++                    android:layout_height="wrap_content"
++                    android:layout_marginTop="6dp"
++                    android:ellipsize="end"
++                    android:fontFamily="google-sans-text-medium"
++                    android:gravity="center_horizontal"
++                    android:singleLine="true"
++                    android:text="@string/blueos_toggles_label_dnd"
++                    android:textColor="@color/blueos_widget_on_surface_variant"
++                    android:textSize="12sp" />
++            </LinearLayout>
++            <LinearLayout
++                android:layout_width="0dp"
++                android:layout_height="wrap_content"
++                android:layout_weight="1"
++                android:gravity="center_horizontal"
++                android:orientation="vertical">
++
++                <ImageView
++                    android:id="@+id/blueos_toggle_rotate"
++                    android:layout_width="56dp"
++                    android:layout_height="56dp"
++                    android:background="@drawable/blueos_toggle_off"
++                    android:contentDescription="@string/blueos_toggles_rotate"
++                    android:padding="15dp"
++                    android:src="@drawable/blueos_ic_rotate"
++                    android:tint="@color/blueos_widget_on_surface" />
++
++                <TextView
++                    android:layout_width="match_parent"
++                    android:layout_height="wrap_content"
++                    android:layout_marginTop="6dp"
++                    android:ellipsize="end"
++                    android:fontFamily="google-sans-text-medium"
++                    android:gravity="center_horizontal"
++                    android:singleLine="true"
++                    android:text="@string/blueos_toggles_label_rotate"
++                    android:textColor="@color/blueos_widget_on_surface_variant"
++                    android:textSize="12sp" />
++            </LinearLayout>
++            <LinearLayout
++                android:layout_width="0dp"
++                android:layout_height="wrap_content"
++                android:layout_weight="1"
++                android:gravity="center_horizontal"
++                android:orientation="vertical">
++
++                <ImageView
++                    android:id="@+id/blueos_toggle_dark"
++                    android:layout_width="56dp"
++                    android:layout_height="56dp"
++                    android:background="@drawable/blueos_toggle_off"
++                    android:contentDescription="@string/blueos_toggles_dark"
++                    android:padding="15dp"
++                    android:src="@drawable/blueos_ic_dark_theme"
++                    android:tint="@color/blueos_widget_on_surface" />
++
++                <TextView
++                    android:layout_width="match_parent"
++                    android:layout_height="wrap_content"
++                    android:layout_marginTop="6dp"
++                    android:ellipsize="end"
++                    android:fontFamily="google-sans-text-medium"
++                    android:gravity="center_horizontal"
++                    android:singleLine="true"
++                    android:text="@string/blueos_toggles_label_dark"
++                    android:textColor="@color/blueos_widget_on_surface_variant"
++                    android:textSize="12sp" />
++            </LinearLayout>
++            <LinearLayout
++                android:layout_width="0dp"
++                android:layout_height="wrap_content"
++                android:layout_weight="1"
++                android:gravity="center_horizontal"
++                android:orientation="vertical">
++
++                <ImageView
++                    android:id="@+id/blueos_toggle_saver"
++                    android:layout_width="56dp"
++                    android:layout_height="56dp"
++                    android:background="@drawable/blueos_toggle_off"
++                    android:contentDescription="@string/blueos_toggles_saver"
++                    android:padding="15dp"
++                    android:src="@drawable/blueos_ic_battery_saver"
++                    android:tint="@color/blueos_widget_on_surface" />
++
++                <TextView
++                    android:layout_width="match_parent"
++                    android:layout_height="wrap_content"
++                    android:layout_marginTop="6dp"
++                    android:ellipsize="end"
++                    android:fontFamily="google-sans-text-medium"
++                    android:gravity="center_horizontal"
++                    android:singleLine="true"
++                    android:text="@string/blueos_toggles_label_saver"
++                    android:textColor="@color/blueos_widget_on_surface_variant"
++                    android:textSize="12sp" />
++            </LinearLayout>
++        </LinearLayout>
++    </FrameLayout>
++</FrameLayout>
+\ No newline at end of file
+diff --git a/packages/SystemUI/res/values-night/blueos_widget_colors.xml b/packages/SystemUI/res/values-night/blueos_widget_colors.xml
+index 3f5751b17844..07088c3aa6de 100644
+--- a/packages/SystemUI/res/values-night/blueos_widget_colors.xml
++++ b/packages/SystemUI/res/values-night/blueos_widget_colors.xml
+@@ -10,4 +10,5 @@
+     <color name="blueos_widget_on_primary">@android:color/system_on_primary_dark</color>
+     <color name="blueos_widget_primary_container">@android:color/system_primary_container_dark</color>
+     <color name="blueos_widget_on_primary_container">@android:color/system_on_primary_container_dark</color>
++    <color name="blueos_widget_tertiary">@android:color/system_tertiary_dark</color>
+ </resources>
+diff --git a/packages/SystemUI/res/values-ru/blueos_08_strings.xml b/packages/SystemUI/res/values-ru/blueos_08_strings.xml
+new file mode 100644
+index 000000000000..09a6888e07b5
+--- /dev/null
++++ b/packages/SystemUI/res/values-ru/blueos_08_strings.xml
+@@ -0,0 +1,11 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS 0.8 widgets -->
++<resources>
++    <string name="blueos_eq_idle">Тишина</string>
++    <string name="blueos_eq_idle_d">включи музыку — оживут</string>
++    <string name="blueos_toggles_label_flashlight">Фонарик</string>
++    <string name="blueos_toggles_label_dnd">Не беспок.</string>
++    <string name="blueos_toggles_label_rotate">Поворот</string>
++    <string name="blueos_toggles_label_dark">Тёмная</string>
++    <string name="blueos_toggles_label_saver">Экономия</string>
++</resources>
+diff --git a/packages/SystemUI/res/values/blueos_08_strings.xml b/packages/SystemUI/res/values/blueos_08_strings.xml
+new file mode 100644
+index 000000000000..36e719df20d7
+--- /dev/null
++++ b/packages/SystemUI/res/values/blueos_08_strings.xml
+@@ -0,0 +1,13 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS 0.8 widgets -->
++<resources>
++    <!-- the equalizer with no music: a calm state instead of an empty card -->
++    <string name="blueos_eq_idle">Silence</string>
++    <string name="blueos_eq_idle_d">play some music and the bars come alive</string>
++    <!-- short labels under the quick toggles (the long ones stay the content descriptions) -->
++    <string name="blueos_toggles_label_flashlight">Flashlight</string>
++    <string name="blueos_toggles_label_dnd">Silent</string>
++    <string name="blueos_toggles_label_rotate">Rotate</string>
++    <string name="blueos_toggles_label_dark">Dark</string>
++    <string name="blueos_toggles_label_saver">Saver</string>
++</resources>
+diff --git a/packages/SystemUI/res/values/blueos_widget_colors.xml b/packages/SystemUI/res/values/blueos_widget_colors.xml
+index e7ba1ffc6686..b26e41cf8201 100644
+--- a/packages/SystemUI/res/values/blueos_widget_colors.xml
++++ b/packages/SystemUI/res/values/blueos_widget_colors.xml
+@@ -10,4 +10,6 @@
+     <color name="blueos_widget_on_primary">@android:color/system_on_primary_light</color>
+     <color name="blueos_widget_primary_container">@android:color/system_primary_container_light</color>
+     <color name="blueos_widget_on_primary_container">@android:color/system_on_primary_container_light</color>
++    <!-- 0.8: «Эквалайзер: Третий цвет палитры» -->
++    <color name="blueos_widget_tertiary">@android:color/system_tertiary_light</color>
+ </resources>
+diff --git a/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt b/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt
+index 6a56222ffd10..6abcae9a8aba 100644
+--- a/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt
++++ b/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt
+@@ -515,9 +515,16 @@ constructor(
+             IntentFilter(Intent.ACTION_LOCALE_CHANGED),
+         )
+         configurationController.addCallback(configListener)
+-        // BlueOS 0.7.2: «Цвет текста на блокировке» applies at once
+-        unobserveBlueOS = org.blueos.arona.BlueOSSettings.observe(
+-            context, listOf(org.blueos.arona.BlueOSSettings.LOCK_TEXT_COLOR)) { updateColors() }
++        // BlueOS 0.7.2: «Цвет текста на блокировке» applies at once; 0.8: so do the roles of «Цвета», and the halo
++        // follows the light-wallpaper dimming under it (BlueOSLockProtection → BlueOSColorRoles.Backdrop)
++        val unobserveKeys = org.blueos.arona.BlueOSSettings.observe(context,
++            listOf(org.blueos.arona.BlueOSSettings.LOCK_TEXT_COLOR) + org.blueos.arona.BlueOSSettings.COLOR_KEYS) { updateColors() }
++        val onBackdrop = Runnable { updateColors() }
++        org.blueos.arona.BlueOSColorRoles.addBackdropListener(onBackdrop)
++        unobserveBlueOS = {
++            unobserveKeys()
++            org.blueos.arona.BlueOSColorRoles.removeBackdropListener(onBackdrop)
++        }
+         batteryController.addCallback(batteryCallback)
+         keyguardUpdateMonitor.registerCallback(keyguardUpdateMonitorCallback)
+         zenModeController.addCallback(zenModeCallback)
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java
+index 41cf603b50a7..a7273986743b 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceView.java
+@@ -131,12 +131,43 @@ public class KeyguardSliceView extends LinearLayout {
+         return org.blueos.arona.BlueOSSettings.getInt(mContext.getContentResolver(), key);
+     }
+ 
+-    /** The clock's colour (Monet), fading to white with the text on AOD. */
+-    private int blueOSAccent() {
+-        final boolean lightText = Color.luminance(mTextColor) > 0.5f;
+-        final int accent = mContext.getColor(lightText
+-                ? android.R.color.system_accent1_100 : android.R.color.system_accent1_600);
+-        return ColorUtils.blendARGB(accent, Color.WHITE, mDarkAmount);
++    /** BlueOS 0.8: on AOD (from the keyguard's dozing state; setDarkAmount never comes in this keyguard). */
++    private boolean mBlueOSDozing;
++
++    void setBlueOSDozing(boolean dozing) {
++        if (mBlueOSDozing == dozing) return;
++        mBlueOSDozing = dozing;
++        updateTextColors();
++    }
++
++    /**
++     * 0.8: «Сэнсэй» ([weather] false) or the weather — the roles chosen in «Цвета» (BlueOSColorRoles), neutral on AOD
++     * (0.7: the accent's tone 90 everywhere, teal on AOD with a teal wallpaper).
++     */
++    private int blueOSDetail(boolean weather) {
++        if (mBlueOSDozing) {
++            return weather ? org.blueos.arona.BlueOSColorRoles.aodWeather(mContext)
++                    : org.blueos.arona.BlueOSColorRoles.aodSensei(mContext);
++        }
++        if (Color.luminance(mTextColor) <= 0.5f) {
++            return mContext.getColor(android.R.color.system_accent1_600);      // dark text («По обоям»)
++        }
++        return weather ? org.blueos.arona.BlueOSColorRoles.lockWeather(mContext)
++                : org.blueos.arona.BlueOSColorRoles.lockSensei(mContext);
++    }
++
++    /** 0.8: a soft shadow in the palette's deep tone under light text, with «Защита читаемости» on. */
++    private void applyBlueOSShadow(TextView v) {
++        final boolean on = !mBlueOSDozing && Color.luminance(mTextColor) > 0.5f
++                && org.blueos.arona.BlueOSColorRoles.protect(mContext)
++                        != org.blueos.arona.BlueOSColorRoles.PROTECT_OFF;
++        final float dp = mContext.getResources().getDisplayMetrics().density;
++        if (on) {
++            v.setShadowLayer(5 * dp, 0, dp, ColorUtils.setAlphaComponent(
++                    org.blueos.arona.BlueOSColorRoles.protectTint(mContext), 0x66));
++        } else {
++            v.setShadowLayer(0, 0, 0, Color.TRANSPARENT);
++        }
+     }
+ 
+     /** 0.7.2: «Добрый день, Сэнсэй» semibold with «Сэнсэй» in the clock's colour, like the Summary widget. */
+@@ -155,7 +186,7 @@ public class KeyguardSliceView extends LinearLayout {
+         final String name = mContext.getString(R.string.blueos_sensei);
+         final int at = text.toString().lastIndexOf(name);
+         if (at >= 0) {
+-            s.setSpan(new android.text.style.ForegroundColorSpan(blueOSAccent()), at, at + name.length(),
++            s.setSpan(new android.text.style.ForegroundColorSpan(blueOSDetail(false)), at, at + name.length(),
+                     android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+         }
+         mTitle.setText(s);
+@@ -171,7 +202,8 @@ public class KeyguardSliceView extends LinearLayout {
+      */
+     private void styleRowItem(TextView v, int blendedColor) {
+         final boolean summary = blueOSStyle(org.blueos.arona.BlueOSSettings.LOCK_DATE_STYLE) != 0;
+-        v.setTextColor(summary && isWeather(v) ? blueOSAccent() : blendedColor);
++        v.setTextColor(summary && isWeather(v) ? blueOSDetail(true) : blendedColor);
++        applyBlueOSShadow(v);
+     }
+ 
+     @Override
+@@ -324,6 +356,7 @@ public class KeyguardSliceView extends LinearLayout {
+     private void updateTextColors() {
+         final int blendedColor = getTextColor();
+         mTitle.setTextColor(blendedColor);
++        applyBlueOSShadow(mTitle);
+         if (mHasGreeting) {
+             bindGreeting();                                  // BlueOS 0.7.2: «Сэнсэй» follows the clock's colour
+         }
+@@ -437,6 +470,10 @@ public class KeyguardSliceView extends LinearLayout {
+ 
+     @VisibleForTesting
+     int getTextColor() {
++        // BlueOS 0.8: AOD text is the AOD colour (grey at the AOD brightness), whatever the lock screen's was
++        if (mBlueOSDozing) {
++            return org.blueos.arona.BlueOSColorRoles.aodText(mContext);
++        }
+         return ColorUtils.blendARGB(mTextColor, Color.WHITE, mDarkAmount);
+     }
+ 
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java
+index 37fb00b5c578..64cedfb8ab97 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java
+@@ -117,9 +117,13 @@ public class KeyguardSliceViewController extends ViewController<KeyguardSliceVie
+                 mView.getContext().getContentResolver(),
+                 org.blueos.arona.BlueOSSettings.LOCK_TEXT_COLOR);
+         final boolean light = textColor == 2 || (textColor == 0 && dark);
+-        mView.setTextColor(light ? Color.WHITE : mRegionSampler.currentForegroundColor());
++        // 0.8: light = the role of «Приветствие и дата» in «Цвета» (white or the tint), from BlueOSColorRoles
++        mView.setTextColor(light ? org.blueos.arona.BlueOSColorRoles.lockText(mView.getContext())
++                : mRegionSampler.currentForegroundColor());
+     }
+ 
++    private final Runnable mOnBackdrop = this::applyTextColor;
++
+     Observer<Slice> mObserver = new Observer<Slice>() {
+         @Override
+         public void onChanged(Slice slice) {
+@@ -178,6 +182,11 @@ public class KeyguardSliceViewController extends ViewController<KeyguardSliceVie
+                         refresh();
+                     }
+                 }, context);
++
++        // BlueOS 0.8: AOD colours for the greeting, «Сэнсэй», the date and the weather (setDarkAmount never comes
++        // in this keyguard, so 0.7 kept the lock screen's accent on AOD)
++        collectFlow(mView, mKeyguardInteractor.isDozing(),
++                (Boolean dozing) -> mView.setBlueOSDozing(dozing), context);
+     }
+ 
+     @Override
+@@ -200,11 +209,14 @@ public class KeyguardSliceViewController extends ViewController<KeyguardSliceVie
+                 mView.getContext().getColor(android.R.color.system_on_surface_light));
+         mRegionSampler.startRegionSampler();
+         applyTextColor();
+-        mUnobserveBlueOS = org.blueos.arona.BlueOSSettings.INSTANCE.observe(mView.getContext(),
+-                java.util.List.of(org.blueos.arona.BlueOSSettings.LOCK_TEXT_COLOR), () -> {
+-                    applyTextColor();
+-                    return Unit.INSTANCE;
+-                });
++        final java.util.List<String> keys = new java.util.ArrayList<>(org.blueos.arona.BlueOSSettings.COLOR_KEYS);
++        keys.add(org.blueos.arona.BlueOSSettings.LOCK_TEXT_COLOR);
++        mUnobserveBlueOS = org.blueos.arona.BlueOSSettings.INSTANCE.observe(mView.getContext(), keys, () -> {
++            applyTextColor();
++            return Unit.INSTANCE;
++        });
++        // 0.8: «Сэнсэй» and the weather get brighter where the wallpaper under them is light
++        org.blueos.arona.BlueOSColorRoles.addBackdropListener(mOnBackdrop);
+         mDumpManager.registerNormalDumpable(
+                 TAG + "@" + Integer.toHexString(
+                         KeyguardSliceViewController.this.hashCode()),
+@@ -226,6 +238,7 @@ public class KeyguardSliceViewController extends ViewController<KeyguardSliceVie
+             mUnobserveBlueOS.invoke();
+             mUnobserveBlueOS = null;
+         }
++        org.blueos.arona.BlueOSColorRoles.removeBackdropListener(mOnBackdrop);
+         mDumpManager.unregisterDumpable(
+                 TAG + "@" + Integer.toHexString(
+                         KeyguardSliceViewController.this.hashCode()));
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt b/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt
+index 2105bc7fe456..6ca2105fd80f 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt
+@@ -12,6 +12,7 @@ import android.view.Choreographer
+ import android.view.MotionEvent
+ import android.view.View
+ import android.view.ViewGroup
++import android.view.ViewTreeObserver
+ import android.view.animation.PathInterpolator
+ import android.widget.FrameLayout
+ import androidx.constraintlayout.widget.ConstraintLayout
+@@ -19,6 +20,7 @@ import androidx.constraintlayout.widget.ConstraintSet
+ import com.android.systemui.dagger.qualifiers.Application
+ import com.android.systemui.keyguard.domain.interactor.KeyguardInteractor
+ import com.android.systemui.keyguard.shared.model.KeyguardSection
++import com.android.systemui.keyguard.shared.model.StatusBarState
+ import com.android.systemui.power.domain.interactor.PowerInteractor
+ import com.android.systemui.res.R
+ import com.android.systemui.shared.clocks.view.BlueOSHaloLive
+@@ -83,6 +85,14 @@ constructor(
+         val notifs = root?.findViewById<View>(R.id.shared_notification_container)
+         if (root != null && notifs != null && notifs.parent === root) root.addView(h.chipLayer, root.indexOfChild(notifs) + 1)
+         else constraintLayout.addView(h.chipLayer)
++        h.notifs = notifs
++        // 0.8: the readability dimming goes under the shade panel, which holds the lock screen's status bar
++        // (in the keyguard root it dimmed the operator, the clock icons and the battery too)
++        val panel = root?.findViewById<View>(R.id.notification_panel)
++        if (root != null && panel != null && panel.parent === root) {
++            root.addView(h.protection, root.indexOfChild(panel), ViewGroup.LayoutParams(-1, -1))
++            h.protection.follow = constraintLayout      // fades with the lock screen (unlock, bouncer)
++        } else h.addView(h.protection, 0, FrameLayout.LayoutParams(-1, -1))
+         host = h
+     }
+ 
+@@ -92,6 +102,7 @@ constructor(
+         jobs += scope.launch { keyguardInteractor.isDozing.collect { host?.dozing = it } }
+         jobs += scope.launch { keyguardInteractor.isKeyguardShowing.collect { host?.showing = it } }
+         jobs += scope.launch { powerInteractor.isAwake.collect { host?.awake = it } }
++        jobs += scope.launch { keyguardInteractor.statusBarState.collect { host?.shadeLocked = it != StatusBarState.KEYGUARD } }
+     }
+ 
+     override fun applyConstraints(constraintSet: ConstraintSet) {
+@@ -111,7 +122,10 @@ constructor(
+         jobs.clear()
+         host?.let { h ->
+             h.release()
++            h.notifs?.let { it.animate().cancel(); it.alpha = 1f; it.visibility = View.VISIBLE }
++            (constraintLayout as View).translationZ = 0f
+             (h.chipLayer.parent as? ViewGroup)?.removeView(h.chipLayer)
++            (h.protection.parent as? ViewGroup)?.removeView(h.protection)
+         }
+         constraintLayout.findViewById<View>(R.id.blueos_arona_host)?.let { constraintLayout.removeView(it) }
+         host = null
+@@ -125,6 +139,8 @@ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.L
+     private val dp = resources.displayMetrics.density
+     private val handler = Handler(Looper.getMainLooper())
+     private val arona = AronaView(context)
++    /** 0.8: the dimming under light text on light wallpapers, behind everything (the status bar and Arona included). */
++    val protection = BlueOSLockProtection(context)
+     private val chip = ReplyChip(context)
+     /** 0.7.1: full-screen, never touchable layer above the notifications, only for the chip. */
+     val chipLayer = FrameLayout(context).apply {
+@@ -167,6 +183,16 @@ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.L
+             if (woke) onWake()
+         }
+ 
++    // 0.8 «Уведомления в лобби»: the notifications' container (set by the section) and whether the shade is down
++    var notifs: View? = null
++    var shadeLocked = false
++        set(v) { field = v; update() }
++    /** «По нажатию»: she was tapped, so the lock screen (her included) is over the notifications until one is tapped. */
++    private var front = false
++    private var frontGesture = false
++    private var notifsHidden = false
++    private val preDraw = ViewTreeObserver.OnPreDrawListener { applyFront(); true }
++
+     init {
+         clipChildren = false
+         addView(arona, LayoutParams(0, 0))
+@@ -174,7 +200,7 @@ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.L
+         arona.tilt = { if (K.on(cr, K.ARONA_TILT)) BlueOSMotion.tilt else null }
+         arona.onReady = { update() }
+         unobserve = K.observe(context, listOf(K.ARONA_SHOW, K.ARONA_MODE, K.ARONA_CUSTOM, K.ARONA_SLEEP, K.ARONA_AOD,
+-            K.CHARACTER)) {
++            K.CHARACTER, K.COLOR_AOD_ARONA, K.COLOR_AOD_BRIGHT, K.ARONA_LOBBY_NOTIFS)) {
+             val c = Character.current(cr)
+             if (c != arona.character) { arona.character = c; layoutArona(shown) }    // her own proportions
+             setLevel(0); update()
+@@ -217,8 +243,14 @@ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.L
+         val show = K.on(cr, K.ARONA_SHOW) && showing && (!dozing || K.on(cr, K.ARONA_AOD))
+         arona.visibility = if (show) VISIBLE else INVISIBLE
+         arona.frozen = dozing
+-        // AOD: a still, faint silhouette in the palette's light accent (follows any wallpaper)
+-        arona.silhouette = if (dozing) (context.getColor(android.R.color.system_accent1_100) and 0x00ffffff) or 0x38000000 else null
++        // AOD, 0.8: a still, neutral thin outline (or a faint fill) at the AOD brightness — the same on any wallpaper
++        // (0.7: filled in the palette's accent, so a teal wallpaper made a teal AOD)
++        if (dozing) {
++            arona.silhouette = org.blueos.arona.BlueOSColorRoles.aodAronaColor(context)
++            arona.outline = org.blueos.arona.BlueOSColorRoles.aodArona(context) == org.blueos.arona.BlueOSColorRoles.ARONA_OUTLINE
++        }
++        animateDoze()
++        protection.active = showing && awake && !dozing
+         arona.setSleeping(night())
+         moveTo(target())
+         updateLobby()
+@@ -234,6 +266,40 @@ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.L
+             arona.translationX = 0f
+             arona.translationY = 0f
+         }
++        updateNotifs()
++    }
++
++    private var dozeAnim: ValueAnimator? = null
++    private var dozeShown: Boolean? = null
++
++    /**
++     * 0.8: lock screen ↔ AOD as a cross-fade between her colours and the silhouette (about as long as the system's
++     * own transition, while the wallpaper fades to black). It used to be a cut: the faint AOD shadow appeared at
++     * once over the still light wallpaper, so she seemed to vanish for a moment before the screen went dark.
++     */
++    private fun animateDoze() {
++        if (dozeShown == dozing) return
++        val first = dozeShown == null
++        dozeShown = dozing
++        dozeAnim?.cancel()
++        val to = if (dozing) 1f else 0f
++        if (first || !isShown) {                                      // nothing on screen to blend from
++            arona.silhouetteMix = to
++            if (!dozing) arona.silhouette = null
++            return
++        }
++        val from = if (dozing && arona.silhouetteMix >= 1f) 0f else arona.silhouetteMix
++        dozeAnim = ValueAnimator.ofFloat(from, to).apply {
++            duration = 500
++            interpolator = PathInterpolator(.4f, 0f, .2f, 1f)
++            addUpdateListener { arona.silhouetteMix = it.animatedValue as Float }
++            addListener(object : android.animation.AnimatorListenerAdapter() {
++                override fun onAnimationEnd(a: android.animation.Animator) {
++                    if (!dozing) arona.silhouette = null
++                }
++            })
++            start()
++        }
+     }
+ 
+     /** 0.7.1: big behind everything (lobby, dynamic grown to the lobby, a big custom place) → small clock. */
+@@ -241,6 +307,73 @@ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.L
+         BlueOSLockState.lobby.value = K.on(cr, K.ARONA_SHOW) && target().h >= 0.75f
+     }
+ 
++    /**
++     * 0.8: «Уведомления в лобби»: 0 as usual, 1 hidden, 2 a tap decides — in the lobby, the dynamic mode grown to it
++     * and «Своё место» at any size (the settings page offers it there; the user's own place was 0.72 of the screen,
++     * under the lobby's 0.75, and nothing happened).
++     */
++    private fun lobbyNotifs() =
++        if (showing && !shadeLocked && K.on(cr, K.ARONA_SHOW) && (BlueOSLockState.lobby.value || mode() == 4))
++            K.int(cr, K.ARONA_LOBBY_NOTIFS) else 0
++
++    private fun updateNotifs() {
++        val mode = lobbyNotifs()
++        if (mode != 2 || !awake || dozing) front = false
++        // hidden also on AOD, so they don't flash up on every wake; pulling the shade down shows them
++        val hide = mode == 1
++        val c = notifs
++        if (c != null && hide != notifsHidden) {
++            notifsHidden = hide
++            c.animate().cancel()
++            if (hide) c.animate().alpha(0f).setDuration(220).withEndAction { if (notifsHidden) c.visibility = INVISIBLE }.start()
++            else { c.visibility = VISIBLE; c.animate().alpha(1f).setDuration(220).start() }
++        }
++        applyFront()
++    }
++
++    /**
++     * The lock screen's root above the notifications' container (both children of the shade window): she covers the
++     * notifications while the clock, the fingerprint and the shortcuts stay over her. Only while the lock screen is
++     * fully shown — the bouncer and unlocking fade it out, and then it must not be over them.
++     */
++    private fun applyFront() {
++        val root = parent as? View ?: return
++        val bouncer = if (front) rootView.findViewById<View>(R.id.keyguard_bouncer_container)?.isShown == true else false
++        val z = if (front && !bouncer && root.alpha > .99f) 1f else 0f
++        if (root.translationZ != z) root.translationZ = z
++        // her reply chip stays over her: its layer goes up with the lock screen (it was under her body)
++        val chipZ = if (z > 0f) 2f else 0f
++        if (chipLayer.translationZ != chipZ) chipLayer.translationZ = chipZ
++    }
++
++    private fun setFront(on: Boolean) {
++        if (on && lobbyNotifs() != 2) return
++        if (front == on) return
++        front = on
++        applyFront()
++    }
++
++    /** A notification card (or the shelf) really shown at this point (host px). */
++    private fun notificationAt(x: Float, y: Float): Boolean {
++        val nssl = rootView.findViewById<ViewGroup>(R.id.notification_stack_scroller) ?: return false
++        val origin = IntArray(2).also { getLocationInWindow(it) }
++        val loc = IntArray(2)
++        for (i in 0 until nssl.childCount) {
++            val c = nssl.getChildAt(i) as? ExpandableView ?: continue
++            if (c.visibility != VISIBLE || c.actualHeight <= 0 || c.alpha < 0.05f) continue
++            c.getLocationInWindow(loc)
++            val l = (loc[0] - origin[0]).toFloat()
++            val t = (loc[1] - origin[1]).toFloat()
++            if (x >= l && x < l + c.width && y >= t && y < t + c.actualHeight) return true
++        }
++        return false
++    }
++
++    override fun onAttachedToWindow() {
++        super.onAttachedToWindow()
++        viewTreeObserver.addOnPreDrawListener(preDraw)
++    }
++
+     private fun moveTo(p: Place) {
+         if (p == shown && arona.layoutParams.height > 0) return
+         val from = shown
+@@ -303,7 +436,7 @@ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.L
+             if (name == "nssl_placeholder") continue                    // an empty box; the real cards are below
+             add(v, v.height.toFloat(), if (name?.startsWith("lockscreen_clock_view") == true) 40 * dp else 0f)
+         }
+-        rootView.findViewById<ViewGroup>(R.id.notification_stack_scroller)?.let { nssl ->
++        if (!notifsHidden) rootView.findViewById<ViewGroup>(R.id.notification_stack_scroller)?.let { nssl ->
+             for (i in 0 until nssl.childCount) {
+                 val c = nssl.getChildAt(i) as? ExpandableView ?: continue
+                 if (c.visibility != VISIBLE || c.actualHeight <= 0 || c.alpha < 0.05f) continue
+@@ -324,15 +457,26 @@ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.L
+                 return true
+             }
+         }
++        // 0.8: she's in front of the notifications — a tap on a notification only brings them back over her
++        if (frontGesture) {
++            if (e.actionMasked == MotionEvent.ACTION_UP) setFront(false)
++            if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) frontGesture = false
++            return true
++        }
+         if (arona.visibility != VISIBLE) return false
+         val local = MotionEvent.obtain(e)
+         local.offsetLocation(-arona.left.toFloat() - arona.translationX, -arona.top.toFloat() - arona.translationY)
+         val handled = touch.onTouch(local)
+         local.recycle()
++        if (!handled && front && e.actionMasked == MotionEvent.ACTION_DOWN && notificationAt(e.x, e.y)) {
++            frontGesture = true
++            return true
++        }
+         return handled
+     }
+ 
+     private fun touched() {
++        setFront(true)                                                   // «По нажатию»: she comes over the notifications
+         val now = SystemClock.uptimeMillis()
+         quick.addLast(now)
+         while (quick.isNotEmpty() && now - quick.first() > 4000) quick.removeFirst()
+@@ -356,9 +500,11 @@ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.L
+         level = l
+         if (mode() == 3) moveTo(target())
+         updateLobby()
++        updateNotifs()
+     }
+ 
+     fun onNotification() {
++        setFront(false)                                                  // a new one comes over her
+         if (arona.visibility != VISIBLE || dozing || !awake || !showing) return
+         if (mode() == 3) setLevel(0)                                     // make room for the notification
+         if (K.on(cr, K.ARONA_NOTIF)) touch.say(AronaReplies.Kind.NOTIFICATION)   // chip only, never a sound
+@@ -396,6 +542,7 @@ private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.L
+     }
+ 
+     override fun onDetachedFromWindow() {
++        viewTreeObserver.removeOnPreDrawListener(preDraw)
+         super.onDetachedFromWindow()
+         motion?.invoke()
+         motion = null
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSLockProtection.kt b/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSLockProtection.kt
+new file mode 100644
+index 000000000000..98bd08fb5fb8
+--- /dev/null
++++ b/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSLockProtection.kt
+@@ -0,0 +1,193 @@
++package com.android.systemui.blueos.lockscreen
++
++import android.app.WallpaperColors
++import android.app.WallpaperManager
++import android.content.Context
++import android.content.res.Configuration
++import android.graphics.Canvas
++import android.graphics.Color
++import android.graphics.LinearGradient
++import android.graphics.Paint
++import android.graphics.RectF
++import android.graphics.Shader
++import android.os.Handler
++import android.os.Looper
++import android.view.View
++import android.view.ViewTreeObserver
++import androidx.core.graphics.ColorUtils
++import org.blueos.arona.BlueOSColorRoles as C
++import org.blueos.arona.BlueOSSettings as K
++
++/**
++ * BlueOS 0.8 «Защита читаемости». The lock screen text stays light (the user doesn't want it dark), so where the
++ * wallpaper under it is light, the wallpaper is dimmed: one smooth top-to-bottom gradient in the palette's own deep
++ * tone, exactly as much as each block needs for its contrast — 4.5:1 for the greeting, the date and the line at the
++ * bottom, 3:1 for the big digits — and nothing at all on dark wallpapers (approved mockup blueos-0.8-colors.html).
++ *
++ * The wallpaper under each block comes from its local colours, like RegionSampler's; the bright spots count (90th
++ * percentile of luminance), not the average: light text disappears on the lightest part under it.
++ */
++class BlueOSLockProtection(context: Context) : View(context), WallpaperManager.LocalWallpaperColorConsumer {
++    private val wm = context.getSystemService(WallpaperManager::class.java)
++    private val main = Handler(Looper.getMainLooper())
++    private val paint = Paint()
++    /** The wallpaper's bright spots (luminance) under: the greeting + date, the big clock, the line at the bottom. */
++    private val bright = floatArrayOf(0f, 0f, 0f)
++    private val sampled = booleanArrayOf(false, false, false)
++    private val dimming = floatArrayOf(0f, 0f, 0f)
++    private var listening = false
++    private var unobserve: (() -> Unit)? = null
++
++    /** On the lock screen and awake: only then it samples and draws. */
++    var active = false
++        set(v) {
++            if (field == v) return
++            field = v
++            updateListening()
++            fadeTo(if (v) 1f else 0f)
++        }
++
++    /**
++     * 0.8: the dimming fades with the screen going to AOD and back (it switched off in one frame and the wallpaper
++     * flashed lighter just before the screen went dark).
++     */
++    private var fade = 0f
++    private var fadeAnim: android.animation.ValueAnimator? = null
++
++    private fun fadeTo(to: Float) {
++        fadeAnim?.cancel()
++        if (!isShown) { fade = to; invalidate(); return }
++        fadeAnim = android.animation.ValueAnimator.ofFloat(fade, to).apply {
++            duration = 400
++            addUpdateListener { fade = it.animatedValue as Float; invalidate() }
++            start()
++        }
++    }
++
++    init {
++        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
++    }
++
++    /** The lock screen's root when this view sits outside it (under the status bar): its alpha is ours. */
++    var follow: View? = null
++    private val preDraw = ViewTreeObserver.OnPreDrawListener {
++        follow?.let { if (alpha != it.alpha) alpha = it.alpha }
++        true
++    }
++
++    override fun onAttachedToWindow() {
++        super.onAttachedToWindow()
++        unobserve = K.observe(context, K.COLOR_KEYS + K.LOCK_TEXT_COLOR) { recompute() }
++        viewTreeObserver.addOnPreDrawListener(preDraw)
++        updateListening()
++    }
++
++    override fun onDetachedFromWindow() {
++        viewTreeObserver.removeOnPreDrawListener(preDraw)
++        unobserve?.invoke()
++        unobserve = null
++        stopListening()
++        super.onDetachedFromWindow()
++    }
++
++    /** A new palette or theme: other colours and another deep tone. */
++    override fun onConfigurationChanged(newConfig: Configuration?) {
++        super.onConfigurationChanged(newConfig)
++        recompute()
++    }
++
++    private fun updateListening() {
++        val want = isAttachedToWindow && active
++        if (want == listening) return
++        if (!want) {
++            stopListening()
++            return
++        }
++        listening = true
++        try {
++            wm?.addOnColorsChangedListener(this, REGIONS.toList(), WallpaperManager.FLAG_LOCK)
++        } catch (e: RuntimeException) {
++            // no local colours: the whole wallpaper below stays the estimate
++        }
++        // until the regions report, the whole wallpaper (a binder call: not on the main thread)
++        Thread {
++            val all = wm?.getWallpaperColors(WallpaperManager.FLAG_LOCK) ?: wm?.getWallpaperColors(WallpaperManager.FLAG_SYSTEM)
++            val l = all?.let(::brightSpots) ?: return@Thread
++            main.post {
++                for (i in bright.indices) if (!sampled[i]) bright[i] = l
++                recompute()
++            }
++        }.start()
++    }
++
++    private fun stopListening() {
++        if (!listening) return
++        listening = false
++        try {
++            wm?.removeOnColorsChangedListener(this)
++        } catch (e: RuntimeException) {
++        }
++    }
++
++    override fun onColorsChanged(area: RectF?, colors: WallpaperColors?) {
++        val i = REGIONS.indexOfFirst { it == area }
++        if (i < 0 || colors == null) return
++        val l = brightSpots(colors)
++        main.post {
++            bright[i] = l
++            sampled[i] = true
++            recompute()
++        }
++    }
++
++    /** Luminance of the lightest 10 % of the area (by the colours' populations). */
++    private fun brightSpots(colors: WallpaperColors): Float {
++        val all = colors.allColors
++        if (all.isEmpty()) return C.luminance(colors.primaryColor.toArgb())
++        val total = all.values.sum().toFloat()
++        var acc = 0f
++        for ((color, n) in all.entries.sortedByDescending { C.luminance(it.key) }) {
++            acc += n
++            if (acc >= total * 0.1f) return C.luminance(color)
++        }
++        return 0f
++    }
++
++    private fun recompute() {
++        val mode = K.int(context.contentResolver, K.LOCK_TEXT_COLOR)
++        // the same rule as the clock (ClockEventController): light text with «Всегда светлый», or «По теме» in the dark
++        val lightText = mode == 2 || (mode == 0 && C.isDark())
++        if (lightText) {
++            dimming[0] = C.protectAlpha(context, bright[0], C.lockText(context), 4.5f, .86f)
++            dimming[1] = C.protectAlpha(context, bright[1], C.lockDigits(context), 3f, .78f)
++            dimming[2] = C.protectAlpha(context, bright[2], Color.WHITE, 4.5f, .86f)
++        } else {
++            dimming.fill(0f)
++        }
++        C.setBackdrop(bright[0] * (1 - dimming[0]), bright[1] * (1 - dimming[1]), bright[2] * (1 - dimming[2]))
++        val tint = C.protectTint(context)
++        fun k(a: Float) = ColorUtils.setAlphaComponent(tint, (a * 255).toInt().coerceIn(0, 255))
++        paint.shader = if (dimming.all { it < .005f }) null else LinearGradient(0f, 0f, 0f, height.coerceAtLeast(1).toFloat(),
++            intArrayOf(k(dimming[0]), k(dimming[0]), k(dimming[1]), k(dimming[1]), k(dimming[2]), k(dimming[2])),
++            STOPS, Shader.TileMode.CLAMP)
++        invalidate()
++    }
++
++    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
++        super.onSizeChanged(w, h, oldw, oldh)
++        recompute()
++    }
++
++    override fun onDraw(canvas: Canvas) {
++        if (fade <= 0f || paint.shader == null) return
++        paint.alpha = (fade * 255).toInt()
++        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
++    }
++
++    companion object {
++        // fractions of the screen, measured on the phone (lock screen 1080×2400): greeting + date, big clock, indication
++        private val REGIONS = arrayOf(RectF(.07f, .065f, .72f, .145f), RectF(.2f, .2f, .8f, .62f), RectF(.18f, .935f, .82f, .97f))
++        // where each block's dimming holds in the gradient (top band, clock, bottom band)
++        private val STOPS = floatArrayOf(0f, .142f, .225f, .608f, .9f, 1f)
++    }
++}
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSMediaWidgetProvider.kt b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSMediaWidgetProvider.kt
+index 21bbf8ce93c7..5aa40f48c21f 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSMediaWidgetProvider.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSMediaWidgetProvider.kt
+@@ -118,7 +118,9 @@ internal object BlueOSMediaWidget {
+             ),
+             Kind(
+                 BlueOSEqFullWidgetProvider::class.java,
+-                listOf(SizeF(40f, 40f) to R.layout.blueos_eq_widget_full),
++                // 0.8: narrower than 3 columns the title gets its own line (it was cut to «The…»)
++                listOf(SizeF(40f, 40f) to R.layout.blueos_eq_widget_full_narrow,
++                    SizeF(250f, 40f) to R.layout.blueos_eq_widget_full),
+                 BlueOSVisualizerView.STYLE_MIRROR,
+             ),
+         )
+@@ -279,7 +281,9 @@ internal object BlueOSMediaWidget {
+         BlueOSWidgetStyle.applyCard(context, rv)
+ 
+         val hasTitle = !track.title.isNullOrEmpty()
+-        rv.setTextViewText(R.id.blueos_media_title, if (hasTitle) track.title else track.idle)
++        // 0.8: file names have no spaces («Theme_24_8bit.ogg» broke as «…og / g»): allow a break after _ . -
++        val title = track.title?.replace(Regex("([_.\\-])(?=.)"), "$1​")
++        rv.setTextViewText(R.id.blueos_media_title, if (hasTitle) title else track.idle)
+         rv.setTextViewText(R.id.blueos_media_artist, if (hasTitle) track.artist else "")
+ 
+         val art = track.art
+@@ -340,11 +344,29 @@ internal object BlueOSMediaWidget {
+         rv.setOnClickPendingIntent(R.id.blueos_media_next, action(context, ACTION_NEXT, 3))
+         controller?.sessionActivity?.let { rv.setOnClickPendingIntent(android.R.id.background, it) }
+ 
++        // 0.8: «Эквалайзер: плеер» options (Виджеты и значки): back / forward, bars or a wave
++        val player = kind.provider == BlueOSEqFullWidgetProvider::class.java
++        val cr = context.contentResolver
++        if (player) {
++            val skip = if (org.blueos.arona.BlueOSSettings.on(cr, org.blueos.arona.BlueOSSettings.EQ_PLAYER_SKIP)) View.VISIBLE else View.GONE
++            rv.setViewVisibility(R.id.blueos_media_previous, skip)
++            rv.setViewVisibility(R.id.blueos_media_next, skip)
++        }
+         if (kind.eqStyle >= 0) {
+-            rv.setInt(R.id.blueos_eq_view, "setStyle", kind.eqStyle)
++            val style =
++                if (player && org.blueos.arona.BlueOSSettings.int(cr, org.blueos.arona.BlueOSSettings.EQ_PLAYER_STYLE) == 1)
++                    BlueOSVisualizerView.STYLE_WAVE
++                else kind.eqStyle
++            rv.setInt(R.id.blueos_eq_view, "setStyle", style)
+             rv.setBoolean(R.id.blueos_eq_view, "setPlaying", track.playing)
+-            // A resource, so the launcher resolves it in the current theme
+-            rv.setColorStateList(R.id.blueos_eq_view, "setBarColor", R.color.blueos_widget_primary)
++            // A resource, so the launcher resolves it in the current theme; 0.8: the role from «Цвета»
++            rv.setColorStateList(R.id.blueos_eq_view, "setBarColor", when (org.blueos.arona.BlueOSColorRoles.eq(context)) {
++                org.blueos.arona.BlueOSColorRoles.EQ_THIRD -> R.color.blueos_widget_tertiary
++                org.blueos.arona.BlueOSColorRoles.EQ_TEXT -> R.color.blueos_widget_on_surface_variant
++                else -> R.color.blueos_widget_primary
++            })
++            // 0.8: no music — «Тишина» instead of an empty card with a row of dots (bars layout; ignored elsewhere)
++            rv.setViewVisibility(R.id.blueos_eq_idle, if (track.playing) View.GONE else View.VISIBLE)
+             if (kind.eqStyle == BlueOSVisualizerView.STYLE_RING) {
+                 rv.setBitmap(R.id.blueos_eq_view, "setArtwork", art)
+             }
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSSummaryWidgetProvider.kt b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSSummaryWidgetProvider.kt
+index 545f43770220..d1636889a799 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSSummaryWidgetProvider.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSSummaryWidgetProvider.kt
+@@ -108,9 +108,9 @@ internal object BlueOSSummaryWidget {
+         // BlueOS 0.7: with the card the text follows the theme (like every carded widget), without
+         // it the wallpaper under the widget
+         val card = org.blueos.arona.BlueOSSettings.on(cr, org.blueos.arona.BlueOSSettings.SUMMARY_CARD)
+-        val night = (context.resources.configuration.uiMode and
+-            android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+-            android.content.res.Configuration.UI_MODE_NIGHT_YES
++        // 0.8: the theme from Resources.getSystem(): SystemUI's configuration stayed light after a switch to dark,
++        // which gave dark text on the dark card
++        val night = org.blueos.arona.BlueOSColorRoles.isDark()
+         val darkText = if (card) !night else BlueOSWidgetStyle.wallpaperWantsDarkText(context)
+         val rv =
+             RemoteViews(
+@@ -119,7 +119,21 @@ internal object BlueOSSummaryWidget {
+                 else R.layout.blueos_summary_widget_light_text,
+             )
+         rv.setViewVisibility(R.id.blueos_widget_bg, if (card) View.VISIBLE else View.GONE)
+-        if (card) BlueOSWidgetStyle.applyCard(context, rv)
++        if (card) {
++            BlueOSWidgetStyle.applyCard(context, rv)
++            // 0.8: the text colours as resources, resolved by the launcher in ITS theme — like the card itself. The
++            // layout picked here by the theme lagged: after a light ↔ dark switch SystemUI still read the old theme,
++            // so the text stayed dark on the dark card (or light on the light one) until the next palette change
++            for (id in intArrayOf(R.id.blueos_summary_greeting, R.id.blueos_summary_date, R.id.blueos_summary_weather_dot,
++                    R.id.blueos_summary_weather, R.id.blueos_summary_next)) {
++                rv.setColorStateList(id, "setTextColor", R.color.blueos_widget_on_surface)
++            }
++            for (id in intArrayOf(R.id.blueos_summary_sensei, R.id.blueos_summary_sensei_below)) {
++                rv.setColorStateList(id, "setTextColor", R.color.blueos_widget_primary)
++            }
++            rv.setColorStateList(R.id.blueos_summary_weather_icon, "setImageTintList", R.color.blueos_widget_on_surface)
++            rv.setColorStateList(R.id.blueos_summary_icon, "setImageTintList", R.color.blueos_widget_primary)
++        }
+         // BlueOS 0.7: weather after the date (Обои и стиль → Погода → «В Сводке»)
+         val weather =
+             if (org.blueos.arona.BlueOSSettings.on(cr, org.blueos.arona.BlueOSSettings.WEATHER_SUMMARY))
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSTogglesWidgetProvider.kt b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSTogglesWidgetProvider.kt
+index bc5db221869d..dcb832a42d72 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSTogglesWidgetProvider.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSTogglesWidgetProvider.kt
+@@ -189,7 +189,16 @@ internal object BlueOSTogglesWidget {
+         val provider = ComponentName(app, BlueOSTogglesWidgetProvider::class.java)
+         if (wm.getAppWidgetIds(provider).isEmpty()) return
+ 
+-        val rv = RemoteViews(app.packageName, R.layout.blueos_toggles_widget)
++        // 0.8: from 4 columns the buttons are bigger and signed (sizes include the 8 dp margin)
++        val rv = RemoteViews(mapOf(
++            android.util.SizeF(40f, 40f) to build(app, R.layout.blueos_toggles_widget),
++            android.util.SizeF(300f, 110f) to build(app, R.layout.blueos_toggles_widget_labels),
++        ))
++        wm.updateAppWidget(provider, rv)
++    }
++
++    private fun build(app: Context, layout: Int): RemoteViews {
++        val rv = RemoteViews(app.packageName, layout)
+         BlueOSWidgetStyle.applyCard(app, rv)
+         for (toggle in Toggle.entries) {
+             val on = isOn(app, toggle)
+@@ -218,6 +227,6 @@ internal object BlueOSTogglesWidget {
+             R.id.blueos_toggle_flashlight,
+             if (torchCameraId != null) android.view.View.VISIBLE else android.view.View.GONE,
+         )
+-        wm.updateAppWidget(provider, rv)
++        return rv
+     }
+ }
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSWidgetStyle.kt b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSWidgetStyle.kt
+index 4ef682dfc157..0f1864c7a207 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSWidgetStyle.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSWidgetStyle.kt
+@@ -53,22 +53,23 @@ object BlueOSWidgetStyle {
+         if (started) return
+         started = true
+         val app = context.applicationContext
+-        app.contentResolver.registerContentObserver(
+-            Settings.Secure.getUriFor(SETTING_TRANSPARENCY),
+-            false,
+-            object : ContentObserver(Handler(Looper.getMainLooper())) {
+-                override fun onChange(selfChange: Boolean) {
+-                    notifyChanged(app)
+-                }
+-            },
+-            UserHandle.USER_ALL,
+-        )
++        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
++            override fun onChange(selfChange: Boolean) {
++                notifyChanged(app)
++            }
++        }
++        // 0.8: «Эквалайзер» in «Цвета» and the «Эквалайзер: плеер» options redraw the widgets too
++        for (key in listOf(SETTING_TRANSPARENCY, org.blueos.arona.BlueOSSettings.COLOR_EQ,
++                org.blueos.arona.BlueOSSettings.EQ_PLAYER_SKIP, org.blueos.arona.BlueOSSettings.EQ_PLAYER_STYLE)) {
++            app.contentResolver.registerContentObserver(Settings.Secure.getUriFor(key), false, observer, UserHandle.USER_ALL)
++        }
+         // 0.7.1: light ↔ dark theme: the «Сводка» picks its text layout by the theme, redraw it right away
+         // (it used to keep the old colours until the next greeting change)
+-        var night = app.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
++        // (0.8: the theme from Resources.getSystem() — SystemUI's own configuration can stay stale after a switch)
++        var night = org.blueos.arona.BlueOSColorRoles.isDark()
+         app.registerReceiver(object : BroadcastReceiver() {
+             override fun onReceive(c: Context, i: Intent) {
+-                val n = app.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
++                val n = org.blueos.arona.BlueOSColorRoles.isDark()
+                 if (n != night) { night = n; notifyChanged(app) }
+             }
+         }, IntentFilter(Intent.ACTION_CONFIGURATION_CHANGED))

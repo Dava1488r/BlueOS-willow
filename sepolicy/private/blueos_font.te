@@ -1,0 +1,6 @@
+# System font (SystemFonts reads persist.sys.blueos.font when it builds the font map):
+# system_server shares the map with apps, the zygotes preload it.
+get_prop(system_server, blueos_font_prop)
+get_prop(zygote, blueos_font_prop)
+get_prop(webview_zygote, blueos_font_prop)
+get_prop(app_zygote, blueos_font_prop)

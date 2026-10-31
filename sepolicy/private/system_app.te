@@ -1,0 +1,5 @@
+# Settings > Display > Boot animation
+set_prop(system_app, blueos_bootanim_prop)
+
+# Settings > Display > Font
+set_prop(system_app, blueos_font_prop)

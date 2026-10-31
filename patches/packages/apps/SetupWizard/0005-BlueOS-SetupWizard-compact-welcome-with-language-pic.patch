@@ -1,0 +1,309 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sat, 24 Oct 2026 23:36:47 +0200
+Subject: [PATCH 5/5] BlueOS: SetupWizard: compact welcome with language picker
+ replaces Google's
+
+Google SUW starts before the user is unlocked; the partner (this app) was not
+direct boot aware, so SUW fell back to its own script and showed its welcome.
+
+- WelcomeActivity, the language picker, DeviceInfoActivity and PartnerReceiver
+  are direct boot aware; WelcomeActivity also answers Google's OEM_PRE_SETUP.
+- wizard_script: the BlueOS welcome goes straight to check_user_unlock.
+- Welcome page: logo higher, normal-size buttons, language button that opens
+  LocaleActivity and returns (BlueOSLocalePickerActivity).
+
+Change-Id: If30528333abf48ac48274d6e19a4af386b61abc5
+---
+ app/src/main/AndroidManifest.xml              | 20 +++++++-
+ .../lineageos/setupwizard/WelcomeActivity.kt  | 27 +++++++++++
+ .../setupwizard/locale/LocaleActivity.kt      |  2 +-
+ app/src/main/res/layout/welcome_activity.xml  | 48 +++++++++++++------
+ app/src/main/res/raw/wizard_script.xml        |  7 ++-
+ app/src/main/res/values-ru/blueos_welcome.xml |  1 +
+ app/src/main/res/values/blueos_welcome.xml    | 13 +++++
+ 7 files changed, 99 insertions(+), 19 deletions(-)
+
+diff --git a/app/src/main/AndroidManifest.xml b/app/src/main/AndroidManifest.xml
+index cdc68ac..196b3bc 100644
+--- a/app/src/main/AndroidManifest.xml
++++ b/app/src/main/AndroidManifest.xml
+@@ -107,11 +107,17 @@
+             android:configChanges="mcc|mnc"
+             android:immersive="true"
+             android:exported="true"
++            android:directBootAware="true"
+             android:windowSoftInputMode="stateAlwaysHidden">
+             <intent-filter>
+                 <action android:name="org.lineageos.setupwizard.LINEAGE_WELCOME" />
+                 <category android:name="android.intent.category.DEFAULT" />
+             </intent-filter>
++            <!-- BlueOS: Google's own script (used while the user is still locked) -->
++            <intent-filter>
++                <action android:name="com.android.setupwizard.OEM_PRE_SETUP" />
++                <category android:name="android.intent.category.DEFAULT" />
++            </intent-filter>
+         </activity>
+ 
+         <activity
+@@ -141,6 +147,16 @@
+             </intent-filter>
+         </activity>
+ 
++        <!-- BlueOS: language picker opened from the welcome screen -->
++        <activity
++            android:name=".BlueOSLocalePickerActivity"
++            android:label="@string/activity_label_empty"
++            android:configChanges="mcc|mnc"
++            android:immersive="true"
++            android:exported="false"
++            android:directBootAware="true"
++            android:windowSoftInputMode="stateAlwaysHidden" />
++
+         <activity
+             android:name=".time.DateTimeActivity"
+             android:label="@string/activity_label_empty"
+@@ -197,6 +213,7 @@
+             android:name=".system.DeviceInfoActivity"
+             android:configChanges="mcc|mnc"
+             android:exported="false"
++            android:directBootAware="true"
+             android:windowSoftInputMode="stateAlwaysHidden" />
+ 
+         <activity
+@@ -318,7 +335,8 @@
+ 
+         <receiver
+             android:name=".receiver.PartnerReceiver"
+-            android:exported="true">
++            android:exported="true"
++            android:directBootAware="true">
+             <intent-filter>
+                 <action android:name="com.android.setupwizard.action.PARTNER_CUSTOMIZATION" />
+                 <action android:name="com.google.android.tvsetup.action.PARTNER_CUSTOMIZATION" />
+diff --git a/app/src/main/java/org/lineageos/setupwizard/WelcomeActivity.kt b/app/src/main/java/org/lineageos/setupwizard/WelcomeActivity.kt
+index c9acefd..2266332 100644
+--- a/app/src/main/java/org/lineageos/setupwizard/WelcomeActivity.kt
++++ b/app/src/main/java/org/lineageos/setupwizard/WelcomeActivity.kt
+@@ -18,13 +18,17 @@ import android.widget.ImageView
+ import android.widget.TextView
+ import androidx.activity.OnBackPressedCallback
+ import androidx.core.view.updateLayoutParams
++import com.android.internal.app.LocaleHelper
++import com.android.internal.app.LocalePicker
+ import com.google.android.material.button.MaterialButton
+ import com.google.android.setupcompat.util.SystemBarHelper
+ import com.google.android.setupdesign.R as SudR
+ import com.google.android.setupdesign.template.FloatingActionButtonMixin
+ import com.google.android.setupdesign.template.FloatingBackButtonMixin
++import java.util.Locale
+ import org.lineageos.setupwizard.base.GlifTemplate
+ import org.lineageos.setupwizard.base.SubBaseActivity
++import org.lineageos.setupwizard.locale.LocaleActivity
+ import org.lineageos.setupwizard.system.DeviceInfoActivity
+ import org.lineageos.setupwizard.util.SetupWizardUtils
+ 
+@@ -73,6 +77,19 @@ class WelcomeActivity : SubBaseActivity() {
+                 SystemProperties.get(BLUEOS_VERSION_PROP),
+                 Build.VERSION.RELEASE_OR_CODENAME,
+             )
++        setupLanguageButton()
++    }
++
++    // The activity is recreated after a language change, so the label stays current
++    private fun setupLanguageButton() {
++        val button = findViewById<MaterialButton>(R.id.blueos_language) ?: return
++        val locale = Locale.getDefault()
++        button.text = LocaleHelper.getDisplayName(locale, locale, true)
++        button.contentDescription =
++            getString(R.string.blueos_welcome_language_description, button.text)
++        button.setOnClickListener {
++            startActivity(Intent(this, BlueOSLocalePickerActivity::class.java))
++        }
+     }
+ 
+     override fun onResume() {
+@@ -171,3 +188,13 @@ class WelcomeActivity : SubBaseActivity() {
+         private const val BLUEOS_VERSION_PROP = "ro.blueos.version"
+     }
+ }
++
++/** BlueOS: language list opened from the welcome screen; goes back instead of advancing. */
++class BlueOSLocalePickerActivity : LocaleActivity() {
++
++    override fun applyLocale(locale: Locale) {
++        LocalePicker.updateLocale(locale)
++        setResult(RESULT_OK)
++        finish()
++    }
++}
+diff --git a/app/src/main/java/org/lineageos/setupwizard/locale/LocaleActivity.kt b/app/src/main/java/org/lineageos/setupwizard/locale/LocaleActivity.kt
+index 1b72197..b08a711 100644
+--- a/app/src/main/java/org/lineageos/setupwizard/locale/LocaleActivity.kt
++++ b/app/src/main/java/org/lineageos/setupwizard/locale/LocaleActivity.kt
+@@ -220,7 +220,7 @@ open class LocaleActivity : BaseSetupWizardActivity() {
+         applyLocale(localeInfo.locale)
+     }
+ 
+-    private fun applyLocale(locale: Locale) {
++    protected open fun applyLocale(locale: Locale) {
+         com.android.internal.app.LocalePicker.updateLocale(locale)
+         nextAction(RESULT_OK)
+     }
+diff --git a/app/src/main/res/layout/welcome_activity.xml b/app/src/main/res/layout/welcome_activity.xml
+index 13f100e..256071b 100644
+--- a/app/src/main/res/layout/welcome_activity.xml
++++ b/app/src/main/res/layout/welcome_activity.xml
+@@ -18,7 +18,7 @@
+         <Space
+             android:layout_width="match_parent"
+             android:layout_height="0dp"
+-            android:layout_weight="2" />
++            android:layout_weight="@dimen/blueos_welcome_space_above_weight" />
+ 
+         <!-- BlueOS logo (system colors), the halo falls in and keeps bobbing -->
+         <ImageView
+@@ -32,8 +32,7 @@
+ 
+         <Space
+             android:layout_width="match_parent"
+-            android:layout_height="0dp"
+-            android:layout_weight="0.5" />
++            android:layout_height="@dimen/blueos_welcome_logo_gap" />
+ 
+         <LinearLayout
+             style="@style/SudContentFrame"
+@@ -62,8 +61,26 @@
+                 android:gravity="center"
+                 android:textAppearance="?attr/textAppearanceBodyLarge"
+                 android:textColor="?android:textColorSecondary" />
++
++            <!-- BlueOS: current language, opens the language list -->
++            <com.google.android.material.button.MaterialButton
++                android:id="@+id/blueos_language"
++                style="?attr/materialButtonOutlinedStyle"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_gravity="center_horizontal"
++                android:layout_marginTop="@dimen/blueos_welcome_language_margin_top"
++                android:textColor="?attr/colorOnSurface"
++                app:icon="@drawable/ic_locale"
++                app:iconSize="@dimen/blueos_welcome_language_icon_size"
++                app:iconTint="?attr/colorOnSurface" />
+         </LinearLayout>
+ 
++        <Space
++            android:layout_width="match_parent"
++            android:layout_height="0dp"
++            android:layout_weight="@dimen/blueos_welcome_space_below_weight" />
++
+         <LinearLayout
+             android:layout_width="match_parent"
+             android:layout_height="wrap_content"
+@@ -73,38 +90,39 @@
+             android:paddingEnd="?attr/sudMarginEnd"
+             android:paddingBottom="?attr/sucFooterBarPaddingBottom">
+ 
++            <!-- BlueOS: compact footer (normal-size buttons) -->
+             <com.google.android.material.button.MaterialButton
+                 android:id="@+id/launch_accessibility"
+                 style="@style/WelcomeIconButton"
+-                android:layout_width="@dimen/welcome_footer_button_size"
+-                android:layout_height="@dimen/welcome_footer_button_size"
++                android:layout_width="@dimen/blueos_welcome_button_height"
++                android:layout_height="@dimen/blueos_welcome_button_height"
+                 android:layout_gravity="center_vertical"
+-                android:layout_marginEnd="@dimen/welcome_footer_button_spacing"
+                 android:contentDescription="@string/accessibility_settings"
+                 app:icon="@drawable/ic_accessibility"
+-                app:iconSize="@dimen/welcome_accessibility_icon_size"
++                app:iconSize="@dimen/blueos_welcome_button_icon_size"
+                 app:iconTint="?attr/colorOnSurface" />
+ 
+             <Space
+                 android:layout_width="0dp"
+                 android:layout_height="0dp"
+-                android:layout_weight="@dimen/welcome_start_button_inset_weight" />
++                android:layout_weight="1" />
+ 
+             <com.google.android.material.button.MaterialButton
+                 android:id="@+id/start"
+                 style="?attr/materialButtonStyle"
+-                android:layout_width="0dp"
++                android:layout_width="wrap_content"
+                 android:layout_height="wrap_content"
+-                android:layout_weight="1"
++                android:layout_gravity="center_vertical"
+                 android:insetTop="0dp"
+                 android:insetBottom="0dp"
+-                android:minHeight="@dimen/welcome_footer_button_size"
++                android:minWidth="@dimen/blueos_welcome_start_min_width"
++                android:minHeight="@dimen/blueos_welcome_button_height"
+                 android:text="@string/start"
+-                android:textAppearance="?attr/textAppearanceTitleLarge"
++                android:textAppearance="?attr/textAppearanceTitleMedium"
+                 app:icon="@drawable/ic_arrow_forward"
+-                app:iconGravity="textStart"
+-                app:iconPadding="@dimen/welcome_start_button_icon_padding"
+-                app:iconSize="@dimen/welcome_start_button_icon_size" />
++                app:iconGravity="textEnd"
++                app:iconPadding="@dimen/blueos_welcome_start_icon_padding"
++                app:iconSize="@dimen/blueos_welcome_button_icon_size" />
+         </LinearLayout>
+     </LinearLayout>
+ </com.google.android.setupdesign.GlifLayout>
+diff --git a/app/src/main/res/raw/wizard_script.xml b/app/src/main/res/raw/wizard_script.xml
+index f348a46..61a3e63 100644
+--- a/app/src/main/res/raw/wizard_script.xml
++++ b/app/src/main/res/raw/wizard_script.xml
+@@ -14,10 +14,13 @@
+ -->
+ <WizardScript xmlns:wizard="http://schemas.android.com/apk/res/com.google.android.setupwizard"
+     wizard:version="2">
+-    <!-- BlueOS: the BlueOS welcome screen first, then Google's welcome (language) -->
++    <!-- BlueOS: the BlueOS welcome screen (with its own language picker) replaces Google's
++         welcome; Google's welcome is kept below but no longer reached -->
+     <WizardAction
+         id="oem_pre_setup"
+-        wizard:uri="intent:#Intent;package=org.lineageos.setupwizard;action=org.lineageos.setupwizard.LINEAGE_WELCOME;end" />
++        wizard:uri="intent:#Intent;package=org.lineageos.setupwizard;action=org.lineageos.setupwizard.LINEAGE_WELCOME;end">
++        <result wizard:action="check_user_unlock" />
++    </WizardAction>
+     <WizardAction
+         id="welcome"
+         wizard:uri="intent:#Intent;package=com.google.android.setupwizard;action=com.android.setupwizard.WELCOME;end">
+diff --git a/app/src/main/res/values-ru/blueos_welcome.xml b/app/src/main/res/values-ru/blueos_welcome.xml
+index dfa9b63..711c3f6 100644
+--- a/app/src/main/res/values-ru/blueos_welcome.xml
++++ b/app/src/main/res/values-ru/blueos_welcome.xml
+@@ -1,4 +1,5 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources>
+     <string name="blueos_welcome_title">Добро пожаловать, Сэнсэй</string>
++    <string name="blueos_welcome_language_description">Язык: <xliff:g id="language" example="Русский (Россия)" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%1$s</xliff:g></string>
+ </resources>
+diff --git a/app/src/main/res/values/blueos_welcome.xml b/app/src/main/res/values/blueos_welcome.xml
+index d097fba..a60c424 100644
+--- a/app/src/main/res/values/blueos_welcome.xml
++++ b/app/src/main/res/values/blueos_welcome.xml
+@@ -6,7 +6,20 @@
+     <dimen name="blueos_welcome_title_line_height">40dp</dimen>
+     <dimen name="blueos_welcome_title_padding_bottom">8dp</dimen>
+ 
++    <!-- Compact layout: free space split above the logo / above the footer -->
++    <item name="blueos_welcome_space_above_weight" format="float" type="dimen">1</item>
++    <item name="blueos_welcome_space_below_weight" format="float" type="dimen">1.2</item>
++    <dimen name="blueos_welcome_logo_gap">24dp</dimen>
++    <dimen name="blueos_welcome_language_margin_top">16dp</dimen>
++    <dimen name="blueos_welcome_language_icon_size">18dp</dimen>
++    <dimen name="blueos_welcome_button_height">56dp</dimen>
++    <dimen name="blueos_welcome_button_icon_size">24dp</dimen>
++    <dimen name="blueos_welcome_start_min_width">160dp</dimen>
++    <dimen name="blueos_welcome_start_icon_padding">8dp</dimen>
++
+     <string name="blueos_welcome_title">Welcome, Sensei</string>
++    <!-- Content description of the language button; the current language -->
++    <string name="blueos_welcome_language_description">Language: <xliff:g id="language" example="English (United States)" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%1$s</xliff:g></string>
+     <!-- BlueOS version, Android version -->
+     <string name="blueos_welcome_subtitle">BlueOS <xliff:g id="blueos" example="0.4" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%1$s</xliff:g> · Android <xliff:g id="android" example="17" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%2$s</xliff:g></string>
+ </resources>

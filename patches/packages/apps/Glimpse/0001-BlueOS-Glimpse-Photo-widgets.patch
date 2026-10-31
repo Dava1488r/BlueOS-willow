@@ -1,0 +1,997 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sun, 25 Oct 2026 04:49:34 +0100
+Subject: [PATCH 1/3] BlueOS: Glimpse: Photo widgets
+
+Any picture on the home screen: rounded, round with an accent ring, or a
+sticker as is (PNG transparency kept). Four starting sizes, all resizable
+and reconfigurable. The system photo picker opens right away; the picture
+is copied, scaled down, and served to the launcher read-only by
+BlueOSPhotoProvider under a random name.
+
+Change-Id: Idccf963f726c4e2d195c519cfc64db9f3ccd9879
+---
+ app/src/main/AndroidManifest.xml              |  65 +++++
+ .../widgets/BlueOSPhotoConfigActivity.kt      | 243 ++++++++++++++++++
+ .../glimpse/widgets/BlueOSPhotoProvider.kt    |  66 +++++
+ .../widgets/BlueOSPhotoWidgetProvider.kt      | 102 ++++++++
+ .../drawable/blueos_ic_photo_placeholder.xml  |  15 ++
+ .../main/res/drawable/blueos_photo_ring.xml   |  16 ++
+ .../res/drawable/blueos_widget_outline.xml    |  11 +
+ .../main/res/layout/blueos_photo_config.xml   |  97 +++++++
+ .../res/layout/blueos_photo_widget_circle.xml |  27 ++
+ .../layout/blueos_photo_widget_rounded.xml    |  21 ++
+ .../layout/blueos_photo_widget_sticker.xml    |  19 ++
+ .../res/values-night/blueos_widget_colors.xml |  10 +
+ app/src/main/res/values-ru/blueos_strings.xml |  19 ++
+ app/src/main/res/values/blueos_strings.xml    |  21 ++
+ .../main/res/values/blueos_widget_colors.xml  |  10 +
+ .../res/xml/blueos_photo_widget_portrait.xml  |  21 ++
+ .../res/xml/blueos_photo_widget_small.xml     |  21 ++
+ .../res/xml/blueos_photo_widget_square.xml    |  21 ++
+ .../main/res/xml/blueos_photo_widget_wide.xml |  21 ++
+ 19 files changed, 826 insertions(+)
+ create mode 100644 app/src/main/java/org/lineageos/glimpse/widgets/BlueOSPhotoConfigActivity.kt
+ create mode 100644 app/src/main/java/org/lineageos/glimpse/widgets/BlueOSPhotoProvider.kt
+ create mode 100644 app/src/main/java/org/lineageos/glimpse/widgets/BlueOSPhotoWidgetProvider.kt
+ create mode 100644 app/src/main/res/drawable/blueos_ic_photo_placeholder.xml
+ create mode 100644 app/src/main/res/drawable/blueos_photo_ring.xml
+ create mode 100644 app/src/main/res/drawable/blueos_widget_outline.xml
+ create mode 100644 app/src/main/res/layout/blueos_photo_config.xml
+ create mode 100644 app/src/main/res/layout/blueos_photo_widget_circle.xml
+ create mode 100644 app/src/main/res/layout/blueos_photo_widget_rounded.xml
+ create mode 100644 app/src/main/res/layout/blueos_photo_widget_sticker.xml
+ create mode 100644 app/src/main/res/values-night/blueos_widget_colors.xml
+ create mode 100644 app/src/main/res/values-ru/blueos_strings.xml
+ create mode 100644 app/src/main/res/values/blueos_strings.xml
+ create mode 100644 app/src/main/res/values/blueos_widget_colors.xml
+ create mode 100644 app/src/main/res/xml/blueos_photo_widget_portrait.xml
+ create mode 100644 app/src/main/res/xml/blueos_photo_widget_small.xml
+ create mode 100644 app/src/main/res/xml/blueos_photo_widget_square.xml
+ create mode 100644 app/src/main/res/xml/blueos_photo_widget_wide.xml
+
+diff --git a/app/src/main/AndroidManifest.xml b/app/src/main/AndroidManifest.xml
+index ba3fd18..e71726e 100644
+--- a/app/src/main/AndroidManifest.xml
++++ b/app/src/main/AndroidManifest.xml
+@@ -131,6 +131,71 @@
+             android:label="@string/title_activity_settings"
+             android:theme="@style/Theme.SettingsLib" />
+ 
++        <!-- BlueOS photo widgets: one picture each, four starting sizes, all resizable -->
++        <receiver
++            android:name=".widgets.BlueOSPhotoWidgetProvider$Small"
++            android:exported="true"
++            android:label="@string/blueos_photo_widget_small">
++            <intent-filter>
++                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
++            </intent-filter>
++            <meta-data
++                android:name="android.appwidget.provider"
++                android:resource="@xml/blueos_photo_widget_small" />
++        </receiver>
++
++        <receiver
++            android:name=".widgets.BlueOSPhotoWidgetProvider$Square"
++            android:exported="true"
++            android:label="@string/blueos_photo_widget_square">
++            <intent-filter>
++                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
++            </intent-filter>
++            <meta-data
++                android:name="android.appwidget.provider"
++                android:resource="@xml/blueos_photo_widget_square" />
++        </receiver>
++
++        <receiver
++            android:name=".widgets.BlueOSPhotoWidgetProvider$Portrait"
++            android:exported="true"
++            android:label="@string/blueos_photo_widget_portrait">
++            <intent-filter>
++                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
++            </intent-filter>
++            <meta-data
++                android:name="android.appwidget.provider"
++                android:resource="@xml/blueos_photo_widget_portrait" />
++        </receiver>
++
++        <receiver
++            android:name=".widgets.BlueOSPhotoWidgetProvider$Wide"
++            android:exported="true"
++            android:label="@string/blueos_photo_widget_wide">
++            <intent-filter>
++                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
++            </intent-filter>
++            <meta-data
++                android:name="android.appwidget.provider"
++                android:resource="@xml/blueos_photo_widget_wide" />
++        </receiver>
++
++        <activity
++            android:name=".widgets.BlueOSPhotoConfigActivity"
++            android:excludeFromRecents="true"
++            android:exported="true"
++            android:label="@string/blueos_photo_config_title">
++            <intent-filter>
++                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
++            </intent-filter>
++        </activity>
++
++        <!-- The widgets' pictures for the launcher: read-only, unguessable names -->
++        <provider
++            android:name=".widgets.BlueOSPhotoProvider"
++            android:authorities="org.lineageos.glimpse.blueos.widgetphotos"
++            android:exported="true" />
++
+     </application>
+ 
+ </manifest>
+diff --git a/app/src/main/java/org/lineageos/glimpse/widgets/BlueOSPhotoConfigActivity.kt b/app/src/main/java/org/lineageos/glimpse/widgets/BlueOSPhotoConfigActivity.kt
+new file mode 100644
+index 0000000..df7b52a
+--- /dev/null
++++ b/app/src/main/java/org/lineageos/glimpse/widgets/BlueOSPhotoConfigActivity.kt
+@@ -0,0 +1,243 @@
++/*
++ * SPDX-FileCopyrightText: 2026 BlueOS
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package org.lineageos.glimpse.widgets
++
++import android.appwidget.AppWidgetManager
++import android.content.Intent
++import android.graphics.Bitmap
++import android.graphics.BitmapShader
++import android.graphics.Canvas
++import android.graphics.ImageDecoder
++import android.graphics.Outline
++import android.graphics.Paint
++import android.graphics.Shader
++import android.net.Uri
++import android.os.Bundle
++import android.view.View
++import android.view.ViewOutlineProvider
++import android.widget.Button
++import android.widget.ImageView
++import android.widget.Toast
++import androidx.activity.result.PickVisualMediaRequest
++import androidx.activity.result.contract.ActivityResultContracts
++import androidx.appcompat.app.AppCompatActivity
++import androidx.lifecycle.lifecycleScope
++import com.google.android.material.button.MaterialButtonToggleGroup
++import java.io.File
++import java.util.UUID
++import kotlin.math.max
++import kotlin.math.min
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.launch
++import kotlinx.coroutines.withContext
++import org.lineageos.glimpse.R
++import org.lineageos.glimpse.widgets.BlueOSPhotoWidgetProvider.Shape
++
++/**
++ * BlueOS photo widget setup: the system photo picker opens right away, then the user picks the
++ * shape. The picture is copied into our files (scaled down; cut round for the circle).
++ */
++class BlueOSPhotoConfigActivity : AppCompatActivity() {
++    private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
++    private var picked: Bitmap? = null
++    private var shape = Shape.ROUNDED
++
++    private lateinit var preview: ImageView
++    private lateinit var previewRing: ImageView
++
++    private val pickPhoto =
++        registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
++            if (uri != null) {
++                load(uri)
++            } else if (picked == null) {
++                // Nothing picked and nothing to keep: no widget
++                finish()
++            }
++        }
++
++    override fun onCreate(savedInstanceState: Bundle?) {
++        super.onCreate(savedInstanceState)
++        setResult(RESULT_CANCELED)
++        widgetId =
++            intent.getIntExtra(
++                AppWidgetManager.EXTRA_APPWIDGET_ID,
++                AppWidgetManager.INVALID_APPWIDGET_ID,
++            )
++        if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
++            finish()
++            return
++        }
++        setContentView(R.layout.blueos_photo_config)
++        preview = findViewById(R.id.blueos_photo_preview)
++        previewRing = findViewById(R.id.blueos_photo_preview_ring)
++        preview.clipToOutline = true
++
++        shape = BlueOSPhotoWidgetProvider.shape(this, widgetId)
++        val shapes = findViewById<MaterialButtonToggleGroup>(R.id.blueos_photo_shape)
++        shapes.check(
++            when (shape) {
++                Shape.ROUNDED -> R.id.blueos_photo_shape_rounded
++                Shape.CIRCLE -> R.id.blueos_photo_shape_circle
++                Shape.STICKER -> R.id.blueos_photo_shape_sticker
++            }
++        )
++        shapes.addOnButtonCheckedListener { _, checkedId, isChecked ->
++            if (!isChecked) return@addOnButtonCheckedListener
++            shape =
++                when (checkedId) {
++                    R.id.blueos_photo_shape_circle -> Shape.CIRCLE
++                    R.id.blueos_photo_shape_sticker -> Shape.STICKER
++                    else -> Shape.ROUNDED
++                }
++            showPreview()
++        }
++        findViewById<Button>(R.id.blueos_photo_change).setOnClickListener { pick() }
++        findViewById<Button>(R.id.blueos_photo_done).setOnClickListener { save() }
++
++        // Reconfiguring starts from the current picture; a new widget starts with the picker
++        val existing = BlueOSPhotoWidgetProvider.photoFile(this, widgetId)
++        if (existing != null && existing.exists()) {
++            lifecycleScope.launch {
++                picked =
++                    withContext(Dispatchers.IO) {
++                        runCatching { decode(ImageDecoder.createSource(existing)) }.getOrNull()
++                    }
++                showPreview()
++            }
++        } else if (savedInstanceState == null) {
++            pick()
++        }
++    }
++
++    private fun pick() {
++        pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
++    }
++
++    private fun load(uri: Uri) {
++        lifecycleScope.launch {
++            val bitmap =
++                withContext(Dispatchers.IO) {
++                    runCatching { decode(ImageDecoder.createSource(contentResolver, uri)) }
++                        .getOrNull()
++                }
++            if (bitmap == null) {
++                Toast.makeText(this@BlueOSPhotoConfigActivity, R.string.blueos_photo_error, Toast.LENGTH_SHORT)
++                    .show()
++                if (picked == null) finish()
++                return@launch
++            }
++            picked = bitmap
++            showPreview()
++        }
++    }
++
++    /** Decoded small enough for a widget (the launcher decodes it again on its main thread). */
++    private fun decode(source: ImageDecoder.Source): Bitmap =
++        ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
++            val longest = max(info.size.width, info.size.height)
++            if (longest > MAX_SIZE_PX) {
++                val scale = MAX_SIZE_PX.toFloat() / longest
++                decoder.setTargetSize(
++                    (info.size.width * scale).toInt().coerceAtLeast(1),
++                    (info.size.height * scale).toInt().coerceAtLeast(1),
++                )
++            }
++            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
++        }
++
++    private fun showPreview() {
++        val bitmap = picked ?: return
++        val radius = resources.getDimension(android.R.dimen.system_app_widget_background_radius)
++        when (shape) {
++            Shape.ROUNDED -> {
++                preview.scaleType = ImageView.ScaleType.CENTER_CROP
++                preview.setImageBitmap(bitmap)
++                preview.outlineProvider =
++                    object : ViewOutlineProvider() {
++                        override fun getOutline(view: View, outline: Outline) {
++                            outline.setRoundRect(0, 0, view.width, view.height, radius)
++                        }
++                    }
++            }
++            Shape.CIRCLE -> {
++                preview.scaleType = ImageView.ScaleType.FIT_CENTER
++                preview.setImageBitmap(circle(bitmap))
++                preview.outlineProvider = ViewOutlineProvider.BACKGROUND
++            }
++            Shape.STICKER -> {
++                preview.scaleType = ImageView.ScaleType.FIT_CENTER
++                preview.setImageBitmap(bitmap)
++                preview.outlineProvider = ViewOutlineProvider.BACKGROUND
++            }
++        }
++        preview.invalidateOutline()
++        previewRing.visibility = if (shape == Shape.CIRCLE) View.VISIBLE else View.GONE
++    }
++
++    /** The middle square cut round, transparent around. */
++    private fun circle(source: Bitmap): Bitmap {
++        val size = min(source.width, source.height)
++        val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
++        val paint =
++            Paint(Paint.ANTI_ALIAS_FLAG).apply {
++                shader =
++                    BitmapShader(source, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
++                        setLocalMatrix(
++                            android.graphics.Matrix().apply {
++                                setTranslate(
++                                    -(source.width - size) / 2f,
++                                    -(source.height - size) / 2f,
++                                )
++                            }
++                        )
++                    }
++            }
++        Canvas(out).drawCircle(size / 2f, size / 2f, size / 2f, paint)
++        return out
++    }
++
++    private fun save() {
++        val bitmap = picked ?: return pick()
++        val chosenShape = shape
++        lifecycleScope.launch {
++            val app = applicationContext
++            withContext(Dispatchers.IO) {
++                val image = if (chosenShape == Shape.CIRCLE) circle(bitmap) else bitmap
++                // PNG keeps transparency (stickers, the circle); photos are smaller as JPEG
++                val png = chosenShape != Shape.ROUNDED && image.hasAlpha() ||
++                    chosenShape == Shape.CIRCLE
++                val file = File(
++                    BlueOSPhotoWidgetProvider.photosDir(app),
++                    "${UUID.randomUUID()}.${if (png) "png" else "jpg"}",
++                )
++                file.outputStream().use {
++                    image.compress(
++                        if (png) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG,
++                        92,
++                        it,
++                    )
++                }
++                // A new name each time: the launcher never shows a cached old picture
++                BlueOSPhotoWidgetProvider.photoFile(app, widgetId)?.delete()
++                BlueOSPhotoWidgetProvider.prefs(app)
++                    .edit()
++                    .putString(BlueOSPhotoWidgetProvider.keyFile(widgetId), file.name)
++                    .putString(BlueOSPhotoWidgetProvider.keyShape(widgetId), chosenShape.name)
++                    .commit()
++            }
++            BlueOSPhotoWidgetProvider.update(app, AppWidgetManager.getInstance(app), widgetId)
++            setResult(
++                RESULT_OK,
++                Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId),
++            )
++            finish()
++        }
++    }
++
++    private companion object {
++        const val MAX_SIZE_PX = 1440
++    }
++}
+diff --git a/app/src/main/java/org/lineageos/glimpse/widgets/BlueOSPhotoProvider.kt b/app/src/main/java/org/lineageos/glimpse/widgets/BlueOSPhotoProvider.kt
+new file mode 100644
+index 0000000..6973ca6
+--- /dev/null
++++ b/app/src/main/java/org/lineageos/glimpse/widgets/BlueOSPhotoProvider.kt
+@@ -0,0 +1,66 @@
++/*
++ * SPDX-FileCopyrightText: 2026 BlueOS
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package org.lineageos.glimpse.widgets
++
++import android.content.ContentProvider
++import android.content.ContentValues
++import android.database.Cursor
++import android.net.Uri
++import android.os.ParcelFileDescriptor
++import java.io.File
++import java.io.FileNotFoundException
++
++/**
++ * Serves the photo widgets' pictures to the launcher, read-only. The launcher loads them itself,
++ * so this is exported; the file names are random UUIDs and nothing can be listed or written.
++ */
++class BlueOSPhotoProvider : ContentProvider() {
++    override fun onCreate() = true
++
++    override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
++        if (mode != "r") throw SecurityException("Read only")
++        val name = uri.lastPathSegment
++        if (uri.pathSegments.size != 1 || name == null || !NAME.matches(name)) {
++            throw FileNotFoundException(uri.toString())
++        }
++        val file = File(BlueOSPhotoWidgetProvider.photosDir(context!!), name)
++        if (!file.exists()) throw FileNotFoundException(uri.toString())
++        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
++    }
++
++    override fun getType(uri: Uri): String? =
++        when (uri.lastPathSegment?.substringAfterLast('.')) {
++            "png" -> "image/png"
++            "jpg" -> "image/jpeg"
++            else -> null
++        }
++
++    override fun query(
++        uri: Uri,
++        projection: Array<out String>?,
++        selection: String?,
++        selectionArgs: Array<out String>?,
++        sortOrder: String?,
++    ): Cursor? = null
++
++    override fun insert(uri: Uri, values: ContentValues?): Uri? = null
++
++    override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?) = 0
++
++    override fun update(
++        uri: Uri,
++        values: ContentValues?,
++        selection: String?,
++        selectionArgs: Array<out String>?,
++    ) = 0
++
++    companion object {
++        private const val AUTHORITY = "org.lineageos.glimpse.blueos.widgetphotos"
++        private val NAME = Regex("[0-9a-f-]{36}\\.(png|jpg)")
++
++        fun uriFor(name: String): Uri = Uri.parse("content://$AUTHORITY/$name")
++    }
++}
+diff --git a/app/src/main/java/org/lineageos/glimpse/widgets/BlueOSPhotoWidgetProvider.kt b/app/src/main/java/org/lineageos/glimpse/widgets/BlueOSPhotoWidgetProvider.kt
+new file mode 100644
+index 0000000..d5b5ad6
+--- /dev/null
++++ b/app/src/main/java/org/lineageos/glimpse/widgets/BlueOSPhotoWidgetProvider.kt
+@@ -0,0 +1,102 @@
++/*
++ * SPDX-FileCopyrightText: 2026 BlueOS
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package org.lineageos.glimpse.widgets
++
++import android.app.PendingIntent
++import android.appwidget.AppWidgetManager
++import android.appwidget.AppWidgetProvider
++import android.content.Context
++import android.content.Intent
++import android.net.Uri
++import android.widget.RemoteViews
++import java.io.File
++import org.lineageos.glimpse.MainActivity
++import org.lineageos.glimpse.R
++
++/**
++ * BlueOS photo widget: one picture the user picked, rounded, round with an accent ring, or a
++ * sticker as is. The four providers only differ in the size they start at; all resize freely.
++ * The picture is a copy in our files, served to the launcher by [BlueOSPhotoProvider].
++ */
++open class BlueOSPhotoWidgetProvider : AppWidgetProvider() {
++    class Small : BlueOSPhotoWidgetProvider()
++
++    class Square : BlueOSPhotoWidgetProvider()
++
++    class Portrait : BlueOSPhotoWidgetProvider()
++
++    class Wide : BlueOSPhotoWidgetProvider()
++
++    override fun onUpdate(context: Context, wm: AppWidgetManager, widgetIds: IntArray) {
++        widgetIds.forEach { update(context, wm, it) }
++    }
++
++    override fun onDeleted(context: Context, widgetIds: IntArray) {
++        widgetIds.forEach { id ->
++            photoFile(context, id)?.delete()
++            prefs(context).edit().remove(keyFile(id)).remove(keyShape(id)).apply()
++        }
++    }
++
++    enum class Shape(val layout: Int) {
++        ROUNDED(R.layout.blueos_photo_widget_rounded),
++        CIRCLE(R.layout.blueos_photo_widget_circle),
++        STICKER(R.layout.blueos_photo_widget_sticker),
++    }
++
++    companion object {
++        private const val PREFS = "blueos_photo_widgets"
++
++        fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
++
++        fun keyFile(id: Int) = "file_$id"
++
++        fun keyShape(id: Int) = "shape_$id"
++
++        fun photosDir(context: Context) = File(context.filesDir, "widget_photos").apply { mkdirs() }
++
++        fun photoFile(context: Context, id: Int): File? =
++            prefs(context).getString(keyFile(id), null)?.let { File(photosDir(context), it) }
++
++        fun shape(context: Context, id: Int): Shape =
++            runCatching { Shape.valueOf(prefs(context).getString(keyShape(id), null)!!) }
++                .getOrDefault(Shape.ROUNDED)
++
++        fun update(context: Context, wm: AppWidgetManager, id: Int) {
++            val rv = RemoteViews(context.packageName, shape(context, id).layout)
++            val file = photoFile(context, id)
++            if (file != null && file.exists()) {
++                rv.setImageViewUri(R.id.blueos_photo, BlueOSPhotoProvider.uriFor(file.name))
++                // Tap opens the gallery
++                rv.setOnClickPendingIntent(
++                    android.R.id.background,
++                    PendingIntent.getActivity(
++                        context,
++                        0,
++                        Intent(context, MainActivity::class.java),
++                        PendingIntent.FLAG_IMMUTABLE,
++                    ),
++                )
++            } else {
++                // Not set up: tap opens the setup
++                rv.setImageViewResource(R.id.blueos_photo, R.drawable.blueos_ic_photo_placeholder)
++                rv.setOnClickPendingIntent(
++                    android.R.id.background,
++                    PendingIntent.getActivity(
++                        context,
++                        id,
++                        Intent(context, BlueOSPhotoConfigActivity::class.java)
++                            .setAction(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE)
++                            .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
++                            .setData(Uri.parse("blueos-photo-widget:$id")),
++                        PendingIntent.FLAG_IMMUTABLE,
++                    ),
++                )
++            }
++            wm.updateAppWidget(id, rv)
++        }
++    }
++}
+diff --git a/app/src/main/res/drawable/blueos_ic_photo_placeholder.xml b/app/src/main/res/drawable/blueos_ic_photo_placeholder.xml
+new file mode 100644
+index 0000000..ba73aa9
+--- /dev/null
++++ b/app/src/main/res/drawable/blueos_ic_photo_placeholder.xml
+@@ -0,0 +1,15 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: 2026 BlueOS
++     SPDX-License-Identifier: Apache-2.0
++-->
++<!-- BlueOS photo widget: not set up yet (Material icon, Apache 2.0) -->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="48dp"
++    android:height="48dp"
++    android:viewportWidth="24"
++    android:viewportHeight="24">
++    <path
++        android:fillColor="@color/blueos_widget_primary"
++        android:pathData="M21,19V5c0,-1.1 -0.9,-2 -2,-2H5c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2zM8.5,13.5l2.5,3.01L14.5,12l4.5,6H5l3.5,-4.5z" />
++</vector>
+diff --git a/app/src/main/res/drawable/blueos_photo_ring.xml b/app/src/main/res/drawable/blueos_photo_ring.xml
+new file mode 100644
+index 0000000..6494a00
+--- /dev/null
++++ b/app/src/main/res/drawable/blueos_photo_ring.xml
+@@ -0,0 +1,16 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: 2026 BlueOS
++     SPDX-License-Identifier: Apache-2.0
++-->
++<!-- BlueOS photo widget: accent ring around a round photo -->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="96dp"
++    android:height="96dp"
++    android:viewportWidth="96"
++    android:viewportHeight="96">
++    <path
++        android:pathData="M48,1.75a46.25,46.25 0 1,0 0.001,0z"
++        android:strokeWidth="3.5"
++        android:strokeColor="@color/blueos_widget_primary" />
++</vector>
+diff --git a/app/src/main/res/drawable/blueos_widget_outline.xml b/app/src/main/res/drawable/blueos_widget_outline.xml
+new file mode 100644
+index 0000000..6111e23
+--- /dev/null
++++ b/app/src/main/res/drawable/blueos_widget_outline.xml
+@@ -0,0 +1,11 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: 2026 BlueOS
++     SPDX-License-Identifier: Apache-2.0
++-->
++<!-- BlueOS photo widget: the rounded outline a "rounded" photo is clipped to -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android"
++    android:shape="rectangle">
++    <solid android:color="@color/blueos_widget_primary_container" />
++    <corners android:radius="@android:dimen/system_app_widget_background_radius" />
++</shape>
+diff --git a/app/src/main/res/layout/blueos_photo_config.xml b/app/src/main/res/layout/blueos_photo_config.xml
+new file mode 100644
+index 0000000..e4fe85a
+--- /dev/null
++++ b/app/src/main/res/layout/blueos_photo_config.xml
+@@ -0,0 +1,97 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: 2026 BlueOS
++     SPDX-License-Identifier: Apache-2.0
++-->
++<!-- BlueOS photo widget setup: the picked photo, its shape, done -->
++<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
++    android:layout_width="match_parent"
++    android:layout_height="match_parent"
++    android:fitsSystemWindows="true"
++    android:orientation="vertical"
++    android:padding="24dp">
++
++    <TextView
++        android:layout_width="match_parent"
++        android:layout_height="wrap_content"
++        android:text="@string/blueos_photo_config_title"
++        android:textAppearance="?attr/textAppearanceHeadlineSmall" />
++
++    <FrameLayout
++        android:layout_width="match_parent"
++        android:layout_height="0dp"
++        android:layout_marginVertical="20dp"
++        android:layout_weight="1">
++
++        <ImageView
++            android:id="@+id/blueos_photo_preview"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitCenter" />
++
++        <ImageView
++            android:id="@+id/blueos_photo_preview_ring"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitCenter"
++            android:src="@drawable/blueos_photo_ring"
++            android:visibility="gone" />
++    </FrameLayout>
++
++    <com.google.android.material.button.MaterialButtonToggleGroup
++        android:id="@+id/blueos_photo_shape"
++        android:layout_width="match_parent"
++        android:layout_height="wrap_content"
++        app:selectionRequired="true"
++        app:singleSelection="true"
++        xmlns:app="http://schemas.android.com/apk/res-auto">
++
++        <Button
++            android:id="@+id/blueos_photo_shape_rounded"
++            style="?attr/materialButtonOutlinedStyle"
++            android:layout_width="0dp"
++            android:layout_height="wrap_content"
++            android:layout_weight="1"
++            android:text="@string/blueos_photo_shape_rounded" />
++
++        <Button
++            android:id="@+id/blueos_photo_shape_circle"
++            style="?attr/materialButtonOutlinedStyle"
++            android:layout_width="0dp"
++            android:layout_height="wrap_content"
++            android:layout_weight="1"
++            android:text="@string/blueos_photo_shape_circle" />
++
++        <Button
++            android:id="@+id/blueos_photo_shape_sticker"
++            style="?attr/materialButtonOutlinedStyle"
++            android:layout_width="0dp"
++            android:layout_height="wrap_content"
++            android:layout_weight="1"
++            android:text="@string/blueos_photo_shape_sticker" />
++    </com.google.android.material.button.MaterialButtonToggleGroup>
++
++    <LinearLayout
++        android:layout_width="match_parent"
++        android:layout_height="wrap_content"
++        android:layout_marginTop="16dp"
++        android:gravity="end"
++        android:orientation="horizontal">
++
++        <Button
++            android:id="@+id/blueos_photo_change"
++            style="?attr/materialButtonOutlinedStyle"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_marginEnd="12dp"
++            android:text="@string/blueos_photo_change" />
++
++        <Button
++            android:id="@+id/blueos_photo_done"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:text="@string/blueos_photo_done" />
++    </LinearLayout>
++</LinearLayout>
+diff --git a/app/src/main/res/layout/blueos_photo_widget_circle.xml b/app/src/main/res/layout/blueos_photo_widget_circle.xml
+new file mode 100644
+index 0000000..825d170
+--- /dev/null
++++ b/app/src/main/res/layout/blueos_photo_widget_circle.xml
+@@ -0,0 +1,27 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: 2026 BlueOS
++     SPDX-License-Identifier: Apache-2.0
++-->
++<!-- BlueOS photo widget: a round photo (already cut round) with an accent ring -->
++<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
++    android:id="@android:id/background"
++    android:layout_width="match_parent"
++    android:layout_height="match_parent">
++
++    <ImageView
++        android:id="@+id/blueos_photo"
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:contentDescription="@null"
++        android:padding="2dp"
++        android:scaleType="fitCenter"
++        android:src="@drawable/blueos_ic_photo_placeholder" />
++
++    <ImageView
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:contentDescription="@null"
++        android:scaleType="fitCenter"
++        android:src="@drawable/blueos_photo_ring" />
++</FrameLayout>
+diff --git a/app/src/main/res/layout/blueos_photo_widget_rounded.xml b/app/src/main/res/layout/blueos_photo_widget_rounded.xml
+new file mode 100644
+index 0000000..d0f2175
+--- /dev/null
++++ b/app/src/main/res/layout/blueos_photo_widget_rounded.xml
+@@ -0,0 +1,21 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: 2026 BlueOS
++     SPDX-License-Identifier: Apache-2.0
++-->
++<!-- BlueOS photo widget: the photo fills the widget, rounded corners -->
++<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
++    android:id="@android:id/background"
++    android:layout_width="match_parent"
++    android:layout_height="match_parent">
++
++    <ImageView
++        android:id="@+id/blueos_photo"
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:background="@drawable/blueos_widget_outline"
++        android:clipToOutline="true"
++        android:contentDescription="@null"
++        android:scaleType="centerCrop"
++        android:src="@drawable/blueos_ic_photo_placeholder" />
++</FrameLayout>
+diff --git a/app/src/main/res/layout/blueos_photo_widget_sticker.xml b/app/src/main/res/layout/blueos_photo_widget_sticker.xml
+new file mode 100644
+index 0000000..96b2edc
+--- /dev/null
++++ b/app/src/main/res/layout/blueos_photo_widget_sticker.xml
+@@ -0,0 +1,19 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: 2026 BlueOS
++     SPDX-License-Identifier: Apache-2.0
++-->
++<!-- BlueOS photo widget: a sticker: the picture as is, transparent parts stay transparent -->
++<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
++    android:id="@android:id/background"
++    android:layout_width="match_parent"
++    android:layout_height="match_parent">
++
++    <ImageView
++        android:id="@+id/blueos_photo"
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:contentDescription="@null"
++        android:scaleType="fitCenter"
++        android:src="@drawable/blueos_ic_photo_placeholder" />
++</FrameLayout>
+diff --git a/app/src/main/res/values-night/blueos_widget_colors.xml b/app/src/main/res/values-night/blueos_widget_colors.xml
+new file mode 100644
+index 0000000..eafbe18
+--- /dev/null
++++ b/app/src/main/res/values-night/blueos_widget_colors.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: 2026 BlueOS
++     SPDX-License-Identifier: Apache-2.0
++-->
++<!-- BlueOS photo widget: dark theme -->
++<resources>
++    <color name="blueos_widget_primary">@android:color/system_primary_dark</color>
++    <color name="blueos_widget_primary_container">@android:color/system_primary_container_dark</color>
++</resources>
+diff --git a/app/src/main/res/values-ru/blueos_strings.xml b/app/src/main/res/values-ru/blueos_strings.xml
+new file mode 100644
+index 0000000..dd021ef
+--- /dev/null
++++ b/app/src/main/res/values-ru/blueos_strings.xml
+@@ -0,0 +1,19 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: 2026 BlueOS
++     SPDX-License-Identifier: Apache-2.0
++-->
++<resources>
++    <string name="blueos_photo_widget_small">Фото: маленькое</string>
++    <string name="blueos_photo_widget_square">Фото: квадрат</string>
++    <string name="blueos_photo_widget_portrait">Фото: портрет</string>
++    <string name="blueos_photo_widget_wide">Фото: широкое</string>
++    <string name="blueos_photo_widget_description">Любое фото или стикер на главном экране</string>
++    <string name="blueos_photo_config_title">Фото на главный экран</string>
++    <string name="blueos_photo_shape_rounded">Скругление</string>
++    <string name="blueos_photo_shape_circle">Круг</string>
++    <string name="blueos_photo_shape_sticker">Стикер</string>
++    <string name="blueos_photo_change">Другое фото</string>
++    <string name="blueos_photo_done">Готово</string>
++    <string name="blueos_photo_error">Не получается открыть эту картинку</string>
++</resources>
+diff --git a/app/src/main/res/values/blueos_strings.xml b/app/src/main/res/values/blueos_strings.xml
+new file mode 100644
+index 0000000..8408765
+--- /dev/null
++++ b/app/src/main/res/values/blueos_strings.xml
+@@ -0,0 +1,21 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: 2026 BlueOS
++     SPDX-License-Identifier: Apache-2.0
++-->
++<!-- BlueOS photo widget -->
++<resources>
++    <string name="blueos_photo_widget_small">Photo: small</string>
++    <string name="blueos_photo_widget_square">Photo: square</string>
++    <string name="blueos_photo_widget_portrait">Photo: portrait</string>
++    <string name="blueos_photo_widget_wide">Photo: wide</string>
++    <string name="blueos_photo_widget_description">Any photo or sticker on the home screen</string>
++    <string name="blueos_photo_config_title">Photo on the home screen</string>
++    <string name="blueos_photo_shape_rounded">Rounded</string>
++    <string name="blueos_photo_shape_circle">Circle</string>
++    <!-- The picture as is, with its transparent parts (a PNG sticker) -->
++    <string name="blueos_photo_shape_sticker">Sticker</string>
++    <string name="blueos_photo_change">Another photo</string>
++    <string name="blueos_photo_done">Done</string>
++    <string name="blueos_photo_error">Can\'t open this picture</string>
++</resources>
+diff --git a/app/src/main/res/values/blueos_widget_colors.xml b/app/src/main/res/values/blueos_widget_colors.xml
+new file mode 100644
+index 0000000..4be9f9d
+--- /dev/null
++++ b/app/src/main/res/values/blueos_widget_colors.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: 2026 BlueOS
++     SPDX-License-Identifier: Apache-2.0
++-->
++<!-- BlueOS photo widget: system palette colors, so they follow the accent color -->
++<resources>
++    <color name="blueos_widget_primary">@android:color/system_primary_light</color>
++    <color name="blueos_widget_primary_container">@android:color/system_primary_container_light</color>
++</resources>
+diff --git a/app/src/main/res/xml/blueos_photo_widget_portrait.xml b/app/src/main/res/xml/blueos_photo_widget_portrait.xml
+new file mode 100644
+index 0000000..b23ff65
+--- /dev/null
++++ b/app/src/main/res/xml/blueos_photo_widget_portrait.xml
+@@ -0,0 +1,21 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: 2026 BlueOS
++     SPDX-License-Identifier: Apache-2.0
++-->
++<!-- BlueOS photo widget: portrait (2x2); all sizes resize freely -->
++<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
++    android:configure="org.lineageos.glimpse.widgets.BlueOSPhotoConfigActivity"
++    android:description="@string/blueos_photo_widget_description"
++    android:initialLayout="@layout/blueos_photo_widget_rounded"
++    android:minWidth="110dp"
++    android:minHeight="180dp"
++    android:minResizeWidth="40dp"
++    android:minResizeHeight="40dp"
++    android:previewLayout="@layout/blueos_photo_widget_rounded"
++    android:resizeMode="horizontal|vertical"
++    android:targetCellWidth="2"
++    android:targetCellHeight="2"
++    android:updatePeriodMillis="0"
++    android:widgetCategory="home_screen"
++    android:widgetFeatures="reconfigurable" />
+diff --git a/app/src/main/res/xml/blueos_photo_widget_small.xml b/app/src/main/res/xml/blueos_photo_widget_small.xml
+new file mode 100644
+index 0000000..fd234c0
+--- /dev/null
++++ b/app/src/main/res/xml/blueos_photo_widget_small.xml
+@@ -0,0 +1,21 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: 2026 BlueOS
++     SPDX-License-Identifier: Apache-2.0
++-->
++<!-- BlueOS photo widget: small (1x1); all sizes resize freely -->
++<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
++    android:configure="org.lineageos.glimpse.widgets.BlueOSPhotoConfigActivity"
++    android:description="@string/blueos_photo_widget_description"
++    android:initialLayout="@layout/blueos_photo_widget_rounded"
++    android:minWidth="40dp"
++    android:minHeight="40dp"
++    android:minResizeWidth="40dp"
++    android:minResizeHeight="40dp"
++    android:previewLayout="@layout/blueos_photo_widget_rounded"
++    android:resizeMode="horizontal|vertical"
++    android:targetCellWidth="1"
++    android:targetCellHeight="1"
++    android:updatePeriodMillis="0"
++    android:widgetCategory="home_screen"
++    android:widgetFeatures="reconfigurable" />
+diff --git a/app/src/main/res/xml/blueos_photo_widget_square.xml b/app/src/main/res/xml/blueos_photo_widget_square.xml
+new file mode 100644
+index 0000000..d0c3a59
+--- /dev/null
++++ b/app/src/main/res/xml/blueos_photo_widget_square.xml
+@@ -0,0 +1,21 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: 2026 BlueOS
++     SPDX-License-Identifier: Apache-2.0
++-->
++<!-- BlueOS photo widget: square (2x1 on the 6a's tall cells); all sizes resize freely -->
++<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
++    android:configure="org.lineageos.glimpse.widgets.BlueOSPhotoConfigActivity"
++    android:description="@string/blueos_photo_widget_description"
++    android:initialLayout="@layout/blueos_photo_widget_rounded"
++    android:minWidth="110dp"
++    android:minHeight="90dp"
++    android:minResizeWidth="40dp"
++    android:minResizeHeight="40dp"
++    android:previewLayout="@layout/blueos_photo_widget_rounded"
++    android:resizeMode="horizontal|vertical"
++    android:targetCellWidth="2"
++    android:targetCellHeight="1"
++    android:updatePeriodMillis="0"
++    android:widgetCategory="home_screen"
++    android:widgetFeatures="reconfigurable" />
+diff --git a/app/src/main/res/xml/blueos_photo_widget_wide.xml b/app/src/main/res/xml/blueos_photo_widget_wide.xml
+new file mode 100644
+index 0000000..bc74d7e
+--- /dev/null
++++ b/app/src/main/res/xml/blueos_photo_widget_wide.xml
+@@ -0,0 +1,21 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: 2026 BlueOS
++     SPDX-License-Identifier: Apache-2.0
++-->
++<!-- BlueOS photo widget: wide (4x2); all sizes resize freely -->
++<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
++    android:configure="org.lineageos.glimpse.widgets.BlueOSPhotoConfigActivity"
++    android:description="@string/blueos_photo_widget_description"
++    android:initialLayout="@layout/blueos_photo_widget_rounded"
++    android:minWidth="250dp"
++    android:minHeight="180dp"
++    android:minResizeWidth="40dp"
++    android:minResizeHeight="40dp"
++    android:previewLayout="@layout/blueos_photo_widget_rounded"
++    android:resizeMode="horizontal|vertical"
++    android:targetCellWidth="4"
++    android:targetCellHeight="2"
++    android:updatePeriodMillis="0"
++    android:widgetCategory="home_screen"
++    android:widgetFeatures="reconfigurable" />

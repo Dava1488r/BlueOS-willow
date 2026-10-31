@@ -1,0 +1,58 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Fri, 30 Oct 2026 22:08:22 +0100
+Subject: [PATCH 9/9] BlueOS: Launcher3: a custom widget the build lacks shows
+ the error card
+
+A build without the character's files has no Arona widget. Its placeholder
+was a plain AppWidgetHostView, not draggable: a long press on its empty
+cells crashed the launcher (NPE in LauncherDragController.createDragView).
+Now it is the usual "can't load widget" card, which can be moved or removed.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: I2afadaaf371efaf5a70462033b5ce6feacac0426
+---
+ .../launcher3/widget/custom/CustomWidgetManager.java  | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/src/com/android/launcher3/widget/custom/CustomWidgetManager.java b/src/com/android/launcher3/widget/custom/CustomWidgetManager.java
+index e8383a3645..638993189c 100644
+--- a/src/com/android/launcher3/widget/custom/CustomWidgetManager.java
++++ b/src/com/android/launcher3/widget/custom/CustomWidgetManager.java
+@@ -27,11 +27,13 @@ import android.content.ComponentName;
+ import android.content.Context;
+ import android.os.Parcel;
+ import android.os.Process;
++import android.view.LayoutInflater;
+ 
+ import androidx.annotation.NonNull;
+ import androidx.annotation.Nullable;
+ import androidx.annotation.VisibleForTesting;
+ 
++import com.android.launcher3.R;
+ import com.android.launcher3.dagger.ApplicationContext;
+ import com.android.launcher3.dagger.LauncherAppSingleton;
+ import com.android.launcher3.dagger.LauncherBaseAppComponent;
+@@ -39,6 +41,7 @@ import com.android.launcher3.util.DaggerSingletonObject;
+ import com.android.launcher3.util.DaggerSingletonTracker;
+ import com.android.launcher3.util.PluginManagerWrapper;
+ import com.android.launcher3.util.SafeCloseable;
++import com.android.launcher3.widget.LauncherAppWidgetHostView;
+ import com.android.launcher3.widget.LauncherAppWidgetProviderInfo;
+ import com.android.systemui.plugins.CustomWidgetPlugin;
+ import com.android.systemui.plugins.PluginLifecycleManager;
+@@ -140,7 +143,13 @@ public class CustomWidgetManager implements PluginListener<CustomWidgetPlugin> {
+      */
+     public AppWidgetHostView createView(Context context, LauncherAppWidgetProviderInfo info) {
+         CustomWidget widget = mWidgets.get(info.provider);
+-        return widget != null ? widget.createView(context, info) : new AppWidgetHostView(context);
++        if (widget != null) return widget.createView(context, info);
++        // BlueOS 0.8: a widget this build lacks (e.g. the character without the game's files).
++        // A plain AppWidgetHostView isn't draggable: a long press on it crashed the launcher.
++        // The usual "can't load widget" card can be moved or removed.
++        LauncherAppWidgetHostView missing = new LauncherAppWidgetHostView(context);
++        missing.addView(LayoutInflater.from(context).inflate(R.layout.appwidget_error, missing, false));
++        return missing;
+     }
+ 
+     /** BlueOS 0.8: the widget's own picture for the widget picker (background thread), or null. */

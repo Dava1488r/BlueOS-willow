@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Fri, 30 Oct 2026 11:59:16 +0100
+Subject: [PATCH 12/12] =?UTF-8?q?BlueOS:=20ThemePicker:=20=C2=AB=D0=9F?=
+ =?UTF-8?q?=D0=B5=D1=80=D1=81=D0=BE=D0=BD=D0=B0=D0=B6=C2=BB=20only=20when?=
+ =?UTF-8?q?=20the=20build=20has=20a=20character?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: Ic217484c0f3165a1ed69399354bfae74e0c2d3d1
+---
+ .../ui/util/ThemePickerCustomizationOptionViewUtil.kt    | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/src/com/android/wallpaper/customization/ui/util/ThemePickerCustomizationOptionViewUtil.kt b/src/com/android/wallpaper/customization/ui/util/ThemePickerCustomizationOptionViewUtil.kt
+index b5d72a3d..7b91fd2b 100644
+--- a/src/com/android/wallpaper/customization/ui/util/ThemePickerCustomizationOptionViewUtil.kt
++++ b/src/com/android/wallpaper/customization/ui/util/ThemePickerCustomizationOptionViewUtil.kt
+@@ -123,8 +123,10 @@ constructor(
+                                 false,
+                             )
+                     )
+-                    // BlueOS 0.7.1: Arona, the live clock, phone motion (one page per subject)
+-                    add(com.android.customization.blueos.BlueOSCustomizationOption.ARONA.entry(layoutInflater, optionContainer))
++                    // BlueOS 0.7.1: Arona, the live clock, phone motion (one page per subject); 0.8: «Персонаж» only
++                    // when this build has a character (a public build without the game's files has none)
++                    if (org.blueos.arona.Character.anyAvailable)
++                        add(com.android.customization.blueos.BlueOSCustomizationOption.ARONA.entry(layoutInflater, optionContainer))
+                     add(com.android.customization.blueos.BlueOSCustomizationOption.CLOCK.entry(layoutInflater, optionContainer))
+                     // 0.8: «Цвета» — a role per element (clock, halo, AOD, icons)
+                     add(com.android.customization.blueos.BlueOSCustomizationOption.COLORS.entry(layoutInflater, optionContainer))
+@@ -205,7 +207,8 @@ constructor(
+                     }
+                     // BlueOS 0.7.1: widgets and icons, Arona (and her widget), weather, phone motion
+                     add(com.android.customization.blueos.BlueOSCustomizationOption.HOME.entry(layoutInflater, optionContainer))
+-                    add(com.android.customization.blueos.BlueOSCustomizationOption.ARONA.entry(layoutInflater, optionContainer))
++                    if (org.blueos.arona.Character.anyAvailable)
++                        add(com.android.customization.blueos.BlueOSCustomizationOption.ARONA.entry(layoutInflater, optionContainer))
+                     add(com.android.customization.blueos.BlueOSCustomizationOption.WEATHER.entry(layoutInflater, optionContainer))
+                     add(com.android.customization.blueos.BlueOSCustomizationOption.MOTION.entry(layoutInflater, optionContainer))
+                 }

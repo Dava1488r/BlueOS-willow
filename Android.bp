@@ -1,0 +1,25 @@
+//
+// BlueOS prebuilt modules
+//
+
+// Boot animations. The default light one (tools/make-bootanimation.py) replaces LineageOS'
+// via TARGET_BOOTANIMATION in config/blueos.mk; the others go to /product/media/blueos/.
+// Which one plays is chosen by bootanimation (BlueOS patch in frameworks/base):
+// Settings > Display > Boot animation.
+prebuilt_media {
+    name: "blueos_bootanimation_dark",
+    src: "media/bootanimation/bootanimation-dark.zip",
+    filename: "bootanimation-dark.zip",
+    relative_install_path: "blueos",
+    product_specific: true,
+}
+
+// The classic animations are optional files (ASSETS.md, tools/import-assets.py): config/blueos.mk
+// copies them when they are there.
+
+// Release marker
+prebuilt_etc {
+    name: "blueos-release",
+    src: "config/blueos-release",
+    product_specific: true,
+}

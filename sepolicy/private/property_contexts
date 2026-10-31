@@ -1,0 +1,2 @@
+persist.sys.blueos.bootanim     u:object_r:blueos_bootanim_prop:s0 exact string
+persist.sys.blueos.font         u:object_r:blueos_font_prop:s0 exact string

@@ -1,0 +1,1443 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 27 Oct 2026 03:49:41 +0100
+Subject: [PATCH 22/30] BlueOS: SystemUI: Live Arona, live halo and weather
+ (0.7)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Lock screen: live Arona (Spine, vendor/blueos/libs/arona) as the first keyguard section — modes next to the clock / by the fingerprint / lobby / dynamic / custom, replies, sleep at night, AOD silhouette, notification chip, shake and fall. Halo clock: breathing glow, float, minute gleam, brighter while charging, swing on touch, tilt, inertia, fall blackout. Weather from Open-Meteo (BlueOSWeather) after the date on the lock screen and in the Summary widget; Summary card background switch.
+
+Change-Id: Ib5aa027a13923a49f9a367d3e4429b0052b84643
+---
+ packages/SystemUI/Android.bp                  |   2 +
+ packages/SystemUI/AndroidManifest.xml         |   4 +
+ packages/SystemUI/customization/Android.bp    |   3 +
+ .../systemui/shared/clocks/view/BlueOSHalo.kt | 176 ++++++++++
+ .../shared/clocks/view/FlexClockTextView.kt   |   5 +-
+ .../shared/clocks/view/FlexClockViewGroup.kt  |   5 +-
+ .../blueos_summary_widget_dark_text.xml       | 214 +++++++-----
+ .../blueos_summary_widget_light_text.xml      | 214 +++++++-----
+ .../SystemUI/res/values-ru/blueos_arona.xml   |   4 +
+ packages/SystemUI/res/values/blueos_arona.xml |   7 +
+ .../lockscreen/BlueOSCharacterSection.kt      | 325 ++++++++++++++++++
+ .../systemui/blueos/weather/BlueOSWeather.kt  | 110 ++++++
+ .../widgets/BlueOSSummaryWidgetProvider.kt    |  34 +-
+ .../keyguard/KeyguardSliceProvider.java       |  44 +++
+ .../blueprints/DefaultKeyguardBlueprint.kt    |   3 +
+ .../theme/ThemeOverlayController.java         |   3 +
+ 16 files changed, 990 insertions(+), 163 deletions(-)
+ create mode 100644 packages/SystemUI/res/values-ru/blueos_arona.xml
+ create mode 100644 packages/SystemUI/res/values/blueos_arona.xml
+ create mode 100644 packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt
+ create mode 100644 packages/SystemUI/src/com/android/systemui/blueos/weather/BlueOSWeather.kt
+
+diff --git a/packages/SystemUI/Android.bp b/packages/SystemUI/Android.bp
+index 9382f88c38ef..79da8da3d3f9 100644
+--- a/packages/SystemUI/Android.bp
++++ b/packages/SystemUI/Android.bp
+@@ -489,6 +489,8 @@ android_library {
+         "//frameworks/libs/systemui:compilelib",
+         "com.android.systemui.bundle.phone_api",
+         "SystemUI-res",
++        // BlueOS: live Arona, replies, weather icons, motion sensors (vendor/blueos/libs/arona)
++        "BlueOSAronaLib",
+         "WifiTrackerLib",
+         "WindowManager-Shell",
+         "PlatformAnimationLib",
+diff --git a/packages/SystemUI/AndroidManifest.xml b/packages/SystemUI/AndroidManifest.xml
+index 1fbb0bc24fca..6f45c37dc8a5 100644
+--- a/packages/SystemUI/AndroidManifest.xml
++++ b/packages/SystemUI/AndroidManifest.xml
+@@ -88,6 +88,10 @@
+     <uses-permission android:name="android.permission.NETWORK_FACTORY" />
+     <uses-permission android:name="android.permission.SATELLITE_COMMUNICATION" />
+     <uses-permission android:name="android.permission.INTERNET" />
++    <!-- BlueOS 0.7: approximate location for the weather (Open-Meteo); the step detector so
++         walking/running isn't taken for shaking the phone. Granted by default-permissions-blueos.xml -->
++    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
++    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+     <!-- Physical hardware -->
+     <uses-permission android:name="android.permission.MANAGE_USB" />
+     <uses-permission android:name="android.permission.CONTROL_DISPLAY_BRIGHTNESS" />
+diff --git a/packages/SystemUI/customization/Android.bp b/packages/SystemUI/customization/Android.bp
+index 3909b5a98b3d..f2a3c80ad48b 100644
+--- a/packages/SystemUI/customization/Android.bp
++++ b/packages/SystemUI/customization/Android.bp
+@@ -50,6 +50,9 @@ android_library {
+         "androidx.lifecycle_lifecycle-viewmodel-ktx",
+         "androidx.recyclerview_recyclerview",
+         "kotlinx_coroutines_android",
++        // BlueOS: live Halo (settings keys, tilt/inertia/fall). Compile-only: SystemUI and
++        // ThemePicker link BlueOSAronaLib themselves.
++        "BlueOSAronaLib",
+     ],
+     resource_dirs: ["res"],
+     min_sdk_version: "current",
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt
+index 3976b9c7b653..70d0e5d9c5ba 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt
+@@ -120,12 +120,188 @@ internal fun drawHaloShape(
+     paint.strokeWidth = rx * if (isDozing) 0.08f else 0.18f
+     paint.color = color
+     oval.set(cx - rx, cy - ry, cx + rx, cy + ry)
++    val live = !isDozing && BlueOSHaloLive.active
+     canvas.withSave {
++        if (live) {
++            // BlueOS 0.7 live halo: floats, swings, leans and lags a little — but always stays in place
++            translate(BlueOSHaloLive.dx, BlueOSHaloLive.dy)
++            rotate(BlueOSHaloLive.angle, cx, cy)
++        }
+         rotate(HALO_ANGLE, cx, cy)
++        if (live) BlueOSHaloLive.drawGlow(this, oval, paint, color)
++        paint.alpha = (paint.alpha * if (live) BlueOSHaloLive.blackout else 1f).toInt()
++        paint.maskFilter = null
+         drawOval(oval, paint)
++        if (live) BlueOSHaloLive.drawSparkle(this, oval, paint)
++    }
++}
++
++/**
++ * BlueOS 0.7: the live halo of the Halo clock (switches in Обои и стиль → Экран блокировки → Живые часы).
++ * Breathes in the accent colour, floats a little, a gleam runs around it when the minute changes, glows
++ * brighter while charging, swings when touched (no sound), leans with the phone, lags behind its motion,
++ * goes out and flickers back after a fall. Draws only while a halo view is attached and awake.
++ */
++object BlueOSHaloLive : android.view.Choreographer.FrameCallback {
++    private val views = mutableSetOf<View>()
++    private var running = false
++    private var last = 0L
++    private var t = 0f
++    private var swingA = 0f
++    private var swingV = 0f
++    private var tiltA = 0f
++    private var sparkleT = -1f
++    private var minute = -1
++    private var blackoutT = -1f
++    private var charging = false
++    private var chargeCheckedAt = 0L
++    private var ctx: Context? = null
++    private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
++    private val sparkPaint = Paint(Paint.ANTI_ALIAS_FLAG)
++
++    var active = false; private set
++    var dx = 0f; private set
++    var dy = 0f; private set
++    var angle = 0f; private set
++    var blackout = 1f; private set
++
++    private fun on(key: String) = ctx?.let { org.blueos.arona.BlueOSSettings.on(it.contentResolver, key) } ?: false
++
++    fun register(view: View) {
++        ctx = view.context.applicationContext
++        views += view
++        if (!running) {
++            running = true
++            last = 0L
++            android.view.Choreographer.getInstance().postFrameCallback(this)
++        }
++    }
++
++    fun unregister(view: View) {
++        views -= view
++        if (views.isEmpty()) {
++            running = false
++            active = false
++            android.view.Choreographer.getInstance().removeFrameCallback(this)
++            idle.removeCallbacks(wake)
++        }
++    }
++
++    /** Touch on the halo: a swing to that side (−1 / +1). */
++    fun swing(dir: Int) { swingV += 220f * dir }
++
++    /** The phone fell: the halo goes out and flickers back in place. */
++    fun fall() { if (on(org.blueos.arona.BlueOSSettings.FALL_HALO)) blackoutT = 0f }
++
++    /** A gleam runs around the halo (also when the screen turns on). */
++    fun sparkle() { if (on(org.blueos.arona.BlueOSSettings.HALO_SPARK)) sparkleT = 0f }
++
++    private val idle = android.os.Handler(android.os.Looper.getMainLooper())
++    private val wake = Runnable { if (running) { last = 0L; android.view.Choreographer.getInstance().postFrameCallback(this) } }
++
++    override fun doFrame(frameTimeNanos: Long) {
++        if (!running) return
++        val c = ctx
++        // AOD / screen off: no per-frame redraws (battery); look again in a second
++        val interactive = c?.getSystemService(android.os.PowerManager::class.java)?.isInteractive ?: false
++        active = interactive && c != null && on(org.blueos.arona.BlueOSSettings.HALO_LIVE)
++        if (!active) {
++            idle.removeCallbacks(wake)
++            idle.postDelayed(wake, 1000)
++            return
++        }
++        val dt = if (last == 0L) 0f else ((frameTimeNanos - last) / 1e9f).coerceIn(0f, 0.05f)
++        last = frameTimeNanos
++        step(c!!, dt)
++        views.forEach { if (it.isShown) it.invalidate() }
++        android.view.Choreographer.getInstance().postFrameCallback(this)
++    }
++
++    private fun step(c: Context, dt: Float) {
++        t += dt
++        val k = org.blueos.arona.BlueOSSettings
++        val float = on(k.HALO_FLOAT)
++        // swing (spring) + tilt lean + inertia (capped ±5 dp)
++        swingV += (-swingA * 90f - swingV * 3.4f) * dt
++        swingA += swingV * dt
++        val tilt = if (on(k.HALO_TILT)) org.blueos.arona.BlueOSMotion.tilt[0] * 7f else 0f
++        tiltA += (tilt - tiltA) * (1f - kotlin.math.exp(-dt * 4f))
++        val dp = c.resources.displayMetrics.density
++        val jx = if (on(k.INERTIA)) (org.blueos.arona.BlueOSMotion.jigX * 0.6f).coerceIn(-5f, 5f) else 0f
++        val jy = if (on(k.INERTIA)) (org.blueos.arona.BlueOSMotion.jigY * 0.6f).coerceIn(-4f, 4f) else 0f
++        val bob = if (float) kotlin.math.sin(t * 2f * Math.PI.toFloat() / 5.5f) * 1.4f else 0f
++        val rot = if (float) kotlin.math.sin(t * 2f * Math.PI.toFloat() / 7f) * 2f else 0f
++        dx = jx * dp
++        dy = (bob + jy) * dp
++        angle = swingA + tiltA + rot - jx * 1.5f
++        // a gleam when the minute changes
++        val m = (System.currentTimeMillis() / 60_000L).toInt()
++        if (minute != -1 && m != minute) sparkle()
++        minute = m
++        if (sparkleT >= 0f) { sparkleT += dt / 1.1f; if (sparkleT > 1f) sparkleT = -1f }
++        // fall: out for ~0.8 s, then flicker back
++        blackout = if (blackoutT < 0f) 1f else {
++            blackoutT += dt
++            val p = blackoutT / 2.3f
++            when {
++                p > 1f -> { blackoutT = -1f; 1f }
++                p < 0.42f -> 0f
++                p < 0.5f -> 0.85f
++                p < 0.56f -> 0.1f
++                p < 0.66f -> 0.9f
++                p < 0.72f -> 0.25f
++                else -> 1f
++            }
++        }
++        val now = android.os.SystemClock.uptimeMillis()
++        if (now - chargeCheckedAt > 5000) {
++            chargeCheckedAt = now
++            val bat = c.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
++            charging = (bat?.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0
++        }
++    }
++
++    /** Glow: a soft, breathing stroke in the accent colour under the halo (brighter while charging). */
++    internal fun drawGlow(canvas: Canvas, oval: RectF, base: Paint, color: Int) {
++        val c = ctx ?: return
++        val k = org.blueos.arona.BlueOSSettings
++        val charge = charging && on(k.HALO_CHARGE)
++        val g = when {
++            charge -> 0.75f + 0.25f * kotlin.math.sin(t * 2f * Math.PI.toFloat() / 2.4f)
++            on(k.HALO_GLOW) -> 0.5f + 0.5f * kotlin.math.sin(t * 2f * Math.PI.toFloat() / 4f)
++            else -> return
++        }
++        val accent = c.getColor(android.R.color.system_accent1_200)
++        glowPaint.style = Paint.Style.STROKE
++        glowPaint.strokeWidth = base.strokeWidth * (1.6f + g)
++        glowPaint.color = withVisibility(accent, (if (charge) 0.55f else 0.35f) * g * blackout * Color.alpha(color) / 255f)
++        glowPaint.maskFilter = android.graphics.BlurMaskFilter(base.strokeWidth * (0.8f + g * 1.4f), android.graphics.BlurMaskFilter.Blur.NORMAL)
++        canvas.drawOval(oval, glowPaint)
++    }
++
++    /** The minute gleam: a short bright arc running once around the halo. */
++    internal fun drawSparkle(canvas: Canvas, oval: RectF, base: Paint) {
++        if (sparkleT < 0f) return
++        val c = ctx ?: return
++        val a = kotlin.math.sin(sparkleT * Math.PI.toFloat())
++        sparkPaint.style = Paint.Style.STROKE
++        sparkPaint.strokeCap = Paint.Cap.ROUND
++        sparkPaint.strokeWidth = base.strokeWidth * 0.8f
++        sparkPaint.color = withVisibility(c.getColor(android.R.color.system_accent1_10), a * blackout * base.alpha / 255f)
++        canvas.drawArc(oval, -200f + sparkleT * 360f, 32f, false, sparkPaint)
+     }
+ }
+ 
++/** Makes this halo view live while it is attached (BlueOS 0.7). */
++internal fun View.liveHalo() {
++    addOnAttachStateChangeListener(
++        object : View.OnAttachStateChangeListener {
++            override fun onViewAttachedToWindow(v: View) = BlueOSHaloLive.register(v)
++            override fun onViewDetachedFromWindow(v: View) = BlueOSHaloLive.unregister(v)
++        }
++    )
++}
++
+ /** Accent tone that reads on the clock's background (light digits = dark background). */
+ internal fun haloAccentFor(context: Context, digitColor: Int): Int =
+     context.getColor(
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt
+index 4653ad1023ad..c0cac99481f5 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt
+@@ -84,7 +84,10 @@ class FlexClockTextView(clockCtx: FlexClockContext, private val isLargeClock: Bo
+         }
+ 
+     init {
+-        if (hasSmallHalo) redrawHaloWhenFading { haloVisibility(this, blueOSHaloAlpha) }
++        if (hasSmallHalo) {
++            redrawHaloWhenFading { haloVisibility(this, blueOSHaloAlpha) }
++            liveHalo() // BlueOS 0.7
++        }
+     }
+ 
+     override val extraTopSpace: Float
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt
+index 8544ad46b30e..302a6d6b930a 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt
+@@ -126,7 +126,10 @@ class FlexClockViewGroup(clockCtx: FlexClockContext) :
+         }
+ 
+     init {
+-        if (isBlueOSHalo) redrawHaloWhenFading { haloVisibility(this, blueOSHaloAlpha) }
++        if (isBlueOSHalo) {
++            redrawHaloWhenFading { haloVisibility(this, blueOSHaloAlpha) }
++            liveHalo() // BlueOS 0.7
++        }
+     }
+     private var isHaloDozing = false
+     private var haloLockscreenColor = Color.WHITE
+diff --git a/packages/SystemUI/res/layout/blueos_summary_widget_dark_text.xml b/packages/SystemUI/res/layout/blueos_summary_widget_dark_text.xml
+index d951c90b86f3..51dca05f34f6 100644
+--- a/packages/SystemUI/res/layout/blueos_summary_widget_dark_text.xml
++++ b/packages/SystemUI/res/layout/blueos_summary_widget_dark_text.xml
+@@ -1,92 +1,146 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS "Summary" widget, no card (dark text for light wallpapers): greeting to Sensei, date, next event or alarm -->
+-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@android:id/background"
++<!-- BlueOS "Summary" widget (dark text for light wallpapers / a light card): greeting to Sensei, date (+ weather), next event or alarm.
++     No card by default; "Фон-карточка" (Обои и стиль → Рабочий стол) shows the card every BlueOS widget has. -->
++<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:gravity="center"
+-    android:orientation="vertical"
+     android:padding="8dp">
+ 
+-    <LinearLayout
+-        android:layout_width="wrap_content"
+-        android:layout_height="wrap_content"
+-        android:orientation="horizontal">
++    <FrameLayout
++        android:id="@android:id/background"
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:background="@drawable/blueos_widget_outline"
++        android:clipToOutline="true">
+ 
+-        <TextView
+-            android:id="@+id/blueos_summary_greeting"
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:fontFamily="blueos-clock"
+-            android:fontVariationSettings="'wght' 600"
+-            android:includeFontPadding="false"
+-            android:singleLine="true"
+-            android:textColor="@android:color/system_on_surface_light"
+-            android:textSize="24sp" />
++        <ImageView
++            android:id="@+id/blueos_widget_bg"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitXY"
++            android:src="@drawable/blueos_widget_card"
++            android:visibility="gone" />
+ 
+-        <TextView
+-            android:id="@+id/blueos_summary_sensei"
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:fontFamily="blueos-clock"
+-            android:fontVariationSettings="'wght' 600"
+-            android:includeFontPadding="false"
+-            android:singleLine="true"
+-            android:text="@string/blueos_summary_sensei"
+-            android:textColor="@android:color/system_primary_light"
+-            android:textSize="24sp" />
+-    </LinearLayout>
++        <LinearLayout
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:gravity="center"
++            android:orientation="vertical">
+ 
+-    <!-- Narrow widgets: "Sensei" on its own line, the greeting keeps its size -->
+-    <TextView
+-        android:id="@+id/blueos_summary_sensei_below"
+-        android:layout_width="wrap_content"
+-        android:layout_height="wrap_content"
+-        android:fontFamily="blueos-clock"
+-        android:fontVariationSettings="'wght' 600"
+-        android:includeFontPadding="false"
+-        android:singleLine="true"
+-        android:text="@string/blueos_summary_sensei"
+-        android:textColor="@android:color/system_primary_light"
+-        android:textSize="24sp"
+-        android:visibility="gone" />
++            <LinearLayout
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:orientation="horizontal">
+ 
+-    <LinearLayout
+-        android:layout_width="wrap_content"
+-        android:layout_height="wrap_content"
+-        android:layout_marginTop="6dp"
+-        android:gravity="center_vertical"
+-        android:orientation="horizontal">
++                <TextView
++                    android:id="@+id/blueos_summary_greeting"
++                    android:layout_width="wrap_content"
++                    android:layout_height="wrap_content"
++                    android:fontFamily="blueos-clock"
++                    android:fontVariationSettings="'wght' 600"
++                    android:includeFontPadding="false"
++                    android:singleLine="true"
++                    android:textColor="@android:color/system_on_surface_light"
++                    android:textSize="24sp" />
+ 
+-        <TextClock
+-            android:id="@+id/blueos_summary_date"
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:fontFamily="google-sans-text"
+-            android:singleLine="true"
+-            android:textColor="@android:color/system_on_surface_light"
+-            android:textSize="14sp" />
++                <TextView
++                    android:id="@+id/blueos_summary_sensei"
++                    android:layout_width="wrap_content"
++                    android:layout_height="wrap_content"
++                    android:fontFamily="blueos-clock"
++                    android:fontVariationSettings="'wght' 600"
++                    android:includeFontPadding="false"
++                    android:singleLine="true"
++                    android:text="@string/blueos_summary_sensei"
++                    android:textColor="@android:color/system_primary_light"
++                    android:textSize="24sp" />
++            </LinearLayout>
+ 
+-        <ImageView
+-            android:id="@+id/blueos_summary_icon"
+-            android:layout_width="15dp"
+-            android:layout_height="15dp"
+-            android:layout_marginStart="12dp"
+-            android:contentDescription="@null"
+-            android:src="@drawable/blueos_ic_event"
+-            android:tint="@android:color/system_primary_light"
+-            android:visibility="gone" />
++            <!-- Narrow widgets: "Sensei" on its own line, the greeting keeps its size -->
++            <TextView
++                android:id="@+id/blueos_summary_sensei_below"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:fontFamily="blueos-clock"
++                android:fontVariationSettings="'wght' 600"
++                android:includeFontPadding="false"
++                android:singleLine="true"
++                android:text="@string/blueos_summary_sensei"
++                android:textColor="@android:color/system_primary_light"
++                android:textSize="24sp"
++                android:visibility="gone" />
+ 
+-        <TextView
+-            android:id="@+id/blueos_summary_next"
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:layout_marginStart="5dp"
+-            android:ellipsize="end"
+-            android:fontFamily="google-sans-text"
+-            android:singleLine="true"
+-            android:textColor="@android:color/system_on_surface_light"
+-            android:textSize="14sp"
+-            android:visibility="gone" />
+-    </LinearLayout>
+-</LinearLayout>
++            <LinearLayout
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_marginTop="6dp"
++                android:gravity="center_vertical"
++                android:orientation="horizontal">
++
++                <TextClock
++                    android:id="@+id/blueos_summary_date"
++                    android:layout_width="wrap_content"
++                    android:layout_height="wrap_content"
++                    android:fontFamily="google-sans-text"
++                    android:singleLine="true"
++                    android:textColor="@android:color/system_on_surface_light"
++                    android:textSize="14sp" />
++
++                <!-- BlueOS 0.7: weather after the date ("вт, 27 окт. · ☁ 7°") -->
++                <TextView
++                    android:id="@+id/blueos_summary_weather_dot"
++                    android:layout_width="wrap_content"
++                    android:layout_height="wrap_content"
++                    android:layout_marginHorizontal="5dp"
++                    android:fontFamily="google-sans-text"
++                    android:text="·"
++                    android:textColor="@android:color/system_on_surface_light"
++                    android:textSize="14sp"
++                    android:visibility="gone" />
++
++                <ImageView
++                    android:id="@+id/blueos_summary_weather_icon"
++                    android:layout_width="17dp"
++                    android:layout_height="17dp"
++                    android:layout_marginEnd="3dp"
++                    android:contentDescription="@null"
++                    android:src="@drawable/blueos_wx_cloudy"
++                    android:tint="@android:color/system_on_surface_light"
++                    android:visibility="gone" />
++
++                <TextView
++                    android:id="@+id/blueos_summary_weather"
++                    android:layout_width="wrap_content"
++                    android:layout_height="wrap_content"
++                    android:fontFamily="google-sans-text"
++                    android:singleLine="true"
++                    android:textColor="@android:color/system_on_surface_light"
++                    android:textSize="14sp"
++                    android:visibility="gone" />
++
++                <ImageView
++                    android:id="@+id/blueos_summary_icon"
++                    android:layout_width="15dp"
++                    android:layout_height="15dp"
++                    android:layout_marginStart="12dp"
++                    android:contentDescription="@null"
++                    android:src="@drawable/blueos_ic_event"
++                    android:tint="@android:color/system_primary_light"
++                    android:visibility="gone" />
++
++                <TextView
++                    android:id="@+id/blueos_summary_next"
++                    android:layout_width="wrap_content"
++                    android:layout_height="wrap_content"
++                    android:layout_marginStart="5dp"
++                    android:ellipsize="end"
++                    android:fontFamily="google-sans-text"
++                    android:singleLine="true"
++                    android:textColor="@android:color/system_on_surface_light"
++                    android:textSize="14sp"
++                    android:visibility="gone" />
++            </LinearLayout>
++        </LinearLayout>
++    </FrameLayout>
++</FrameLayout>
+diff --git a/packages/SystemUI/res/layout/blueos_summary_widget_light_text.xml b/packages/SystemUI/res/layout/blueos_summary_widget_light_text.xml
+index df6f35b602ee..00a9d4a5f67b 100644
+--- a/packages/SystemUI/res/layout/blueos_summary_widget_light_text.xml
++++ b/packages/SystemUI/res/layout/blueos_summary_widget_light_text.xml
+@@ -1,92 +1,146 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<!-- BlueOS "Summary" widget, no card (light text for dark wallpapers): greeting to Sensei, date, next event or alarm -->
+-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@android:id/background"
++<!-- BlueOS "Summary" widget (light text for dark wallpapers / a dark card): greeting to Sensei, date (+ weather), next event or alarm.
++     No card by default; "Фон-карточка" (Обои и стиль → Рабочий стол) shows the card every BlueOS widget has. -->
++<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    android:gravity="center"
+-    android:orientation="vertical"
+     android:padding="8dp">
+ 
+-    <LinearLayout
+-        android:layout_width="wrap_content"
+-        android:layout_height="wrap_content"
+-        android:orientation="horizontal">
++    <FrameLayout
++        android:id="@android:id/background"
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:background="@drawable/blueos_widget_outline"
++        android:clipToOutline="true">
+ 
+-        <TextView
+-            android:id="@+id/blueos_summary_greeting"
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:fontFamily="blueos-clock"
+-            android:fontVariationSettings="'wght' 600"
+-            android:includeFontPadding="false"
+-            android:singleLine="true"
+-            android:textColor="@android:color/system_on_surface_dark"
+-            android:textSize="24sp" />
++        <ImageView
++            android:id="@+id/blueos_widget_bg"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:contentDescription="@null"
++            android:scaleType="fitXY"
++            android:src="@drawable/blueos_widget_card"
++            android:visibility="gone" />
+ 
+-        <TextView
+-            android:id="@+id/blueos_summary_sensei"
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:fontFamily="blueos-clock"
+-            android:fontVariationSettings="'wght' 600"
+-            android:includeFontPadding="false"
+-            android:singleLine="true"
+-            android:text="@string/blueos_summary_sensei"
+-            android:textColor="@android:color/system_primary_dark"
+-            android:textSize="24sp" />
+-    </LinearLayout>
++        <LinearLayout
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:gravity="center"
++            android:orientation="vertical">
+ 
+-    <!-- Narrow widgets: "Sensei" on its own line, the greeting keeps its size -->
+-    <TextView
+-        android:id="@+id/blueos_summary_sensei_below"
+-        android:layout_width="wrap_content"
+-        android:layout_height="wrap_content"
+-        android:fontFamily="blueos-clock"
+-        android:fontVariationSettings="'wght' 600"
+-        android:includeFontPadding="false"
+-        android:singleLine="true"
+-        android:text="@string/blueos_summary_sensei"
+-        android:textColor="@android:color/system_primary_dark"
+-        android:textSize="24sp"
+-        android:visibility="gone" />
++            <LinearLayout
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:orientation="horizontal">
+ 
+-    <LinearLayout
+-        android:layout_width="wrap_content"
+-        android:layout_height="wrap_content"
+-        android:layout_marginTop="6dp"
+-        android:gravity="center_vertical"
+-        android:orientation="horizontal">
++                <TextView
++                    android:id="@+id/blueos_summary_greeting"
++                    android:layout_width="wrap_content"
++                    android:layout_height="wrap_content"
++                    android:fontFamily="blueos-clock"
++                    android:fontVariationSettings="'wght' 600"
++                    android:includeFontPadding="false"
++                    android:singleLine="true"
++                    android:textColor="@android:color/system_on_surface_dark"
++                    android:textSize="24sp" />
+ 
+-        <TextClock
+-            android:id="@+id/blueos_summary_date"
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:fontFamily="google-sans-text"
+-            android:singleLine="true"
+-            android:textColor="@android:color/system_on_surface_dark"
+-            android:textSize="14sp" />
++                <TextView
++                    android:id="@+id/blueos_summary_sensei"
++                    android:layout_width="wrap_content"
++                    android:layout_height="wrap_content"
++                    android:fontFamily="blueos-clock"
++                    android:fontVariationSettings="'wght' 600"
++                    android:includeFontPadding="false"
++                    android:singleLine="true"
++                    android:text="@string/blueos_summary_sensei"
++                    android:textColor="@android:color/system_primary_dark"
++                    android:textSize="24sp" />
++            </LinearLayout>
+ 
+-        <ImageView
+-            android:id="@+id/blueos_summary_icon"
+-            android:layout_width="15dp"
+-            android:layout_height="15dp"
+-            android:layout_marginStart="12dp"
+-            android:contentDescription="@null"
+-            android:src="@drawable/blueos_ic_event"
+-            android:tint="@android:color/system_primary_dark"
+-            android:visibility="gone" />
++            <!-- Narrow widgets: "Sensei" on its own line, the greeting keeps its size -->
++            <TextView
++                android:id="@+id/blueos_summary_sensei_below"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:fontFamily="blueos-clock"
++                android:fontVariationSettings="'wght' 600"
++                android:includeFontPadding="false"
++                android:singleLine="true"
++                android:text="@string/blueos_summary_sensei"
++                android:textColor="@android:color/system_primary_dark"
++                android:textSize="24sp"
++                android:visibility="gone" />
+ 
+-        <TextView
+-            android:id="@+id/blueos_summary_next"
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:layout_marginStart="5dp"
+-            android:ellipsize="end"
+-            android:fontFamily="google-sans-text"
+-            android:singleLine="true"
+-            android:textColor="@android:color/system_on_surface_dark"
+-            android:textSize="14sp"
+-            android:visibility="gone" />
+-    </LinearLayout>
+-</LinearLayout>
++            <LinearLayout
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_marginTop="6dp"
++                android:gravity="center_vertical"
++                android:orientation="horizontal">
++
++                <TextClock
++                    android:id="@+id/blueos_summary_date"
++                    android:layout_width="wrap_content"
++                    android:layout_height="wrap_content"
++                    android:fontFamily="google-sans-text"
++                    android:singleLine="true"
++                    android:textColor="@android:color/system_on_surface_dark"
++                    android:textSize="14sp" />
++
++                <!-- BlueOS 0.7: weather after the date ("вт, 27 окт. · ☁ 7°") -->
++                <TextView
++                    android:id="@+id/blueos_summary_weather_dot"
++                    android:layout_width="wrap_content"
++                    android:layout_height="wrap_content"
++                    android:layout_marginHorizontal="5dp"
++                    android:fontFamily="google-sans-text"
++                    android:text="·"
++                    android:textColor="@android:color/system_on_surface_dark"
++                    android:textSize="14sp"
++                    android:visibility="gone" />
++
++                <ImageView
++                    android:id="@+id/blueos_summary_weather_icon"
++                    android:layout_width="17dp"
++                    android:layout_height="17dp"
++                    android:layout_marginEnd="3dp"
++                    android:contentDescription="@null"
++                    android:src="@drawable/blueos_wx_cloudy"
++                    android:tint="@android:color/system_on_surface_dark"
++                    android:visibility="gone" />
++
++                <TextView
++                    android:id="@+id/blueos_summary_weather"
++                    android:layout_width="wrap_content"
++                    android:layout_height="wrap_content"
++                    android:fontFamily="google-sans-text"
++                    android:singleLine="true"
++                    android:textColor="@android:color/system_on_surface_dark"
++                    android:textSize="14sp"
++                    android:visibility="gone" />
++
++                <ImageView
++                    android:id="@+id/blueos_summary_icon"
++                    android:layout_width="15dp"
++                    android:layout_height="15dp"
++                    android:layout_marginStart="12dp"
++                    android:contentDescription="@null"
++                    android:src="@drawable/blueos_ic_event"
++                    android:tint="@android:color/system_primary_dark"
++                    android:visibility="gone" />
++
++                <TextView
++                    android:id="@+id/blueos_summary_next"
++                    android:layout_width="wrap_content"
++                    android:layout_height="wrap_content"
++                    android:layout_marginStart="5dp"
++                    android:ellipsize="end"
++                    android:fontFamily="google-sans-text"
++                    android:singleLine="true"
++                    android:textColor="@android:color/system_on_surface_dark"
++                    android:textSize="14sp"
++                    android:visibility="gone" />
++            </LinearLayout>
++        </LinearLayout>
++    </FrameLayout>
++</FrameLayout>
+diff --git a/packages/SystemUI/res/values-ru/blueos_arona.xml b/packages/SystemUI/res/values-ru/blueos_arona.xml
+new file mode 100644
+index 000000000000..85f9dcf374a9
+--- /dev/null
++++ b/packages/SystemUI/res/values-ru/blueos_arona.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS 0.7: nothing to translate yet (texts of Arona's replies live in vendor/blueos/libs/arona) -->
++<resources>
++</resources>
+diff --git a/packages/SystemUI/res/values/blueos_arona.xml b/packages/SystemUI/res/values/blueos_arona.xml
+new file mode 100644
+index 000000000000..42ef45e00827
+--- /dev/null
++++ b/packages/SystemUI/res/values/blueos_arona.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS 0.7: live Arona on the lock screen, weather next to the date -->
++<resources>
++    <item type="id" name="blueos_arona_host" />
++    <!-- weather after the date on the lock screen: "· 7°" -->
++    <string name="blueos_weather_slice" translatable="false">· %1$s</string>
++</resources>
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt b/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt
+new file mode 100644
+index 000000000000..5675e7419c30
+--- /dev/null
++++ b/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSCharacterSection.kt
+@@ -0,0 +1,325 @@
++package com.android.systemui.blueos.lockscreen
++
++import android.animation.ValueAnimator
++import android.content.Context
++import android.graphics.RectF
++import android.os.Handler
++import android.os.Looper
++import android.os.SystemClock
++import android.service.notification.NotificationListenerService.RankingMap
++import android.service.notification.StatusBarNotification
++import android.view.Choreographer
++import android.view.MotionEvent
++import android.view.View
++import android.view.animation.PathInterpolator
++import android.widget.FrameLayout
++import androidx.constraintlayout.widget.ConstraintLayout
++import androidx.constraintlayout.widget.ConstraintSet
++import com.android.systemui.dagger.qualifiers.Application
++import com.android.systemui.keyguard.domain.interactor.KeyguardInteractor
++import com.android.systemui.keyguard.shared.model.KeyguardSection
++import com.android.systemui.power.domain.interactor.PowerInteractor
++import com.android.systemui.res.R
++import com.android.systemui.shared.clocks.view.BlueOSHaloLive
++import com.android.systemui.statusbar.NotificationListener
++import java.util.Calendar
++import javax.inject.Inject
++import kotlinx.coroutines.CoroutineScope
++import kotlinx.coroutines.Job
++import kotlinx.coroutines.launch
++import org.blueos.arona.AronaReplies
++import org.blueos.arona.AronaTouch
++import org.blueos.arona.AronaView
++import org.blueos.arona.BlueOSMotion
++import org.blueos.arona.BlueOSSettings as K
++import org.blueos.arona.ReplyChip
++
++/**
++ * BlueOS 0.7: live Arona on the lock screen (approved mockup 2). Added first to the keyguard root, so the
++ * clock, fingerprint circle, shortcuts — and the notifications (drawn above the keyguard root) — are over her.
++ * Modes: next to the clock, by the fingerprint, lobby, dynamic (grows with taps/pats) and custom.
++ */
++class BlueOSCharacterSection
++@Inject
++constructor(
++    private val keyguardInteractor: KeyguardInteractor,
++    private val powerInteractor: PowerInteractor,
++    notificationListener: NotificationListener,
++    @Application private val scope: CoroutineScope,
++) : KeyguardSection() {
++    private var host: AronaHost? = null
++    private val jobs = mutableListOf<Job>()
++
++    init {
++        notificationListener.addNotificationHandler(object : NotificationListener.NotificationHandler {
++            override fun onNotificationPosted(sbn: StatusBarNotification, rankingMap: RankingMap?) {
++                if (!sbn.isOngoing && !sbn.notification.isGroupSummary) host?.onNotification()
++            }
++            override fun onNotificationRemoved(sbn: StatusBarNotification, rankingMap: RankingMap?) {}
++            override fun onNotificationRemoved(sbn: StatusBarNotification, rankingMap: RankingMap?, reason: Int) {}
++            override fun onNotificationRankingUpdate(rankingMap: RankingMap?) {}
++            override fun onNotificationsInitialized() {}
++        })
++    }
++
++    override fun addViews(constraintLayout: ConstraintLayout) {
++        if (constraintLayout.findViewById<View>(R.id.blueos_arona_host) != null) return
++        val h = AronaHost(constraintLayout.context).apply { id = R.id.blueos_arona_host }
++        constraintLayout.addView(h, 0)         // lowest: everything else on the lock screen is above her
++        host = h
++    }
++
++    override fun bindData(constraintLayout: ConstraintLayout) {
++        jobs.forEach { it.cancel() }
++        jobs.clear()
++        jobs += scope.launch { keyguardInteractor.isDozing.collect { host?.dozing = it } }
++        jobs += scope.launch { keyguardInteractor.isKeyguardShowing.collect { host?.showing = it } }
++        jobs += scope.launch { powerInteractor.isAwake.collect { host?.awake = it } }
++    }
++
++    override fun applyConstraints(constraintSet: ConstraintSet) {
++        val id = R.id.blueos_arona_host
++        constraintSet.apply {
++            constrainWidth(id, ConstraintSet.MATCH_CONSTRAINT)
++            constrainHeight(id, ConstraintSet.MATCH_CONSTRAINT)
++            connect(id, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP)
++            connect(id, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM)
++            connect(id, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
++            connect(id, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
++        }
++    }
++
++    override fun removeViews(constraintLayout: ConstraintLayout) {
++        jobs.forEach { it.cancel() }
++        jobs.clear()
++        host?.release()
++        constraintLayout.findViewById<View>(R.id.blueos_arona_host)?.let { constraintLayout.removeView(it) }
++        host = null
++    }
++}
++
++/** Full-screen, transparent host: Arona + her reply chip. Touches that miss her pass through. */
++private class AronaHost(context: Context) : FrameLayout(context), BlueOSMotion.Listener, Choreographer.FrameCallback {
++    private val cr = context.contentResolver
++    private val dp = resources.displayMetrics.density
++    private val handler = Handler(Looper.getMainLooper())
++    private val arona = AronaView(context)
++    private val chip = ReplyChip(context)
++    private val touch = AronaTouch(arona, this, chip, avoid = ::avoidRects, isNight = ::night, touched = ::touched)
++    private val unobserve: () -> Unit
++    private var motion: (() -> Unit)? = null
++
++    // where she stands, as fractions of the screen: centre x, top, height (measured on the phone, mockup 2)
++    private data class Place(val cx: Float, val top: Float, val h: Float)
++    private val clock = Place(926f / 1080, 150f / 2400, 470f / 2400)
++    private val fingerprint = Place(866f / 1080, 1475f / 2400, 700f / 2400)
++    private val lobby = Place(540f / 1080, 640f / 2400, 2700f / 2400)
++    private var shown = clock
++    private var anim: ValueAnimator? = null
++
++    // dynamic mode
++    private var touches = 0
++    private var level = 0
++    private val shrink = Runnable { setLevel(0) }
++    private val quick = ArrayDeque<Long>()
++    private var lastGreeting = 0L
++
++    var dozing = false
++        set(v) { field = v; update() }
++    var showing = false
++        set(v) { field = v; update() }
++    var awake = true
++        set(v) {
++            val woke = v && !field
++            field = v
++            if (!v) setLevel(0)                                          // screen off: back to small
++            update()
++            if (woke) onWake()
++        }
++
++    init {
++        clipChildren = false
++        addView(arona, LayoutParams(0, 0))
++        addView(chip, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
++        arona.tilt = { if (K.on(cr, K.ARONA_TILT)) BlueOSMotion.tilt else null }
++        arona.onReady = { update() }
++        unobserve = K.observe(context, listOf(K.ARONA_SHOW, K.ARONA_MODE, K.ARONA_CUSTOM, K.ARONA_SLEEP, K.ARONA_AOD)) {
++            setLevel(0); update()
++        }
++    }
++
++    fun release() {
++        unobserve()
++        motion?.invoke()
++        motion = null
++        Choreographer.getInstance().removeFrameCallback(this)
++    }
++
++    private fun mode() = K.int(cr, K.ARONA_MODE)
++
++    private fun night(): Boolean {
++        if (!K.on(cr, K.ARONA_SLEEP)) return false
++        val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
++        return h >= 23 || h < 7
++    }
++
++    private fun target(): Place = when (mode()) {
++        0 -> clock
++        1 -> fingerprint
++        2 -> lobby
++        4 -> K.string(cr, K.ARONA_CUSTOM, "").split(';').mapNotNull { it.toFloatOrNull() }
++            .takeIf { it.size == 3 }?.let { Place(it[0], it[1], it[2]) } ?: Place(0.52f, 0.46f, 0.46f)
++        else -> listOf(clock, fingerprint, lobby)[level]
++    }
++
++    private fun update() {
++        // the host stays for the halo's touch even when Arona is off
++        visibility = if (showing) VISIBLE else INVISIBLE
++        val show = K.on(cr, K.ARONA_SHOW) && showing && (!dozing || K.on(cr, K.ARONA_AOD))
++        arona.visibility = if (show) VISIBLE else INVISIBLE
++        arona.frozen = dozing
++        // AOD: a still, faint silhouette in the palette's light accent (follows any wallpaper)
++        arona.silhouette = if (dozing) (context.getColor(android.R.color.system_accent1_100) and 0x00ffffff) or 0x38000000 else null
++        arona.setSleeping(night())
++        moveTo(target())
++        // sensors only while the lock screen is visible and the screen is on (Arona and the halo use them)
++        val sensors = showing && awake && !dozing
++        if (sensors && motion == null) {
++            motion = BlueOSMotion.acquire(context, this)
++            Choreographer.getInstance().postFrameCallback(this)
++        } else if (!sensors && motion != null) {
++            motion?.invoke()
++            motion = null
++            Choreographer.getInstance().removeFrameCallback(this)
++            arona.translationX = 0f
++            arona.translationY = 0f
++        }
++    }
++
++    private fun moveTo(p: Place) {
++        if (p == shown && arona.layoutParams.height > 0) return
++        val from = shown
++        shown = p
++        anim?.cancel()
++        if (width == 0 || arona.layoutParams.height == 0) { layoutArona(p); return }
++        anim = ValueAnimator.ofFloat(0f, 1f).apply {
++            duration = 900
++            interpolator = PathInterpolator(.3f, 1.15f, .4f, 1f)
++            addUpdateListener {
++                val f = it.animatedValue as Float
++                layoutArona(Place(from.cx + (p.cx - from.cx) * f, from.top + (p.top - from.top) * f, from.h + (p.h - from.h) * f))
++            }
++            start()
++        }
++    }
++
++    private fun layoutArona(p: Place) {
++        if (width == 0) return
++        val vp = arona.viewport
++        val h = (p.h * height).toInt()
++        val w = (h * vp.w / vp.h).toInt()
++        val lp = arona.layoutParams as LayoutParams
++        lp.width = w
++        lp.height = h
++        lp.leftMargin = (p.cx * width - w / 2f).toInt()
++        lp.topMargin = (p.top * height).toInt()
++        arona.layoutParams = lp
++    }
++
++    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
++        super.onSizeChanged(w, h, oldw, oldh)
++        post { layoutArona(shown) }
++    }
++
++    // the clock digits and the halo must stay readable (uiautomator, 1080x2400)
++    private fun avoidRects(): List<RectF> = listOf(RectF(74f, 179f, 657f, 478f), RectF(450f, 172f, 650f, 268f))
++        .map { RectF(it.left / 1080 * width, it.top / 2400 * height, it.right / 1080 * width, it.bottom / 2400 * height) }
++
++    override fun onTouchEvent(e: MotionEvent): Boolean {
++        if (visibility != VISIBLE || dozing) return false
++        // a tap on the halo makes it swing (no sound)
++        if (e.actionMasked == MotionEvent.ACTION_DOWN && K.on(cr, K.HALO_LIVE) && K.on(cr, K.HALO_TOUCH)) {
++            val halo = avoidRects()[1]
++            halo.inset(-24 * dp, -24 * dp)
++            if (halo.contains(e.x, e.y)) {
++                BlueOSHaloLive.swing(if (e.x < halo.centerX()) -1 else 1)
++                return true
++            }
++        }
++        if (arona.visibility != VISIBLE) return false
++        val local = MotionEvent.obtain(e)
++        local.offsetLocation(-arona.left.toFloat() - arona.translationX, -arona.top.toFloat() - arona.translationY)
++        val handled = touch.onTouch(local)
++        local.recycle()
++        return handled
++    }
++
++    private fun touched() {
++        val now = SystemClock.uptimeMillis()
++        quick.addLast(now)
++        while (quick.isNotEmpty() && now - quick.first() > 4000) quick.removeFirst()
++        if (quick.size >= 9) {                                           // poked too often: she's annoyed
++            quick.clear()
++            handler.postDelayed({ touch.say(AronaReplies.Kind.ANGRY) }, 350)
++        }
++        if (mode() != 3) return
++        touches++
++        handler.removeCallbacks(shrink)
++        handler.postDelayed(shrink, 30_000)                              // 30 s without her → small again
++        val lvl = if (touches >= 6) 2 else if (touches >= 3) 1 else 0
++        if (lvl > level) {
++            setLevel(lvl)
++            handler.postDelayed({ touch.say(AronaReplies.Kind.GROW) }, 700)
++        }
++    }
++
++    private fun setLevel(l: Int) {
++        if (l == 0) touches = 0
++        level = l
++        if (mode() == 3) moveTo(target())
++    }
++
++    fun onNotification() {
++        if (arona.visibility != VISIBLE || dozing || !awake || !showing) return
++        if (mode() == 3) setLevel(0)                                     // make room for the notification
++        if (K.on(cr, K.ARONA_NOTIF)) touch.say(AronaReplies.Kind.NOTIFICATION)   // chip only, never a sound
++    }
++
++    private fun onWake() {
++        BlueOSHaloLive.sparkle()
++        if (arona.visibility != VISIBLE || dozing || night()) return
++        val now = SystemClock.elapsedRealtime()
++        if (now - lastGreeting < 2 * 3600_000L && lastGreeting != 0L) return     // greets at most every 2 h
++        lastGreeting = now
++        handler.postDelayed({ touch.say(AronaReplies.Kind.WAKE) }, 400)
++    }
++
++    override fun onShake() {
++        if (!K.on(cr, K.SHAKE_ARONA) || arona.visibility != VISIBLE) return
++        arona.dizzy()
++        handler.postDelayed({ touch.say(AronaReplies.Kind.SHAKE) }, 600)
++    }
++
++    override fun onFall() {
++        BlueOSHaloLive.fall()                                            // halos go out and flicker, in place
++        if (!K.on(cr, K.FALL_ARONA) || arona.visibility != VISIBLE) return
++        arona.startle()
++        handler.postDelayed({ touch.say(AronaReplies.Kind.FALL) }, 250)
++    }
++
++    // inertia: she lags a little behind the phone's motion and springs back
++    override fun doFrame(frameTimeNanos: Long) {
++        if (motion == null) return
++        val on = K.on(cr, K.INERTIA)
++        arona.translationX = if (on) BlueOSMotion.jigX * 0.6f * dp else 0f
++        arona.translationY = if (on) BlueOSMotion.jigY * 0.6f * dp else 0f
++        Choreographer.getInstance().postFrameCallback(this)
++    }
++
++    override fun onDetachedFromWindow() {
++        super.onDetachedFromWindow()
++        motion?.invoke()
++        motion = null
++        Choreographer.getInstance().removeFrameCallback(this)
++    }
++}
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/weather/BlueOSWeather.kt b/packages/SystemUI/src/com/android/systemui/blueos/weather/BlueOSWeather.kt
+new file mode 100644
+index 000000000000..edcb4c83be2d
+--- /dev/null
++++ b/packages/SystemUI/src/com/android/systemui/blueos/weather/BlueOSWeather.kt
+@@ -0,0 +1,110 @@
++package com.android.systemui.blueos.weather
++
++import android.Manifest
++import android.content.BroadcastReceiver
++import android.content.Context
++import android.content.Intent
++import android.content.IntentFilter
++import android.content.pm.PackageManager
++import android.location.Location
++import android.location.LocationManager
++import android.os.Handler
++import android.os.HandlerThread
++import android.os.SystemClock
++import android.provider.Settings
++import android.util.Log
++import java.net.HttpURLConnection
++import java.net.URL
++import java.util.Locale
++import org.blueos.arona.BlueOSSettings
++import org.json.JSONObject
++
++/**
++ * BlueOS 0.7 weather for the lock clock, the «Сводка»/«Дата»/«Погода» widgets and Arona's weather lines.
++ * Google Weather on the phone doesn't share its data, so we ask Open-Meteo (free, no key) for the
++ * approximate location (rounded to 0.1° ≈ 10 km) every 45 min and when the screen turns on with stale data,
++ * and publish the result as JSON in Settings.Secure [BlueOSSettings.WEATHER].
++ */
++object BlueOSWeather {
++    private const val TAG = "BlueOSWeather"
++    private const val PERIOD = 45 * 60_000L
++
++    private var started = false
++    private lateinit var ctx: Context
++    private lateinit var bg: Handler
++    private var lastFetch = 0L
++
++    fun start(context: Context) {
++        if (started) return
++        started = true
++        ctx = context.applicationContext
++        bg = Handler(HandlerThread("BlueOSWeather").apply { start() }.looper)
++        bg.post(::refresh)
++        // other apps' widgets (Calendar's «Дата») follow the weather and its switches
++        BlueOSSettings.observe(ctx, listOf(BlueOSSettings.WEATHER, BlueOSSettings.WEATHER_DATE, BlueOSSettings.WEATHER_F)) {
++            com.android.systemui.blueos.widgets.BlueOSWidgetStyle.notifyChanged(ctx)
++        }
++        ctx.registerReceiver(object : BroadcastReceiver() {
++            override fun onReceive(c: Context, i: Intent) {
++                if (SystemClock.elapsedRealtime() - lastFetch > PERIOD) bg.post(::refresh)
++            }
++        }, IntentFilter(Intent.ACTION_SCREEN_ON))
++    }
++
++    private fun refresh() {
++        bg.removeCallbacksAndMessages(null)
++        bg.postDelayed(::refresh, PERIOD)
++        val loc = location() ?: run { Log.i(TAG, "no location yet"); return }
++        val lat = String.format(Locale.US, "%.1f", loc.latitude)
++        val lon = String.format(Locale.US, "%.1f", loc.longitude)
++        val url = URL("https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
++            "&current=temperature_2m,apparent_temperature,weather_code,is_day" +
++            "&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1")
++        try {
++            val conn = url.openConnection() as HttpURLConnection
++            conn.connectTimeout = 10_000
++            conn.readTimeout = 10_000
++            val body = conn.inputStream.bufferedReader().use { it.readText() }
++            conn.disconnect()
++            val j = JSONObject(body)
++            val cur = j.getJSONObject("current")
++            val daily = j.getJSONObject("daily")
++            val out = JSONObject()
++                .put("t", cur.getDouble("temperature_2m"))
++                .put("feels", cur.getDouble("apparent_temperature"))
++                .put("code", cur.getInt("weather_code"))
++                .put("day", cur.optInt("is_day", 1))
++                .put("hi", daily.getJSONArray("temperature_2m_max").getDouble(0))
++                .put("lo", daily.getJSONArray("temperature_2m_min").getDouble(0))
++                .put("ts", System.currentTimeMillis())
++            // the icon's resource id in SystemUI, for widgets of other apps (Calendar's «Дата»)
++            out.put("iconRes", org.blueos.arona.Weather(out.getDouble("t"), out.getInt("code"), 0.0, 0.0, 0.0,
++                out.getInt("day") == 1, 0L).icon)
++            Settings.Secure.putString(ctx.contentResolver, BlueOSSettings.WEATHER, out.toString())
++            lastFetch = SystemClock.elapsedRealtime()
++        } catch (e: Exception) {
++            Log.w(TAG, "weather fetch failed: $e")
++            bg.postDelayed(::refresh, 10 * 60_000L)     // retry sooner on a network error
++        }
++    }
++
++    private fun location(): Location? {
++        if (ctx.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) return null
++        val lm = ctx.getSystemService(LocationManager::class.java) ?: return null
++        return try {
++            listOf(LocationManager.FUSED_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER, LocationManager.GPS_PROVIDER)
++                .mapNotNull { runCatching { lm.getLastKnownLocation(it) }.getOrNull() }
++                .maxByOrNull { it.time }
++                ?: run {
++                    // nothing cached yet: ask once, the next refresh will use it
++                    lm.getCurrentLocation(LocationManager.FUSED_PROVIDER, null, ctx.mainExecutor) { l ->
++                        if (l != null) bg.post(::refresh)
++                    }
++                    null
++                }
++        } catch (e: Exception) {
++            Log.w(TAG, "location: $e")
++            null
++        }
++    }
++}
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSSummaryWidgetProvider.kt b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSSummaryWidgetProvider.kt
+index bf2cd1f5f6bf..545f43770220 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSSummaryWidgetProvider.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/widgets/BlueOSSummaryWidgetProvider.kt
+@@ -104,13 +104,35 @@ internal object BlueOSSummaryWidget {
+     }
+ 
+     private fun build(context: Context, event: Event?, twoLines: Boolean): RemoteViews {
+-        val darkText = BlueOSWidgetStyle.wallpaperWantsDarkText(context)
++        val cr = context.contentResolver
++        // BlueOS 0.7: with the card the text follows the theme (like every carded widget), without
++        // it the wallpaper under the widget
++        val card = org.blueos.arona.BlueOSSettings.on(cr, org.blueos.arona.BlueOSSettings.SUMMARY_CARD)
++        val night = (context.resources.configuration.uiMode and
++            android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
++            android.content.res.Configuration.UI_MODE_NIGHT_YES
++        val darkText = if (card) !night else BlueOSWidgetStyle.wallpaperWantsDarkText(context)
+         val rv =
+             RemoteViews(
+                 context.packageName,
+                 if (darkText) R.layout.blueos_summary_widget_dark_text
+                 else R.layout.blueos_summary_widget_light_text,
+             )
++        rv.setViewVisibility(R.id.blueos_widget_bg, if (card) View.VISIBLE else View.GONE)
++        if (card) BlueOSWidgetStyle.applyCard(context, rv)
++        // BlueOS 0.7: weather after the date (Обои и стиль → Погода → «В Сводке»)
++        val weather =
++            if (org.blueos.arona.BlueOSSettings.on(cr, org.blueos.arona.BlueOSSettings.WEATHER_SUMMARY))
++                org.blueos.arona.Weather.read(cr)?.takeIf { it.fresh }
++            else null
++        val wv = if (weather != null) View.VISIBLE else View.GONE
++        rv.setViewVisibility(R.id.blueos_summary_weather_dot, wv)
++        rv.setViewVisibility(R.id.blueos_summary_weather_icon, wv)
++        rv.setViewVisibility(R.id.blueos_summary_weather, wv)
++        if (weather != null) {
++            rv.setImageViewResource(R.id.blueos_summary_weather_icon, weather.icon)
++            rv.setTextViewText(R.id.blueos_summary_weather, org.blueos.arona.Weather.format(cr, weather.temp))
++        }
+         rv.setTextViewText(R.id.blueos_summary_greeting, context.getString(greeting()))
+         rv.setViewVisibility(R.id.blueos_summary_sensei, if (twoLines) View.GONE else View.VISIBLE)
+         rv.setViewVisibility(
+@@ -228,6 +250,16 @@ internal object BlueOSSummaryWidget {
+                 },
+             )
+         }
++        // BlueOS 0.7: new weather, "Фон-карточка", weather on/off, °C/°F
++        org.blueos.arona.BlueOSSettings.observe(
++            context,
++            listOf(
++                org.blueos.arona.BlueOSSettings.WEATHER,
++                org.blueos.arona.BlueOSSettings.WEATHER_SUMMARY,
++                org.blueos.arona.BlueOSSettings.WEATHER_F,
++                org.blueos.arona.BlueOSSettings.SUMMARY_CARD,
++            ),
++        ) { push(context) }
+     }
+ 
+     /** At the next greeting change, when the event starts or ends, or at midnight. */
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardSliceProvider.java b/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardSliceProvider.java
+index fafce89088c2..ac95804efdbb 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardSliceProvider.java
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardSliceProvider.java
+@@ -111,6 +111,9 @@ public class KeyguardSliceProvider extends SliceProvider implements
+             "content://com.android.systemui.keyguard/greeting";
+     public static final String KEYGUARD_EVENT_URI =
+             "content://com.android.systemui.keyguard/event";
++    // BlueOS 0.7: weather after the date ("Вт, 27 окт.  ☁ 7°"), from BlueOSWeather
++    public static final String KEYGUARD_WEATHER_URI =
++            "content://com.android.systemui.keyguard/weather";
+ 
+     /** BlueOS: only show calendar events that start within N hours. */
+     private static final int EVENT_VISIBILITY_HOURS = 12;
+@@ -133,6 +136,7 @@ public class KeyguardSliceProvider extends SliceProvider implements
+     protected final Uri mMediaUri;
+     protected final Uri mGreetingUri;
+     protected final Uri mEventUri;
++    protected final Uri mWeatherUri;
+     private final Date mCurrentTime = new Date();
+     private final Handler mHandler;
+     private final Handler mMediaHandler;
+@@ -182,6 +186,13 @@ public class KeyguardSliceProvider extends SliceProvider implements
+             refreshBlueOSInBackground();
+         }
+     };
++    // BlueOS 0.7: the weather row follows new weather data and the "Погода у часов" choice
++    private final ContentObserver mWeatherObserver = new ContentObserver(null) {
++        @Override
++        public void onChange(boolean selfChange) {
++            notifyChange();
++        }
++    };
+     protected boolean mDozing;
+     private int mStatusBarState;
+     private boolean mMediaIsVisible;
+@@ -247,6 +258,7 @@ public class KeyguardSliceProvider extends SliceProvider implements
+         mMediaUri = Uri.parse(KEYGUARD_MEDIA_URI);
+         mGreetingUri = Uri.parse(KEYGUARD_GREETING_URI);
+         mEventUri = Uri.parse(KEYGUARD_EVENT_URI);
++        mWeatherUri = Uri.parse(KEYGUARD_WEATHER_URI);
+     }
+ 
+     @AnyThread
+@@ -268,6 +280,7 @@ public class KeyguardSliceProvider extends SliceProvider implements
+                     builder.setHeader(new ListBuilder.HeaderBuilder(mGreetingUri)
+                             .setTitle(mGreeting));
+                     builder.addRow(new RowBuilder(mDateUri).setTitle(mLastText));
++                    addWeatherLocked(builder);
+                 }
+                 addNextEventLocked(builder);
+                 addNextAlarmLocked(builder);
+@@ -339,6 +352,30 @@ public class KeyguardSliceProvider extends SliceProvider implements
+         builder.addRow(alarmRowBuilder);
+     }
+ 
++    /**
++     * BlueOS 0.7: weather after the date — icon + temperature, temperature only, or nothing
++     * (Обои и стиль → Погода / Экран блокировки → Погода у часов). Hidden when older than 3 h.
++     */
++    protected void addWeatherLocked(ListBuilder builder) {
++        final ContentResolver cr = getContext().getContentResolver();
++        final int mode = org.blueos.arona.BlueOSSettings.getInt(cr,
++                org.blueos.arona.BlueOSSettings.WEATHER_LOCK);
++        final org.blueos.arona.Weather weather = org.blueos.arona.Weather.read(cr);
++        if (mode == 2 || weather == null || !weather.getFresh()) {
++            return;
++        }
++        final String temp = org.blueos.arona.Weather.format(cr, weather.getTemp());
++        RowBuilder row = new RowBuilder(mWeatherUri);
++        if (mode == 0) {
++            row.setTitle(temp).addEndItem(
++                    IconCompat.createWithResource(getContext(), weather.getIcon()),
++                    ListBuilder.ICON_IMAGE);
++        } else {
++            row.setTitle(getContext().getString(R.string.blueos_weather_slice, temp));
++        }
++        builder.addRow(row);
++    }
++
+     /** BlueOS: the next calendar event, for the "what's next" card. */
+     protected void addNextEventLocked(ListBuilder builder) {
+         if (TextUtils.isEmpty(mNextEventTitle)) {
+@@ -504,6 +541,12 @@ public class KeyguardSliceProvider extends SliceProvider implements
+         } catch (SecurityException e) {
+             Log.w(TAG, "Can't observe the calendar", e);
+         }
++        for (String key : new String[] {org.blueos.arona.BlueOSSettings.WEATHER,
++                org.blueos.arona.BlueOSSettings.WEATHER_LOCK,
++                org.blueos.arona.BlueOSSettings.WEATHER_F}) {
++            mContentResolver.registerContentObserver(Settings.Secure.getUriFor(key),
++                    false, mWeatherObserver);
++        }
+         refreshBlueOSInBackground();
+         return true;
+     }
+@@ -516,6 +559,7 @@ public class KeyguardSliceProvider extends SliceProvider implements
+             mMediaWakeLock.setAcquired(false);
+             mAlarmManager.cancel(mUpdateNextAlarm);
+             mContentResolver.unregisterContentObserver(mCalendarObserver);
++            mContentResolver.unregisterContentObserver(mWeatherObserver);
+             if (mRegistered) {
+                 mRegistered = false;
+                 mKeyguardUpdateMonitor.removeCallback(mKeyguardUpdateMonitorCallback);
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/blueprints/DefaultKeyguardBlueprint.kt b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/blueprints/DefaultKeyguardBlueprint.kt
+index 0feca9f66846..1e311483a6af 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/blueprints/DefaultKeyguardBlueprint.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/blueprints/DefaultKeyguardBlueprint.kt
+@@ -17,6 +17,7 @@
+ 
+ package com.android.systemui.keyguard.ui.view.layout.blueprints
+ 
++import com.android.systemui.blueos.lockscreen.BlueOSCharacterSection
+ import com.android.systemui.dagger.SysUISingleton
+ import com.android.systemui.keyguard.shared.model.KeyguardBlueprint
+ import com.android.systemui.keyguard.shared.model.KeyguardSection
+@@ -69,11 +70,13 @@ constructor(
+     smartspaceSection: SmartspaceSection,
+     keyguardSliceViewSection: KeyguardSliceViewSection,
+     udfpsAccessibilityOverlaySection: DefaultUdfpsAccessibilityOverlaySection,
++    blueOSCharacterSection: BlueOSCharacterSection,
+ ) : KeyguardBlueprint {
+     override val id: String = DEFAULT
+ 
+     override val sections =
+         listOfNotNull(
++            blueOSCharacterSection, // BlueOS: live Arona — FIRST, so everything else is above her
+             accessibilityActionsSection,
+             defaultIndicationAreaSection,
+             defaultShortcutsSection,
+diff --git a/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java b/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java
+index 94ec751452cc..a3e80c814b15 100644
+--- a/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java
++++ b/packages/SystemUI/src/com/android/systemui/theme/ThemeOverlayController.java
+@@ -72,6 +72,7 @@ import com.android.systemui.CoreStartable;
+ import com.android.systemui.Dumpable;
+ import com.android.systemui.blueos.BlueOSDefaults;
+ import com.android.systemui.blueos.widgets.BlueOSWidgetStyle;
++import com.android.systemui.blueos.weather.BlueOSWeather;
+ import com.android.systemui.broadcast.BroadcastDispatcher;
+ import com.android.systemui.dagger.SysUISingleton;
+ import com.android.systemui.dagger.qualifiers.Background;
+@@ -510,6 +511,8 @@ public class ThemeOverlayController implements CoreStartable, Dumpable {
+         BlueOSDefaults.INSTANCE.applyOnce(mContext);
+         // BlueOS: watches the widget transparency set in Wallpaper & style
+         BlueOSWidgetStyle.INSTANCE.start(mContext);
++        // BlueOS 0.7: weather (Open-Meteo) for the lock clock, widgets and Arona
++        BlueOSWeather.INSTANCE.start(mContext);
+         final IntentFilter filter = new IntentFilter();
+         filter.addAction(Intent.ACTION_PROFILE_ADDED);
+         filter.addAction(Intent.ACTION_WALLPAPER_CHANGED);

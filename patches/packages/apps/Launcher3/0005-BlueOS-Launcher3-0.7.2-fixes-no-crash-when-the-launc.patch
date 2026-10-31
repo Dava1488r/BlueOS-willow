@@ -1,0 +1,48 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 27 Oct 2026 16:19:42 +0100
+Subject: [PATCH 5/9] =?UTF-8?q?BlueOS:=20Launcher3:=200.7.2=20fixes=20?=
+ =?UTF-8?q?=E2=80=94=20no=20crash=20when=20the=20launcher=20is=20recreated?=
+ =?UTF-8?q?,=20Arona=20hums=20at=20her=20desk?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The Arona widget took its reply chip out of the drag layer while the drag layer was detaching its children
+(theme / wallpaper colours / «Яркие цвета» recreate the launcher) → NullPointerException; now a moment later.
+Sitting down on her desk she hums one of the game's lines out loud («Напевает вслух», blueos_arona_desk_voice).
+
+Change-Id: Ib8d95dd3ff50a7bed61b79c76e0bee10aca3aea2
+---
+ src/com/android/launcher3/blueos/BlueOSAronaWidget.kt | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt b/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt
+index cc9d7b157e..a1e77bdb11 100644
+--- a/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt
++++ b/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt
+@@ -162,8 +162,11 @@ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(contex
+         d.visibility = VISIBLE
+         d.animate().alpha(1f).setDuration(350).start()
+         arona.animate().alpha(0f).setDuration(350).withEndAction { if (seated) arona.visibility = INVISIBLE }.start()
+-        // she says what she's humming — a chip only: nothing she does by herself ever makes a sound
+-        if (!d.asleep) handler.postDelayed({ if (seated) touch.say(AronaReplies.Kind.SIT, silent = true, at = d) }, 900)
++        // she hums a line from the game — out loud by «Напевает вслух» (and the reply sound / silent mode), else
++        // a chip only
++        if (!d.asleep) handler.postDelayed({
++            if (seated) touch.say(AronaReplies.Kind.SIT, silent = !K.on(cr, K.ARONA_DESK_VOICE), at = d)
++        }, 900)
+     }
+ 
+     private fun standUp(say: Boolean) {
+@@ -285,7 +288,9 @@ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(contex
+         unobserve?.invoke(); unobserve = null
+         unGaze?.invoke(); unGaze = null
+         motion?.invoke(); motion = null
+-        (chip.parent as? ViewGroup)?.removeView(chip)
++        // 0.7.2: not right now — when the launcher is recreated (theme, wallpaper colours) the drag layer is
++        // detaching its children at this very moment, and taking one away under it crashed the launcher
++        handler.post { if (!isAttachedToWindow) (chip.parent as? ViewGroup)?.removeView(chip) }
+         Choreographer.getInstance().removeFrameCallback(this)
+         handler.removeCallbacks(tick)
+     }

@@ -1,0 +1,118 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Sat, 24 Oct 2026 17:48:03 +0200
+Subject: [PATCH 01/12] BlueOS: Kivotos school color presets
+
+Wallpaper & style color presets: the BlueOS brand color and the Blue Archive schools instead of the LineageOS/AOSP ones.
+
+Change-Id: I3a5b79d19ce6337d661f3a8947a27cd88ffe149a
+---
+ themes/res/values-ru/blueos_colors.xml | 11 ++++++++
+ themes/res/values/blueos_colors.xml    | 31 ++++++++++++++++++++++
+ themes/res/values/color-bundles.xml    | 36 +++++++-------------------
+ 3 files changed, 51 insertions(+), 27 deletions(-)
+ create mode 100644 themes/res/values-ru/blueos_colors.xml
+ create mode 100644 themes/res/values/blueos_colors.xml
+
+diff --git a/themes/res/values-ru/blueos_colors.xml b/themes/res/values-ru/blueos_colors.xml
+new file mode 100644
+index 00000000..0ad4950c
+--- /dev/null
++++ b/themes/res/values-ru/blueos_colors.xml
+@@ -0,0 +1,11 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <string name="bundle_name_blue">Голубой BA</string>
++    <string name="bundle_name_abydos">Абидос</string>
++    <string name="bundle_name_gehenna">Геенна</string>
++    <string name="bundle_name_trinity">Тринити</string>
++    <string name="bundle_name_millennium">Миллениум</string>
++    <string name="bundle_name_hyakkiyako">Хякки-яко</string>
++    <string name="bundle_name_shanhaijing">Шанхайцзин</string>
++    <string name="bundle_name_valkyrie">Валькирия</string>
++</resources>
+diff --git a/themes/res/values/blueos_colors.xml b/themes/res/values/blueos_colors.xml
+new file mode 100644
+index 00000000..0c321281
+--- /dev/null
++++ b/themes/res/values/blueos_colors.xml
+@@ -0,0 +1,31 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- BlueOS: color presets in Wallpaper & style = the Kivotos schools (see color-bundles.xml).
++     "blue" is the BlueOS brand color, the default (theming_defaults in vendor/blueos). -->
++<resources>
++    <color name="color_secondary_blue">#128AFA</color>
++    <color name="color_secondary_abydos">#C98A2B</color>
++    <color name="color_secondary_gehenna">#C8303A</color>
++    <color name="color_secondary_trinity">#C9A54A</color>
++    <color name="color_secondary_millennium">#1FA7B8</color>
++    <color name="color_secondary_hyakkiyako">#C94A8A</color>
++    <color name="color_secondary_shanhaijing">#D9622B</color>
++    <color name="color_secondary_valkyrie">#3B5BA9</color>
++
++    <string name="bundle_name_blue">Blue Archive</string>
++    <string name="bundle_name_abydos">Abydos</string>
++    <string name="bundle_name_gehenna">Gehenna</string>
++    <string name="bundle_name_trinity">Trinity</string>
++    <string name="bundle_name_millennium">Millennium</string>
++    <string name="bundle_name_hyakkiyako">Hyakkiyako</string>
++    <string name="bundle_name_shanhaijing">Shanhaijing</string>
++    <string name="bundle_name_valkyrie">Valkyrie</string>
++
++    <string name="color_style_blue" translatable="false">TONAL_SPOT</string>
++    <string name="color_style_abydos" translatable="false">TONAL_SPOT</string>
++    <string name="color_style_gehenna" translatable="false">TONAL_SPOT</string>
++    <string name="color_style_trinity" translatable="false">TONAL_SPOT</string>
++    <string name="color_style_millennium" translatable="false">TONAL_SPOT</string>
++    <string name="color_style_hyakkiyako" translatable="false">TONAL_SPOT</string>
++    <string name="color_style_shanhaijing" translatable="false">TONAL_SPOT</string>
++    <string name="color_style_valkyrie" translatable="false">TONAL_SPOT</string>
++</resources>
+diff --git a/themes/res/values/color-bundles.xml b/themes/res/values/color-bundles.xml
+index d2cd994b..f43998c4 100644
+--- a/themes/res/values/color-bundles.xml
++++ b/themes/res/values/color-bundles.xml
+@@ -15,34 +15,16 @@
+   ~ limitations under the License.
+   -->
+ <resources>
++    <!-- BlueOS: the Kivotos schools (blueos_colors.xml) + monochrome -->
+     <array name="color_bundles">
+-        <item>default</item>
+-        <item>wht</item>
+-        <item>bue</item>
+-        <item>red</item>
+-        <item>porcelain</item>
+-        <item>obsidian</item>
+-        <item>moonstone</item>
+-        <item>jade</item>
+-        <item>iris</item>
+-        <item>lemongrass</item>
+-        <item>indigo</item>
+-        <item>peony</item>
+-        <item>bundle1</item>
+-        <item>bundle2</item>
+-        <item>bundle3</item>
++        <item>blue</item>
++        <item>abydos</item>
++        <item>gehenna</item>
++        <item>trinity</item>
++        <item>millennium</item>
++        <item>hyakkiyako</item>
++        <item>shanhaijing</item>
++        <item>valkyrie</item>
+         <item>monochromatic</item>
+-        <item>rainbow1</item>
+-        <item>rainbow2</item>
+-        <item>rainbow3</item>
+-        <item>rainbow4</item>
+-        <item>rainbow5</item>
+-        <item>rainbow6</item>
+-        <item>rainbow7</item>
+-        <item>fruits1</item>
+-        <item>fruits2</item>
+-        <item>fruits3</item>
+-        <item>fruits4</item>
+-        <item>fruits5</item>
+     </array>
+ </resources>
