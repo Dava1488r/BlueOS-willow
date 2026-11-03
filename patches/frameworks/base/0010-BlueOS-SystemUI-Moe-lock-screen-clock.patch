@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sat, 24 Oct 2026 21:03:45 +0200
-Subject: [PATCH 10/31] BlueOS: SystemUI: Moe lock screen clock
+Subject: [PATCH 10/32] BlueOS: SystemUI: Moe lock screen clock
 
 A clock face where Blue Archive pixel-art girls hold the digits (Moe Counter moebooru theme with halos, vendor/blueos/tools/make-moe-ba.py). Built on the bitmap clock views: real digit pictures, size from the clock text size, sharp pixels, grey and dim on AOD, and a one-row small clock.
 

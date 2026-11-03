@@ -1,0 +1,117 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 3 Nov 2026 22:56:28 +0100
+Subject: [PATCH 11/11] BlueOS: Launcher3: the weather widget says when it has
+ no data
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: Ic6609888aa4e66bb825071947ec941b2a81769c1
+---
+ res/values-ru/blueos_strings.xml              |  3 +-
+ res/values/blueos_strings.xml                 |  3 +-
+ .../launcher3/blueos/BlueOSWeatherWidget.kt   | 32 +++++++++++++++++--
+ 3 files changed, 33 insertions(+), 5 deletions(-)
+
+diff --git a/res/values-ru/blueos_strings.xml b/res/values-ru/blueos_strings.xml
+index 2351266414..962ccb31dd 100644
+--- a/res/values-ru/blueos_strings.xml
++++ b/res/values-ru/blueos_strings.xml
+@@ -10,7 +10,8 @@
+     <string name="blueos_arona_pat_me">погладь меня</string>
+     <string name="blueos_arona_shh">тсс…</string>
+     <string name="blueos_weather_feels">Ощущается как %1$s</string>
+-    <string name="blueos_weather_none">Погоды пока нет</string>
++    <string name="blueos_weather_none">Нет данных о погоде</string>
++    <string name="blueos_weather_none_hint">Укажи город: «Обои и стиль» → «Погода»</string>
+     <string name="blueos_weather_clear">Ясно</string>
+     <string name="blueos_weather_cloudy">Облачно</string>
+     <string name="blueos_weather_rain">Дождь</string>
+diff --git a/res/values/blueos_strings.xml b/res/values/blueos_strings.xml
+index a3cff9505b..1ae90bf582 100644
+--- a/res/values/blueos_strings.xml
++++ b/res/values/blueos_strings.xml
+@@ -11,7 +11,8 @@
+     <string name="blueos_arona_pat_me">pat me</string>
+     <string name="blueos_arona_shh">shh…</string>
+     <string name="blueos_weather_feels">Feels like %1$s</string>
+-    <string name="blueos_weather_none">No weather yet</string>
++    <string name="blueos_weather_none">No weather data</string>
++    <string name="blueos_weather_none_hint">Pick a city: Wallpaper &amp; style → Weather</string>
+     <string name="blueos_weather_clear">Clear</string>
+     <string name="blueos_weather_cloudy">Cloudy</string>
+     <string name="blueos_weather_rain">Rain</string>
+diff --git a/src/com/android/launcher3/blueos/BlueOSWeatherWidget.kt b/src/com/android/launcher3/blueos/BlueOSWeatherWidget.kt
+index 1e4ca7dfc4..c35dd187d7 100644
+--- a/src/com/android/launcher3/blueos/BlueOSWeatherWidget.kt
++++ b/src/com/android/launcher3/blueos/BlueOSWeatherWidget.kt
+@@ -116,6 +116,11 @@ class BlueOSWeatherWidgetView(context: Context) : LauncherAppWidgetHostView(cont
+     private val hiLo = small()
+     private val feels = small()
+     private val icon = WeatherIconView(context)
++    private val column = LinearLayout(context)
++    /** 0.8.1: no weather: this instead of [column], which got a width of 0 with empty captions (a blank card) */
++    private val empty = LinearLayout(context)
++    private val emptyTitle = wrapped()
++    private val emptyHint = wrapped()
+     /** «Живые виджеты» and «Инерция» together; read in [bind] (0.8: not twice a frame from Settings). */
+     private var inertia = false
+     private var unobserve: (() -> Unit)? = null
+@@ -127,6 +132,11 @@ class BlueOSWeatherWidgetView(context: Context) : LauncherAppWidgetHostView(cont
+         maxLines = 1
+     }
+ 
++    private fun wrapped() = TextView(context).apply {
++        setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
++        typeface = Typeface.create("google-sans-text", Typeface.NORMAL)
++    }
++
+     init {
+         val m = (8 * dp).toInt()
+         setPadding(m, m, m, m)
+@@ -151,7 +161,7 @@ class BlueOSWeatherWidgetView(context: Context) : LauncherAppWidgetHostView(cont
+             addView(big)
+             addView(captions, LinearLayout.LayoutParams(-2, -2).apply { marginStart = (12 * dp).toInt() })
+         }
+-        val column = LinearLayout(context).apply {
++        column.apply {
+             orientation = LinearLayout.VERTICAL
+             gravity = Gravity.CENTER_VERTICAL
+             addView(top)
+@@ -159,8 +169,21 @@ class BlueOSWeatherWidgetView(context: Context) : LauncherAppWidgetHostView(cont
+         }
+         card.addView(column, FrameLayout.LayoutParams(-2, -1).apply { marginStart = (16 * dp).toInt() })
+         card.addView(icon, FrameLayout.LayoutParams((40 * dp).toInt(), (40 * dp).toInt(), Gravity.END or Gravity.CENTER_VERTICAL).apply { marginEnd = (14 * dp).toInt() })
++        empty.apply {
++            orientation = LinearLayout.VERTICAL
++            gravity = Gravity.CENTER_VERTICAL
++            setPadding((16 * dp).toInt(), 0, (16 * dp).toInt(), 0)
++            addView(emptyTitle, LinearLayout.LayoutParams(-1, -2))
++            addView(emptyHint, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (2 * dp).toInt() })
++        }
++        emptyTitle.setText(R.string.blueos_weather_none)
++        emptyHint.setText(R.string.blueos_weather_none_hint)
++        card.addView(empty, FrameLayout.LayoutParams(-1, -1))
+         card.setOnClickListener {
+-            context.packageManager.getLaunchIntentForPackage("com.google.android.apps.weather")?.let { context.startActivity(it.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
++            // 0.8.1: no weather yet: to «Обои и стиль», the city is picked there
++            val intent = if (Weather.read(cr) == null) android.content.Intent(android.content.Intent.ACTION_SET_WALLPAPER).setPackage("com.android.wallpaper")
++                else context.packageManager.getLaunchIntentForPackage("com.google.android.apps.weather")
++            intent?.let { context.startActivity(it.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+         }
+         bind()
+     }
+@@ -178,10 +201,13 @@ class BlueOSWeatherWidgetView(context: Context) : LauncherAppWidgetHostView(cont
+         inertia = K.on(cr, K.LIVE_WIDGETS) && K.on(cr, K.HOME_INERTIA)
+         val w = Weather.read(cr)
+         if (w == null) {
+-            big.text = "—"; name.setText(R.string.blueos_weather_none); hiLo.text = ""; feels.text = ""
++            // 0.8.1: what's wrong and what to do
++            emptyTitle.setTextColor(onS); emptyHint.setTextColor(variant)
++            empty.visibility = View.VISIBLE; column.visibility = View.GONE
+             icon.weather = null
+             return
+         }
++        empty.visibility = View.GONE; column.visibility = View.VISIBLE
+         big.text = Weather.format(cr, w.temp)
+         name.setText(when (w.kind) {
+             Weather.Kind.CLEAR -> R.string.blueos_weather_clear

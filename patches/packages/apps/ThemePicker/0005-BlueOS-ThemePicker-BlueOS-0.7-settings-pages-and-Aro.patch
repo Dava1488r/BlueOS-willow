@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Tue, 27 Oct 2026 03:49:42 +0100
-Subject: [PATCH 05/14] BlueOS: ThemePicker: BlueOS 0.7 settings pages and
+Subject: [PATCH 05/15] BlueOS: ThemePicker: BlueOS 0.7 settings pages and
  Arona position editor
 
 Entries: Arona and live clock (lock screen list), BlueOS home screen and Weather (home screen list); every 0.7 feature has its own switch.

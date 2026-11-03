@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sat, 24 Oct 2026 18:12:28 +0200
-Subject: [PATCH 08/31] BlueOS: SystemUI: Halo lock screen clock
+Subject: [PATCH 08/32] BlueOS: SystemUI: Halo lock screen clock
 
 A clock face next to the default one (Wallpaper and style > Clock): Outfit digits, semi-bold on the lock screen and thin on AOD, minutes in the accent color and a halo over the hours. Font family blueos-clock from vendor/blueos/tools/make-fonts.py.
 

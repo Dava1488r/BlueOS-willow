@@ -1,0 +1,65 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 3 Nov 2026 22:56:27 +0100
+Subject: [PATCH 32/32] BlueOS: SystemUI: weather for a city picked by hand
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: I44694fe70c8b7807c144f41f4a6238d2d19fd9e7
+---
+ .../systemui/blueos/weather/BlueOSWeather.kt  | 22 ++++++++++++++++---
+ 1 file changed, 19 insertions(+), 3 deletions(-)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/weather/BlueOSWeather.kt b/packages/SystemUI/src/com/android/systemui/blueos/weather/BlueOSWeather.kt
+index 690aa1e6c32a..93bc9a4495bc 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/weather/BlueOSWeather.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/weather/BlueOSWeather.kt
+@@ -50,6 +50,14 @@ object BlueOSWeather {
+         BlueOSSettings.observe(ctx, listOf(BlueOSSettings.WEATHER, BlueOSSettings.WEATHER_DATE, BlueOSSettings.WEATHER_F)) {
+             com.android.systemui.blueos.widgets.BlueOSWidgetStyle.notifyChanged(ctx)
+         }
++        // 0.8.1: a city picked by hand, or back to the location: the old place's weather must not stay
++        BlueOSSettings.observe(ctx, listOf(BlueOSSettings.WEATHER_CITY)) {
++            bg.post {
++                lastFetch = 0L
++                Settings.Secure.putString(ctx.contentResolver, BlueOSSettings.WEATHER, null)
++                refresh()
++            }
++        }
+         // 0.7.1: try again as soon as it can work — screen on, the network is up, location got switched on
+         ctx.registerReceiver(object : BroadcastReceiver() {
+             override fun onReceive(c: Context, i: Intent) = refreshIfStale()
+@@ -67,7 +75,7 @@ object BlueOSWeather {
+     private fun refresh() {
+         bg.removeCallbacksAndMessages(null)
+         bg.postDelayed(::refresh, PERIOD)
+-        val loc = location() ?: run {
++        val place = city() ?: location()?.let { it.latitude to it.longitude } ?: run {
+             Log.i(TAG, "no location yet")
+             // 0.7.1: soon, not in 45 min (with location off: when it gets switched on, see start())
+             val on = ctx.getSystemService(LocationManager::class.java)?.isLocationEnabled == true
+@@ -75,8 +83,8 @@ object BlueOSWeather {
+             bg.postDelayed(::refresh, if (on) 2 * 60_000L else PERIOD)
+             return
+         }
+-        val lat = String.format(Locale.US, "%.1f", loc.latitude)
+-        val lon = String.format(Locale.US, "%.1f", loc.longitude)
++        val lat = String.format(Locale.US, "%.1f", place.first)
++        val lon = String.format(Locale.US, "%.1f", place.second)
+         val url = URL("https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
+             "&current=temperature_2m,apparent_temperature,weather_code,is_day" +
+             "&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1")
+@@ -109,6 +117,14 @@ object BlueOSWeather {
+         }
+     }
+ 
++    /** 0.8.1: the city from «Погода» → «Город», for phones where the location gives nothing (a GSI). */
++    private fun city(): Pair<Double, Double>? {
++        val p = Settings.Secure.getString(ctx.contentResolver, BlueOSSettings.WEATHER_CITY)?.split(';') ?: return null
++        val lat = p.getOrNull(1)?.toDoubleOrNull() ?: return null
++        val lon = p.getOrNull(2)?.toDoubleOrNull() ?: return null
++        return lat to lon
++    }
++
+     private fun location(): Location? {
+         if (ctx.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) return null
+         val lm = ctx.getSystemService(LocationManager::class.java) ?: return null

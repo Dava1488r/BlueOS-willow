@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sun, 25 Oct 2026 00:53:01 +0200
-Subject: [PATCH 15/31] BlueOS: SystemUI: Halo lock screen
+Subject: [PATCH 15/32] BlueOS: SystemUI: Halo lock screen
 
 - Halo is the default clock (lockscreen_clock_id_fallback).
 - The wallpaper under the clock and under the date is sampled (region sampling,

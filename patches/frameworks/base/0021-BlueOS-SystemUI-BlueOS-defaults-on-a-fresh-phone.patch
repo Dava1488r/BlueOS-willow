@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sun, 25 Oct 2026 12:33:42 +0100
-Subject: [PATCH 21/31] BlueOS: SystemUI: BlueOS defaults on a fresh phone
+Subject: [PATCH 21/32] BlueOS: SystemUI: BlueOS defaults on a fresh phone
 
 - BlueOSDefaults (once, before setup finishes; updates keep the user's
   choices): light theme, the brand palette with "Bright colors"

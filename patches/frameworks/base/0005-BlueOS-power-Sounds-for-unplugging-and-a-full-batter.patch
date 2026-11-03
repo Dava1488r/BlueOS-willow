@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sat, 24 Oct 2026 12:55:20 +0200
-Subject: [PATCH 05/31] BlueOS: power: Sounds for unplugging and a full battery
+Subject: [PATCH 05/32] BlueOS: power: Sounds for unplugging and a full battery
 
 Unplugging played the charging started sound again. It now plays Settings.Global blueos_charging_stopped_sound (default Emoticon_Sweat), and blueos_battery_full_sound (default Emoticon_Steam) plays when the battery reaches 100% while charging. Both obey the charging sounds switch.
 

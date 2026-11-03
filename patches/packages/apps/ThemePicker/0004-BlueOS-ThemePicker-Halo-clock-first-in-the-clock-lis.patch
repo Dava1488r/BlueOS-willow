@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sun, 25 Oct 2026 12:33:42 +0100
-Subject: [PATCH 04/14] BlueOS: ThemePicker: Halo clock first in the clock list
+Subject: [PATCH 04/15] BlueOS: ThemePicker: Halo clock first in the clock list
 
 Halo, then the stock clock, the divider, then the Moe clocks. The divider
 follows the last clock with presets, so Halo (no presets) can sit first.

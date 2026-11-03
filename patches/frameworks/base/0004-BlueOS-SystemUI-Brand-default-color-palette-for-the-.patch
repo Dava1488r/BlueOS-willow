@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sat, 24 Oct 2026 12:53:59 +0200
-Subject: [PATCH 04/31] BlueOS: SystemUI: Brand default color, palette for the
+Subject: [PATCH 04/32] BlueOS: SystemUI: Brand default color, palette for the
  boot animation
 
 Until the user picks colors in Wallpaper & style the system palette comes from the BlueOS brand color (#128AFA, stored as a preset). The current palette is published to persist.bootanim.color1..4 so dynamically colored boot animations follow it.

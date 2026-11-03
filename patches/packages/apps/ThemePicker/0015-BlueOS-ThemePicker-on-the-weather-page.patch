@@ -1,0 +1,166 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 3 Nov 2026 22:56:27 +0100
+Subject: [PATCH 15/15] =?UTF-8?q?BlueOS:=20ThemePicker:=20=C2=AB=D0=93?=
+ =?UTF-8?q?=D0=BE=D1=80=D0=BE=D0=B4=C2=BB=20on=20the=20weather=20page?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: Ieead4d37e5cfa1029cad9fd0c60b7564628647fe
+---
+ res/values-ru/blueos_08_strings.xml           |  8 ++
+ res/values/blueos_08_strings.xml              |  8 ++
+ .../blueos/BlueOSSettingsActivity.kt          | 83 +++++++++++++++++++
+ 3 files changed, 99 insertions(+)
+
+diff --git a/res/values-ru/blueos_08_strings.xml b/res/values-ru/blueos_08_strings.xml
+index a7afde7a..8b475f6d 100644
+--- a/res/values-ru/blueos_08_strings.xml
++++ b/res/values-ru/blueos_08_strings.xml
+@@ -104,4 +104,12 @@
+     <string name="blueos_s_clock_size_normal">Обычный</string>
+     <string name="blueos_s_clock_size_d">%1$d %%</string>
+     <string name="blueos_s_clock_size_pick">Размер цифр: %1$d %%</string>
++    <string name="blueos_s_wx_city">Город</string>
++    <string name="blueos_s_wx_city_auto">Определяется автоматически по местоположению</string>
++    <string name="blueos_s_wx_city_d">Погода будет показываться для этого города, а не по местоположению. Пригодится, если погода не появляется. Введённое название отправится в Open-Meteo.</string>
++    <string name="blueos_s_wx_city_hint">Название города</string>
++    <string name="blueos_s_wx_city_find">Найти</string>
++    <string name="blueos_s_wx_city_clear">По местоположению</string>
++    <string name="blueos_s_wx_city_none">Ничего не нашлось. Проверьте название.</string>
++    <string name="blueos_s_wx_city_err">Не получилось найти: проверьте интернет.</string>
+ </resources>
+diff --git a/res/values/blueos_08_strings.xml b/res/values/blueos_08_strings.xml
+index 244536ae..0684d5bf 100644
+--- a/res/values/blueos_08_strings.xml
++++ b/res/values/blueos_08_strings.xml
+@@ -104,4 +104,12 @@
+     <string name="blueos_s_clock_size_normal">Normal</string>
+     <string name="blueos_s_clock_size_d">%1$d %%</string>
+     <string name="blueos_s_clock_size_pick">Digit size: %1$d %%</string>
++    <string name="blueos_s_wx_city">City</string>
++    <string name="blueos_s_wx_city_auto">Found automatically from your location</string>
++    <string name="blueos_s_wx_city_d">Weather will be shown for this city instead of your location. Useful if the weather doesn\'t appear. The name you type is sent to Open-Meteo.</string>
++    <string name="blueos_s_wx_city_hint">City name</string>
++    <string name="blueos_s_wx_city_find">Find</string>
++    <string name="blueos_s_wx_city_clear">Use location</string>
++    <string name="blueos_s_wx_city_none">Nothing found. Check the name.</string>
++    <string name="blueos_s_wx_city_err">Couldn\'t search: check your internet connection.</string>
+ </resources>
+diff --git a/src/com/android/customization/blueos/BlueOSSettingsActivity.kt b/src/com/android/customization/blueos/BlueOSSettingsActivity.kt
+index 7a672361..b8faf512 100644
+--- a/src/com/android/customization/blueos/BlueOSSettingsActivity.kt
++++ b/src/com/android/customization/blueos/BlueOSSettingsActivity.kt
+@@ -87,6 +87,8 @@ class BlueOSSettingsActivity : Activity() {
+         class Btn(val title: Int, val desc: Int?, override val sub: Boolean = false, override val dep: () -> Boolean,
+                   val dot: (() -> Int)? = null, val onClick: () -> Unit) : Item()
+         class Info(val title: Int, val desc: Int) : Item()
++        /** 0.8.1: a row with a text value that isn't a list of options */
++        class Value(val title: Int, val value: () -> String, val onClick: () -> Unit) : Item()
+     }
+ 
+     private val rows = mutableListOf<Pair<Item, () -> Unit>>()
+@@ -301,6 +303,7 @@ class BlueOSSettingsActivity : Activity() {
+     private fun weatherPage(): List<Item> = listOf(
+         Item.Header(R.string.blueos_s_h_source),
+         Item.Info(R.string.blueos_s_source, R.string.blueos_s_source_d),
++        Item.Value(R.string.blueos_s_wx_city, { cityName() ?: getString(R.string.blueos_s_wx_city_auto) }) { pickCity() },
+         Item.Choice(K.WEATHER_F, R.string.blueos_s_c_units, listOf(R.string.blueos_s_units_c to 0, R.string.blueos_s_units_f to 1)),
+         Item.Header(R.string.blueos_s_h_wx_where),
+         Item.Sw(K.WEATHER_SUMMARY, R.string.blueos_s_wx_sum, R.string.blueos_s_wx_sum_d),
+@@ -319,6 +322,81 @@ class BlueOSSettingsActivity : Activity() {
+         },
+     )
+ 
++    private fun cityName() = K.string(contentResolver, K.WEATHER_CITY, "").substringBefore(';').ifEmpty { null }
++
++    private class City(val name: String, val label: String, val lat: Double, val lon: Double)
++
++    /** 0.8.1: Open-Meteo's own search, the service the weather comes from. On a background thread. */
++    private fun findCities(query: String): List<City> {
++        val url = java.net.URL("https://geocoding-api.open-meteo.com/v1/search?count=6&format=json" +
++            "&language=" + java.util.Locale.getDefault().language + "&name=" + java.net.URLEncoder.encode(query, "UTF-8"))
++        val conn = url.openConnection() as java.net.HttpURLConnection
++        conn.connectTimeout = 10_000
++        conn.readTimeout = 10_000
++        val body = try { conn.inputStream.bufferedReader().use { it.readText() } } finally { conn.disconnect() }
++        val found = org.json.JSONObject(body).optJSONArray("results") ?: return emptyList()
++        return (0 until found.length()).map { i ->
++            val c = found.getJSONObject(i)
++            val name = c.getString("name")
++            val label = listOf(name, c.optString("admin1"), c.optString("country")).filter { it.isNotEmpty() }.distinct().joinToString(", ")
++            City(name, label, c.getDouble("latitude"), c.getDouble("longitude"))
++        }
++    }
++
++    /** 0.8.1: weather for a city typed by hand, when the phone can't tell where it is. */
++    private fun pickCity() {
++        val field = android.widget.EditText(this).apply {
++            setHint(R.string.blueos_s_wx_city_hint)
++            isSingleLine = true
++            setText(cityName().orEmpty())
++        }
++        val box = LinearLayout(this).apply {
++            orientation = LinearLayout.VERTICAL
++            setPadding((18 * dp).toInt(), (8 * dp).toInt(), (18 * dp).toInt(), 0)
++            addView(field)
++        }
++        val builder = AlertDialog.Builder(this)
++            .setTitle(R.string.blueos_s_wx_city)
++            .setMessage(R.string.blueos_s_wx_city_d)
++            .setView(box)
++            .setPositiveButton(R.string.blueos_s_wx_city_find, null)    // set below: a failed search keeps the dialog
++            .setNegativeButton(android.R.string.cancel, null)
++        if (cityName() != null) builder.setNeutralButton(R.string.blueos_s_wx_city_clear) { _, _ ->
++            Settings.Secure.putString(contentResolver, K.WEATHER_CITY, null)
++            refresh()
++        }
++        val dialog = builder.show()
++        val find = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
++        find.setOnClickListener {
++            val query = field.text.toString().trim()
++            if (query.isEmpty()) return@setOnClickListener
++            find.isEnabled = false
++            Thread {
++                val found = runCatching { findCities(query) }
++                runOnUiThread {
++                    find.isEnabled = true
++                    val cities = found.getOrNull()
++                    when {
++                        isFinishing || !dialog.isShowing -> {}
++                        cities == null -> field.error = getString(R.string.blueos_s_wx_city_err)
++                        cities.isEmpty() -> field.error = getString(R.string.blueos_s_wx_city_none)
++                        else -> {
++                            dialog.dismiss()
++                            AlertDialog.Builder(this)
++                                .setTitle(R.string.blueos_s_wx_city)
++                                .setItems(cities.map { it.label }.toTypedArray()) { _, i ->
++                                    val c = cities[i]
++                                    put(K.WEATHER_CITY, "${c.name};${c.lat};${c.lon}")
++                                }
++                                .setNegativeButton(android.R.string.cancel, null)
++                                .show()
++                        }
++                    }
++                }
++            }.start()
++        }
++    }
++
+     // 0.8 «Цвета»: a role per element (BlueOSColorRoles decides the colour — the same rule everywhere)
+     private val roleNames = mapOf(
+         C.TEXT to R.string.blueos_s_role_text, C.TINT to R.string.blueos_s_role_tint, C.ACCENT to R.string.blueos_s_role_accent,
+@@ -776,6 +854,11 @@ class BlueOSSettingsActivity : Activity() {
+                 val dot = dotOf?.let { dotView().also { row.addView(it) } }
+                 update = { if (dot != null && dotOf != null) paintDot(dot, dotOf()) }
+             }
++            is Item.Value -> {
++                row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
++                row.setOnClickListener { item.onClick() }
++                update = { setTexts(item.title, item.value()) }
++            }
+             is Item.Info -> {
+                 setTexts(item.title, getString(item.desc))
+                 row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))

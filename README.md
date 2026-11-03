@@ -6,7 +6,7 @@
 (нужны свои файлы, см. ниже).
 
 Разрабатывается на **Google Pixel 6a (`bluejay`)**. Под другие телефоны BlueOS можно собрать самому — эти исходники
-для этого и выложены.
+для этого и выложены — или попробовать экспериментальный GSI ([GSI.md](GSI.md)).
 
 > BlueOS — неофициальный фанатский проект. Он не связан с Nexon, Yostar и NEXON Games. **Файлов из игры здесь нет**:
 > модели персонажей, их голоса, музыка, звуки и обои из игры не входят в исходники. Без них прошивка полностью
@@ -22,6 +22,7 @@
 | Что нужно | Где |
 |---|---|
 | **Поставить готовую BlueOS на Pixel 6a** | **Releases** + [INSTALL.md](INSTALL.md) |
+| **Попробовать на другом телефоне** (GSI, экспериментально, проверен только на Pixel 6a) | **Releases** + [GSI.md](GSI.md) |
 | Собрать BlueOS под свой телефон | [BUILDING.md](BUILDING.md) |
 | Телефона нет в списке / что подстроить под другой экран | [PORTING.md](PORTING.md) |
 | Вернуть персонажа и звуки (на телефоне, без сборки) | [ASSETS.md](ASSETS.md) |
@@ -61,5 +62,5 @@ Wallpaper & style → Character → Add character files ([ASSETS.md](ASSETS.md))
 author's TikTok profile description, [tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun).
 
 **No warranty — flashing wipes the phone; use at your own risk.** A ready-made build for the Pixel 6a is under
-**Releases** ([INSTALL.md](INSTALL.md)). Start with [BUILDING.md](BUILDING.md) (build), [PORTING.md](PORTING.md) (other devices), [AGENTS.md](AGENTS.md)
+**Releases** ([INSTALL.md](INSTALL.md)), and an experimental GSI for other phones, tested only on a Pixel 6a ([GSI.md](GSI.md)). Start with [BUILDING.md](BUILDING.md) (build), [PORTING.md](PORTING.md) (other devices), [AGENTS.md](AGENTS.md)
 (let an AI coding agent such as Claude Code walk you through it). The guides are in Russian; the commands are the same.

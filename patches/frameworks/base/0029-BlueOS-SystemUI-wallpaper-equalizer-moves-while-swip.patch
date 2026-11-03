@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Fri, 30 Oct 2026 12:38:01 +0100
-Subject: [PATCH 29/31] BlueOS: SystemUI: wallpaper equalizer moves while
+Subject: [PATCH 29/32] BlueOS: SystemUI: wallpaper equalizer moves while
  swiping, lock weather icon colour
 
 - While the home screen moves the weather holds its frame (for the GPU);

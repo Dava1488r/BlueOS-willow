@@ -84,3 +84,7 @@ check that it worked. Long steps (sync, build) take hours — run them in the ba
 - Blur gone in the shade / All apps right after flashing or while charging = Android's thermal protection
   (`dumpsys thermalservice` status ≥ 3 → `dumpsys window` `mBlurEnabled=false`), not a bug.
 - After a change to colours, check light **and** dark theme and several wallpapers.
+
+## GSI
+A prebuilt experimental GSI exists for phones other than the Pixel 6a: [GSI.md](GSI.md) (tested only on a Pixel 6a through DSU; say so).
+To build one: `breakfast gsi_arm64`, `m systemimage` (BUILDING.md).

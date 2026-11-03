@@ -72,6 +72,7 @@ object BlueOSSettings {
     const val WEATHER_DATE = "blueos_weather_date"
     const val WEATHER_LIVE = "blueos_weather_live"
     const val WEATHER_TALK = "blueos_weather_talk"
+    const val WEATHER_CITY = "blueos_weather_city"           // 0.8.1: "name;lat;lon" picked by hand, unset = by location
 
     // Home screen
     const val WIDGET_MATERIAL = "blueos_widget_material"     // 0 matte, 1 glass, 2 solid, 3 outline, 4 accent

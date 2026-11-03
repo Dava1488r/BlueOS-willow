@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: BlueOS <blueos@localhost>
 Date: Sat, 24 Oct 2026 03:52:56 +0200
-Subject: [PATCH 02/31] BlueOS: audio: Selectable touch sound
+Subject: [PATCH 02/32] BlueOS: audio: Selectable touch sound
 
 Settings.Global blueos_touch_sound replaces Effect_Tick.ogg (file path, or android for stock).
 

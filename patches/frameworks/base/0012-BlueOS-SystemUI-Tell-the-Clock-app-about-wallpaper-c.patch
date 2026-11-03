@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sun, 25 Oct 2026 00:06:19 +0200
-Subject: [PATCH 12/31] BlueOS: SystemUI: Tell the Clock app about wallpaper
+Subject: [PATCH 12/32] BlueOS: SystemUI: Tell the Clock app about wallpaper
  color changes
 
 The BlueOS halo clock widget (DeskClock) has no card and picks dark or light

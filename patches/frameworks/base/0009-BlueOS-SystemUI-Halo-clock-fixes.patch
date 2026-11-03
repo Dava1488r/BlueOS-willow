@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sat, 24 Oct 2026 20:38:40 +0200
-Subject: [PATCH 09/31] BlueOS: SystemUI: Halo clock fixes
+Subject: [PATCH 09/32] BlueOS: SystemUI: Halo clock fixes
 
 The halo sits in its own room above the hours instead of over the digits, the small clock (notifications, AOD) gets one too, and a clock color picked by the user is used for all digits and the halo. Default system font: Nunito.
 

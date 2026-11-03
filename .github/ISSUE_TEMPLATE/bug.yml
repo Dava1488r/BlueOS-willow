@@ -21,6 +21,7 @@ body:
       label: "Чья сборка / Whose build"
       options:
         - "Готовая из Releases / From Releases"
+        - "GSI из Releases / GSI from Releases"
         - "Собрал(а) сам(а) / Built myself"
         - "Собрал кто-то другой / Built by someone else"
     validations:

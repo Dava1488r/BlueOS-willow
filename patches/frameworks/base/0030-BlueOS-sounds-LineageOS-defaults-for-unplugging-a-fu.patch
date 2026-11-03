@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Fri, 30 Oct 2026 22:08:24 +0100
-Subject: [PATCH 30/31] BlueOS: sounds: LineageOS defaults for unplugging, a
+Subject: [PATCH 30/32] BlueOS: sounds: LineageOS defaults for unplugging, a
  full battery and touch
 
 Unset unplug sound plays the plug-in sound as LineageOS does, a full battery

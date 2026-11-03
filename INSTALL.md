@@ -1,7 +1,8 @@
 # Установка готовой BlueOS на Google Pixel 6a
 
-Готовая сборка есть только для **Pixel 6a** (кодовое имя `bluejay`) — она на странице **Releases** этого репозитория.
-На другой телефон её ставить нельзя: не загрузится. Для других телефонов BlueOS собирают сами — [BUILDING.md](BUILDING.md).
+Эта инструкция и этот zip — только для **Pixel 6a** (кодовое имя `bluejay`), сборка на странице **Releases** этого
+репозитория. На другой телефон его ставить нельзя: не загрузится. Для других телефонов есть экспериментальный образ
+([GSI.md](GSI.md)), или BlueOS можно собрать самому ([BUILDING.md](BUILDING.md)).
 
 ## ⚠️ Прочитайте до начала
 - **Неофициальная фанатская прошивка, без каких-либо гарантий.** Всё, что вы делаете с телефоном, — на ваш страх и
@@ -87,7 +88,7 @@ adb sideload BlueOS-0.8.1-bluejay-20261103.zip
 ---
 
 ## English (short)
-Ready-made builds exist **only for the Pixel 6a (`bluejay`)** — see **Releases**. Unofficial fan ROM, **no warranty,
+This zip is **only for the Pixel 6a (`bluejay`)** — see **Releases**; for other phones see [GSI.md](GSI.md). Unofficial fan ROM, **no warranty,
 use at your own risk**; not a LineageOS build — don't report its bugs to LineageOS. Unlocking the bootloader and
 installing **wipe the phone**. **Never relock the bootloader while BlueOS is installed** (the phone won't boot); go back
 to stock with flash.android.com first. Tap-to-pay and some banking apps/games may refuse to work (Play Integrity).
