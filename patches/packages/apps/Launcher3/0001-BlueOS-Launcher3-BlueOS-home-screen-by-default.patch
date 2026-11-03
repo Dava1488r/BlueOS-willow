@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sun, 25 Oct 2026 12:33:40 +0100
-Subject: [PATCH 1/9] BlueOS: Launcher3: BlueOS home screen by default
+Subject: [PATCH 01/10] BlueOS: Launcher3: BlueOS home screen by default
 
 - The 4x5 grid until the user picks one: near-square cells where
   two-column widgets fill a row symmetrically.

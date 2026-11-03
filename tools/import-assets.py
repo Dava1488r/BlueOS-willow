@@ -9,6 +9,8 @@ Every part is optional — a missing folder is skipped and what is already impor
   boot/bootanimation/{light,dark}/bootanimation.zip -> media/bootanimation/bootanimation-classic{,-dark}.zip
   wallpaper/*                     -> overlay for the Backgrounds app ("BlueOS" collection) + default wallpaper
   characters/arona/{spine,voice,sfx,desk}/, characters/plana/{spine,voice}/ -> media/{arona,plana}/... as they are
+                                     (0.8.1: no characters/ folder → the files are looked for by name anywhere in it,
+                                     the desk cut out of the work page scene if needed)
   stickers/*.png                  -> media/stickers/
 Re-run it after adding or changing files in the assets folder; it rewrites its outputs.
 """
@@ -224,8 +226,85 @@ def import_characters():
         print("stickers:", len(stickers))
 
 
+LIST = os.path.join(TOP, "config", "assets-files.txt")
+# words in a file's name or folders that tell whose voice it is (both have lines named the same)
+OWNERS = {"arona": ("arona", "арона"), "plana": ("plana", "np0035", "плана")}
+SCENE = "arona_workpage_daytime"
+
+
+def norm(name):
+    """Unity exports text assets as name.skel.bytes / name.atlas.txt."""
+    s = name.lower()
+    for suffix in (".bytes", ".txt"):
+        if s.endswith(suffix) and "." in s[:-len(suffix)]:
+            s = s[:-len(suffix)]
+    return s
+
+
+def scan_characters():
+    """0.8.1: any folder, as unpacked from the game — the characters' files are found by name (config/assets-files.txt,
+    the same rules as the phone's importer, Settings → «Файлы персонажа»). The desk is cut out of the work page scene
+    when the cut files aren't there."""
+    base = os.path.dirname(os.path.abspath(SRC))
+    by_name = {}
+    for root, _, names in os.walk(SRC):
+        for n in names:
+            by_name.setdefault(norm(n), []).append(os.path.join(root, n))
+    targets = []
+    for line in open(LIST, encoding="utf-8"):
+        parts = line.split()
+        if len(parts) >= 2 and not line.startswith("#") and re.match(r"media/(arona|plana)/(spine|voice|sfx|desk)/", parts[0]):
+            targets.append((parts[0], int(parts[1])))
+    voice_owners = {}
+    for p, _ in targets:
+        if "/voice/" in p:
+            voice_owners.setdefault(os.path.basename(p).lower(), set()).add(p.split("/")[1])
+    found = {}
+    for p, size in targets:
+        n = os.path.basename(p).lower()
+        if "/voice/" in p:
+            owner = p.split("/")[1]
+            mine = OWNERS[owner]
+            others = [w for o, ws in OWNERS.items() if o != owner for w in ws]
+            shared = len(voice_owners.get(n, ())) > 1
+            cands = [f for w in mine for f in by_name.get(f"{w}_{n}", [])]
+            for f in by_name.get(n, []):
+                where = os.path.relpath(os.path.dirname(f), base).lower()
+                # a line both of them have, in a folder that doesn't tell, is hers if it's exactly her file's size
+                if any(w in where for w in mine) or (not any(w in where for w in others)
+                                                     and (not shared or os.path.getsize(f) == size)):
+                    cands.append(f)
+        else:
+            cands = by_name.get(n, [])
+        if cands:
+            found[p] = next((f for f in cands if os.path.getsize(f) == size), cands[0])
+    groups = {}
+    for p, f in found.items():
+        out = os.path.join(TOP, p)
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        shutil.copyfile(f, out)
+        groups[os.path.dirname(p)] = groups.get(os.path.dirname(p), 0) + 1
+    for g in sorted(groups):
+        print(f"{g}: {groups[g]} of {sum(1 for p, _ in targets if os.path.dirname(p) == g)}")
+    scene = [f for k, fs in by_name.items() if k.startswith(SCENE) for f in fs]
+    if not any(p.startswith("media/arona/desk/") for p in found) and scene:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            for f in scene:
+                shutil.copyfile(f, os.path.join(tmp, norm(os.path.basename(f))))
+            subprocess.run([sys.executable, os.path.join(TOP, "tools", "cut-workpage.py"), tmp,
+                            os.path.join(MEDIA, "arona", "desk")], check=True)
+        print("media/arona/desk: cut out of the work page scene")
+    if not found and not scene:
+        print("No character files found (arona_spr.skel, NP0035_spr.skel, … — config/assets-files.txt).")
+
+
 if __name__ == "__main__":
     import_sounds()
     import_bootanimations()
     import_wallpapers()
-    import_characters()
+    # the folder layout of ASSETS.md, or any folder as unpacked from the game
+    if os.path.isdir(os.path.join(SRC, "characters")):
+        import_characters()
+    else:
+        scan_characters()

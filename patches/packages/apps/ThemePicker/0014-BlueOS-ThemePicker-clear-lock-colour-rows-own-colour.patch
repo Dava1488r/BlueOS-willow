@@ -1,0 +1,374 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 3 Nov 2026 05:45:27 +0100
+Subject: [PATCH 14/14] BlueOS: ThemePicker: clear lock colour rows, own colour
+ per part, digit size
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: Ie53518e70b585006b91963c09e2e2ca603f568b5
+---
+ .../floating_sheet_clock_size_content.xml     | 26 ++++-
+ res/values-ru/blueos_08_strings.xml           | 18 +++-
+ res/values/blueos_08_strings.xml              | 18 +++-
+ .../blueos/BlueOSSettingsActivity.kt          | 99 ++++++++++++++-----
+ .../ui/binder/ClockFloatingSheetBinder.kt     | 29 ++++++
+ 5 files changed, 155 insertions(+), 35 deletions(-)
+
+diff --git a/res/layout/floating_sheet_clock_size_content.xml b/res/layout/floating_sheet_clock_size_content.xml
+index b1384a7a..98152517 100644
+--- a/res/layout/floating_sheet_clock_size_content.xml
++++ b/res/layout/floating_sheet_clock_size_content.xml
+@@ -13,14 +13,21 @@
+   ~ See the License for the specific language governing permissions and
+   ~ limitations under the License.
+   -->
+-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
++<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+     xmlns:app="http://schemas.android.com/apk/res-auto"
+     android:layout_width="match_parent"
+     android:layout_height="wrap_content"
++    android:orientation="vertical"
+     android:paddingVertical="@dimen/floating_sheet_content_vertical_padding"
+     android:clipToPadding="false"
+     android:clipChildren="false">
+ 
++<androidx.constraintlayout.widget.ConstraintLayout
++    android:layout_width="match_parent"
++    android:layout_height="wrap_content"
++    android:clipToPadding="false"
++    android:clipChildren="false">
++
+     <TextView
+         android:id="@+id/clock_style_clock_size_title"
+         style="@style/CustomizationOptionEntryTitleTextStyle"
+@@ -59,3 +66,20 @@
+         app:layout_constraintEnd_toEndOf="parent"
+         android:theme="@style/Theme.Material3.DynamicColors.DayNight" />
+ </androidx.constraintlayout.widget.ConstraintLayout>
++
++    <!-- BlueOS 0.8.1: the digits' size, on top of «big clock or not» -->
++    <TextView
++        android:id="@+id/blueos_clock_size_title"
++        style="@style/CustomizationOptionEntryTitleTextStyle"
++        android:layout_width="match_parent"
++        android:layout_height="wrap_content"
++        android:layout_marginTop="16dp"
++        android:layout_marginHorizontal="@dimen/floating_sheet_content_horizontal_padding" />
++
++    <include
++        layout="@layout/blueos_settings_slider"
++        android:id="@+id/blueos_clock_size_slider"
++        android:layout_width="match_parent"
++        android:layout_height="wrap_content"
++        android:layout_marginHorizontal="@dimen/floating_sheet_content_horizontal_padding" />
++</LinearLayout>
+diff --git a/res/values-ru/blueos_08_strings.xml b/res/values-ru/blueos_08_strings.xml
+index 2cb424e8..a7afde7a 100644
+--- a/res/values-ru/blueos_08_strings.xml
++++ b/res/values-ru/blueos_08_strings.xml
+@@ -5,9 +5,9 @@
+     <string name="blueos_s_entry_colors_desc">Цвета часов, нимба, AOD и значков — под любые обои</string>
+     <string name="blueos_s_page_colors">Цвета</string>
+     <string name="blueos_s_c_info">Цвета подстраиваются под обои</string>
+-    <string name="blueos_s_c_info_d">Здесь выбирается не сам цвет, а какой цвет брать из палитры обоев. Сменишь обои — цвета сменятся сами, а сочетание останется. От обоев не зависит только «Свой цвет»</string>
++    <string name="blueos_s_c_info_d">Цвета берутся из палитры обоев: сменишь обои — цвета сменятся сами, а сочетание останется. От обоев не зависит только «Свой цвет». Выбранный цвет не меняется: если его плохо видно, «Защита читаемости» притемнит обои под ним</string>
+     <string name="blueos_s_h_c_base">Общее</string>
+-    <string name="blueos_s_h_c_lock">Экран блокировки</string>
++    <string name="blueos_s_h_c_lock">Часы на экране блокировки</string>
+     <string name="blueos_s_h_c_aod">Always-on (AOD)</string>
+     <string name="blueos_s_h_c_home">Рабочий стол</string>
+     <string name="blueos_s_h_c_own">Свой цвет</string>
+@@ -50,7 +50,6 @@
+     <string name="blueos_s_eq_third">Третий цвет обоев</string>
+     <string name="blueos_s_eq_text">Как текст</string>
+     <string name="blueos_s_custom">Свой цвет</string>
+-    <string name="blueos_s_custom_d">Для деталей, где выбран «Свой цвет»</string>
+     <string name="blueos_s_custom_hex">#RRGGBB</string>
+     <string name="blueos_s_reset">Сбросить цвета</string>
+     <string name="blueos_s_reset_d">Вернуть все цвета по умолчанию</string>
+@@ -69,8 +68,8 @@
+     <string name="blueos_s_wall_dim_home">Затемнение обоев на рабочем столе</string>
+     <string name="blueos_s_wall_blur_lock">Размытие обоев на экране блокировки</string>
+     <string name="blueos_s_wall_off">Выключено</string>
+-    <string name="blueos_s_c_minutes">Минуты часов</string>
+-    <string name="blueos_s_minutes_same">Как часы</string>
++    <string name="blueos_s_c_minutes">Цифры минут</string>
++    <string name="blueos_s_minutes_same">Как цифры часов</string>
+     <string name="blueos_s_c_wall_blur_mode">Когда размывать</string>
+     <string name="blueos_s_wall_blur_home_only">Только на рабочем столе — для экрана блокировки свой ползунок ниже</string>
+     <string name="blueos_s_wall_blur_always">Всегда — экран блокировки размыт так же, как рабочий стол</string>
+@@ -96,4 +95,13 @@
+     <string name="blueos_s_weq_str">Высота и яркость</string>
+     <string name="blueos_s_halo_beat">Нимб в такт музыке</string>
+     <string name="blueos_s_halo_beat_d">Пока играет музыка, нимб над часами на экране блокировки чуть увеличивается и вспыхивает на каждом ударе</string>
++    <!-- 0.8.1 -->
++    <string name="blueos_s_role_white">Белый</string>
++    <string name="blueos_s_h_c_locktext">Текст на экране блокировки</string>
++    <string name="blueos_s_c_seed">Цвет выбран в «Часы» → «Цвет». Выбор здесь его заменит</string>
++    <string name="blueos_s_h_clock_size">Размер</string>
++    <string name="blueos_s_clock_size">Размер цифр</string>
++    <string name="blueos_s_clock_size_normal">Обычный</string>
++    <string name="blueos_s_clock_size_d">%1$d %%</string>
++    <string name="blueos_s_clock_size_pick">Размер цифр: %1$d %%</string>
+ </resources>
+diff --git a/res/values/blueos_08_strings.xml b/res/values/blueos_08_strings.xml
+index 90f238a9..244536ae 100644
+--- a/res/values/blueos_08_strings.xml
++++ b/res/values/blueos_08_strings.xml
+@@ -5,9 +5,9 @@
+     <string name="blueos_s_entry_colors_desc">Clock, halo, always-on display, icons — by role, for any wallpaper</string>
+     <string name="blueos_s_page_colors">Colors</string>
+     <string name="blueos_s_c_info">Colors follow the wallpaper</string>
+-    <string name="blueos_s_c_info_d">You pick which color of the wallpaper\'s palette to use, not the color itself. A new wallpaper changes the colors, the combination stays. Only «Custom color» doesn\'t depend on the wallpaper</string>
++    <string name="blueos_s_c_info_d">You pick which color of the wallpaper\'s palette to use. A new wallpaper changes the colors, the combination stays. Only «Custom color» doesn\'t depend on the wallpaper. The picked color is never changed: where it is hard to see, «Readability protection» dims the wallpaper under it</string>
+     <string name="blueos_s_h_c_base">Basics</string>
+-    <string name="blueos_s_h_c_lock">Lock screen</string>
++    <string name="blueos_s_h_c_lock">Lock screen clock</string>
+     <string name="blueos_s_h_c_aod">Always-on display</string>
+     <string name="blueos_s_h_c_home">Home screen</string>
+     <string name="blueos_s_h_c_own">Custom color</string>
+@@ -50,7 +50,6 @@
+     <string name="blueos_s_eq_third">Third palette color</string>
+     <string name="blueos_s_eq_text">Like text</string>
+     <string name="blueos_s_custom">Custom color</string>
+-    <string name="blueos_s_custom_d">For the parts set to «Custom color»</string>
+     <string name="blueos_s_custom_hex">#RRGGBB</string>
+     <string name="blueos_s_reset">Reset colors</string>
+     <string name="blueos_s_reset_d">Everything as it was by default</string>
+@@ -69,8 +68,8 @@
+     <string name="blueos_s_wall_dim_home">Wallpaper dimming on the home screen</string>
+     <string name="blueos_s_wall_blur_lock">Wallpaper blur on the lock screen</string>
+     <string name="blueos_s_wall_off">Off</string>
+-    <string name="blueos_s_c_minutes">Clock minutes</string>
+-    <string name="blueos_s_minutes_same">Like the hours</string>
++    <string name="blueos_s_c_minutes">Minute digits</string>
++    <string name="blueos_s_minutes_same">Like the hour digits</string>
+     <string name="blueos_s_c_wall_blur_mode">When to blur</string>
+     <string name="blueos_s_wall_blur_home_only">Home screen only — the lock screen has its own slider below</string>
+     <string name="blueos_s_wall_blur_always">Always — the lock screen as blurred as the home screen</string>
+@@ -96,4 +95,13 @@
+     <string name="blueos_s_weq_str">Height and brightness</string>
+     <string name="blueos_s_halo_beat">Halo to the beat</string>
+     <string name="blueos_s_halo_beat_d">While music plays, the halo over the lock screen clock grows a little and glows on every beat</string>
++    <!-- 0.8.1 -->
++    <string name="blueos_s_role_white">White</string>
++    <string name="blueos_s_h_c_locktext">Lock screen text</string>
++    <string name="blueos_s_c_seed">Color set in «Clock» → «Color». Picking here replaces it</string>
++    <string name="blueos_s_h_clock_size">Size</string>
++    <string name="blueos_s_clock_size">Digit size</string>
++    <string name="blueos_s_clock_size_normal">Normal</string>
++    <string name="blueos_s_clock_size_d">%1$d %%</string>
++    <string name="blueos_s_clock_size_pick">Digit size: %1$d %%</string>
+ </resources>
+diff --git a/src/com/android/customization/blueos/BlueOSSettingsActivity.kt b/src/com/android/customization/blueos/BlueOSSettingsActivity.kt
+index a1db70ce..7a672361 100644
+--- a/src/com/android/customization/blueos/BlueOSSettingsActivity.kt
++++ b/src/com/android/customization/blueos/BlueOSSettingsActivity.kt
+@@ -49,6 +49,7 @@ enum class BlueOSCustomizationOption(val page: String, val title: Int, val desc:
+  */
+ class BlueOSSettingsActivity : Activity() {
+     companion object {
++        private const val CLOCK_FACE = "lock_screen_custom_clock_face"
+         private const val EXTRA_PAGE = "blueos_page"
+         const val ARONA = "arona"
+         const val CLOCK = "clock"
+@@ -70,7 +71,11 @@ class BlueOSSettingsActivity : Activity() {
+                  override val dep: () -> Boolean = { true }) : Item()
+         /** One of several values: a row with the current one, the list in a dialog; 0.8: [dot] = the value's colour. */
+         class Choice(val key: String, val title: Int, val options: List<Pair<Int, Int>>, override val sub: Boolean = false,
+-                     override val dep: () -> Boolean = { true }, val dot: ((Int) -> Int)? = null) : Item()
++                     override val dep: () -> Boolean = { true }, val dot: ((Int) -> Int)? = null,
++                     /** 0.8.1: instead of just saving the picked value */
++                     val pick: ((Int) -> Unit)? = null,
++                     /** 0.8.1: the colour that beats this setting right now (the clock's own, «Часы» → «Цвет») */
++                     val seed: (() -> Int?)? = null) : Item()
+         class ChoiceStr(val key: String, val def: String, val title: Int, val options: List<Pair<Int, String>>,
+                         override val sub: Boolean = false, override val dep: () -> Boolean = { true }) : Item()
+         class Slider(val key: String, val title: Int, override val sub: Boolean = false,
+@@ -160,6 +165,11 @@ class BlueOSSettingsActivity : Activity() {
+     private fun clockPage(): List<Item> {
+         val halo = { on(K.HALO_LIVE) }
+         return listOf(
++            // 0.8.1: the digits' size (the same slider is on «Часы» → «Размер»)
++            Item.Header(R.string.blueos_s_h_clock_size),
++            Item.Slider(K.LOCK_CLOCK_SIZE, R.string.blueos_s_clock_size, min = K.LOCK_CLOCK_SIZE_MIN, max = K.LOCK_CLOCK_SIZE_MAX) { v ->
++                if (v == 100) getString(R.string.blueos_s_clock_size_normal) else getString(R.string.blueos_s_clock_size_d, v)
++            },
+             Item.Header(R.string.blueos_s_h_halo),
+             Item.Sw(K.HALO_LIVE, R.string.blueos_s_halo, R.string.blueos_s_halo_d),
+             Item.Sw(K.HALO_GLOW, R.string.blueos_s_halo_glow, R.string.blueos_s_halo_glow_d, sub = true, dep = halo),
+@@ -314,6 +324,52 @@ class BlueOSSettingsActivity : Activity() {
+         C.TEXT to R.string.blueos_s_role_text, C.TINT to R.string.blueos_s_role_tint, C.ACCENT to R.string.blueos_s_role_accent,
+         C.SECOND to R.string.blueos_s_role_second, C.THIRD to R.string.blueos_s_role_third, C.CUSTOM to R.string.blueos_s_role_custom)
+     private fun roles(vararg r: Int) = r.map { roleNames.getValue(it) to it }
++
++    // 0.8.1: every part of the lock screen offers the same colours in the same order; on the lock screen TEXT is plain white
++    private val lockRoles = listOf(R.string.blueos_s_role_white to C.TEXT, R.string.blueos_s_role_tint to C.TINT,
++        R.string.blueos_s_role_accent to C.ACCENT, R.string.blueos_s_role_second to C.SECOND,
++        R.string.blueos_s_role_third to C.THIRD, R.string.blueos_s_role_custom to C.CUSTOM)
++
++    /** «Цвет текста на блокировке» leaves the roles working (the same rule as ClockEventController). */
++    private fun lockLight() = int(K.LOCK_TEXT_COLOR).let { it == 2 || (it == 0 && C.isDark()) }
++
++    private fun clockFace() = runCatching {
++        org.json.JSONObject(Settings.Secure.getString(contentResolver, CLOCK_FACE))
++    }.getOrNull()
++
++    /** The colour picked in «Часы» → «Цвет»: it paints the whole clock and beats the roles while it is set. */
++    private fun clockSeed(): Int? = clockFace()?.takeUnless { it.isNull("seedColor") }?.getInt("seedColor")
++
++    private fun clearClockSeed() {
++        val face = clockFace() ?: return
++        if (face.isNull("seedColor")) return
++        face.remove("seedColor")
++        face.optJSONObject("metadata")?.put("metadataSelectedColorId", "DEFAULT")
++        Settings.Secure.putString(contentResolver, CLOCK_FACE, face.toString())
++    }
++
++    /**
++     * A part of the lock screen: the last choice wins (one picked here replaces the clock's own colour), «Свой цвет»
++     * opens the colour picker right here and belongs to this part alone.
++     */
++    private fun lockRow(key: String, title: Int, sub: Boolean = false, clock: Boolean = false, sameAsHours: Boolean = false,
++                        dep: () -> Boolean = { true }) = Item.Choice(key, title,
++        lockRoles + if (sameAsHours) listOf(R.string.blueos_s_minutes_same to C.SAME_AS_HOURS) else emptyList(), sub,
++        dep = { lockLight() && dep() },
++        dot = { if (it == C.SAME_AS_HOURS) C.lockDigits(this) else C.lockRoleColor(this, key, it) },
++        seed = if (clock) ({ clockSeed() }) else null,
++        pick = { role ->
++            fun save() {
++                if (clock) clearClockSeed()
++                put(key, role)
++            }
++            if (role != C.CUSTOM) save()
++            else pickCustom(title, C.lockRoleColor(this, key, C.CUSTOM)) { color ->
++                Settings.Secure.putInt(contentResolver, key + K.COLOR_OWN, color)
++                save()
++            }
++        })
++
+     private fun lockDot(role: Int) = C.lockColor(this, role)
+     private fun homeDot(role: Int) = when (role) {
+         C.TEXT -> sys(android.R.color.system_on_surface_light, android.R.color.system_on_surface_dark)
+@@ -348,21 +404,14 @@ class BlueOSSettingsActivity : Activity() {
+             Item.Slider(K.HOME_WALL_DIM, R.string.blueos_s_wall_dim_home, max = 80) { v -> wallPct(v) },
+             Item.Slider(K.LOCK_WALL_BLUR, R.string.blueos_s_wall_blur_lock) { v -> wallPct(v) },
+             Item.Header(R.string.blueos_s_h_c_lock),
+-            Item.Choice(K.COLOR_LOCK_DIGITS, R.string.blueos_s_c_digits, roles(C.TINT, C.TEXT, C.ACCENT, C.SECOND, C.THIRD, C.CUSTOM),
+-                dot = ::lockDot),
+-            // 0.8: the minutes their own colour, like everywhere in BlueOS; «Как часы» = as before
+-            Item.Choice(K.COLOR_LOCK_MINUTES, R.string.blueos_s_c_minutes,
+-                roles(C.ACCENT, C.TINT, C.TEXT, C.SECOND, C.THIRD, C.CUSTOM) +
+-                    (R.string.blueos_s_minutes_same to C.SAME_AS_HOURS),
+-                dot = { if (it == C.SAME_AS_HOURS) C.lockDigits(this) else lockDot(it) }),
+-            Item.Choice(K.COLOR_LOCK_HALO, R.string.blueos_s_c_halo, roles(C.ACCENT, C.TINT, C.TEXT, C.SECOND, C.THIRD, C.CUSTOM),
+-                dot = ::lockDot),
+-            Item.Choice(K.COLOR_GLOW, R.string.blueos_s_c_glow, roles(C.ACCENT, C.SECOND, C.THIRD, C.TEXT), sub = true, dep = halo,
+-                dot = ::lockDot),
+-            Item.Choice(K.COLOR_LOCK_SENSEI, R.string.blueos_s_c_sensei, roles(C.ACCENT, C.TINT, C.TEXT, C.SECOND, C.THIRD, C.CUSTOM),
+-                dot = ::lockDot),
+-            Item.Choice(K.COLOR_LOCK_TEXT, R.string.blueos_s_c_text, roles(C.TEXT, C.TINT), dot = ::lockDot),
+-            Item.Choice(K.COLOR_LOCK_WEATHER, R.string.blueos_s_c_weather, roles(C.TEXT, C.TINT, C.ACCENT), dot = ::lockDot),
++            lockRow(K.COLOR_LOCK_DIGITS, R.string.blueos_s_c_digits, clock = true),
++            lockRow(K.COLOR_LOCK_MINUTES, R.string.blueos_s_c_minutes, clock = true, sameAsHours = true),
++            lockRow(K.COLOR_LOCK_HALO, R.string.blueos_s_c_halo, clock = true),
++            lockRow(K.COLOR_GLOW, R.string.blueos_s_c_glow, sub = true, dep = halo),
++            Item.Header(R.string.blueos_s_h_c_locktext),
++            lockRow(K.COLOR_LOCK_TEXT, R.string.blueos_s_c_text),
++            lockRow(K.COLOR_LOCK_SENSEI, R.string.blueos_s_c_sensei),
++            lockRow(K.COLOR_LOCK_WEATHER, R.string.blueos_s_c_weather),
+             Item.Header(R.string.blueos_s_h_c_aod),
+             Item.Choice(K.COLOR_AOD, R.string.blueos_s_c_aod, listOf(R.string.blueos_s_aod_neutral to C.AOD_NEUTRAL,
+                 R.string.blueos_s_aod_halo to C.AOD_HALO, R.string.blueos_s_aod_lock to C.AOD_LOCK)),
+@@ -376,7 +425,6 @@ class BlueOSSettingsActivity : Activity() {
+             Item.Choice(K.COLOR_EQ, R.string.blueos_s_c_eq, listOf(R.string.blueos_s_eq_accent to 0, R.string.blueos_s_eq_third to 1,
+                 R.string.blueos_s_eq_text to 2), dot = { homeDot(when (it) { 1 -> C.THIRD; 2 -> C.TEXT; else -> C.ACCENT }) }),
+             Item.Header(R.string.blueos_s_h_c_own),
+-            Item.Btn(R.string.blueos_s_custom, R.string.blueos_s_custom_d, dep = { true }, dot = { C.custom(this) }) { pickCustom() },
+             Item.Btn(R.string.blueos_s_reset, R.string.blueos_s_reset_d, dep = { true }) {
+                 K.COLOR_KEYS.forEach { Settings.Secure.putString(contentResolver, it, null) }
+                 refresh()
+@@ -385,8 +433,8 @@ class BlueOSSettingsActivity : Activity() {
+     }
+ 
+     /** «Свой цвет»: the palette's own colours and a ring of hues, or a hex code. */
+-    private fun pickCustom() {
+-        var picked = C.custom(this)
++    private fun pickCustom(title: Int, start: Int, onPick: (Int) -> Unit) {
++        var picked = start
+         val hex = android.widget.EditText(this).apply {
+             setHint(R.string.blueos_s_custom_hex)
+             setText(String.format("#%06X", picked and 0xFFFFFF))
+@@ -431,9 +479,9 @@ class BlueOSSettingsActivity : Activity() {
+             addView(hex)
+         }
+         AlertDialog.Builder(this)
+-            .setTitle(R.string.blueos_s_custom)
++            .setTitle(title)
+             .setView(box)
+-            .setPositiveButton(android.R.string.ok) { _, _ -> put(K.COLOR_CUSTOM, picked or OPAQUE) }
++            .setPositiveButton(android.R.string.ok) { _, _ -> onPick(picked or OPAQUE) }
+             .setNegativeButton(android.R.string.cancel, null)
+             .show()
+     }
+@@ -636,14 +684,17 @@ class BlueOSSettingsActivity : Activity() {
+                 row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
+                 row.setOnClickListener {
+                     choose(item.title, item.options.map { it.first }, item.options.indexOfFirst { it.second == int(item.key) }) {
+-                        put(item.key, item.options[it].second)
++                        val v = item.options[it].second
++                        if (item.pick != null) item.pick.invoke(v) else put(item.key, v)
+                     }
+                 }
+                 val dotOf = item.dot
+                 val dot = dotOf?.let { dotView().also { row.addView(it) } }
+                 update = {
+-                    setTexts(item.title, item.options.firstOrNull { it.second == int(item.key) }?.let { getString(it.first) })
+-                    if (dot != null && dotOf != null) paintDot(dot, dotOf(int(item.key)))
++                    val seed = item.seed?.invoke()
++                    setTexts(item.title, if (seed != null) getString(R.string.blueos_s_c_seed)
++                        else item.options.firstOrNull { it.second == int(item.key) }?.let { getString(it.first) })
++                    if (dot != null && dotOf != null) paintDot(dot, seed ?: dotOf(int(item.key)))
+                 }
+             }
+             is Item.ChoiceStr -> {
+diff --git a/src/com/android/customization/picker/clock/ui/binder/ClockFloatingSheetBinder.kt b/src/com/android/customization/picker/clock/ui/binder/ClockFloatingSheetBinder.kt
+index c68cccbe..a795bbaf 100644
+--- a/src/com/android/customization/picker/clock/ui/binder/ClockFloatingSheetBinder.kt
++++ b/src/com/android/customization/picker/clock/ui/binder/ClockFloatingSheetBinder.kt
+@@ -253,6 +253,35 @@ object ClockFloatingSheetBinder {
+         }
+         val clockSizeSwitch: MaterialSwitch =
+             clockSizeContent.requireViewById(R.id.clock_style_clock_size_switch)
++
++        // BlueOS 0.8.1: the digits' size. It applies at once and to every clock, so «Применить» isn't involved
++        val clockScaleTitle: TextView = clockSizeContent.requireViewById(R.id.blueos_clock_size_title)
++        val clockScale: com.google.android.material.slider.Slider =
++            clockSizeContent.requireViewById(R.id.blueos_clock_size_slider)
++        val blueOS = org.blueos.arona.BlueOSSettings
++        fun showClockScale(percent: Int) {
++            clockScaleTitle.text = view.context.getString(R.string.blueos_s_clock_size_pick, percent)
++        }
++        clockScale.valueFrom = blueOS.LOCK_CLOCK_SIZE_MIN.toFloat()
++        clockScale.valueTo = blueOS.LOCK_CLOCK_SIZE_MAX.toFloat()
++        blueOS.int(view.context.contentResolver, blueOS.LOCK_CLOCK_SIZE)
++            .coerceIn(blueOS.LOCK_CLOCK_SIZE_MIN, blueOS.LOCK_CLOCK_SIZE_MAX).let {
++                clockScale.value = it.toFloat()
++                showClockScale(it)
++            }
++        clockScale.addOnChangeListener { _, value, _ -> showClockScale(value.toInt()) }
++        clockScale.addOnSliderTouchListener(object : com.google.android.material.slider.Slider.OnSliderTouchListener {
++            override fun onStartTrackingTouch(slider: com.google.android.material.slider.Slider) {}
++            override fun onStopTrackingTouch(slider: com.google.android.material.slider.Slider) {
++                android.provider.Settings.Secure.putInt(view.context.contentResolver, blueOS.LOCK_CLOCK_SIZE, slider.value.toInt())
++            }
++        })
++        ColorUpdateBinder.bind(
++            setColor = { color -> clockScaleTitle.setTextColor(color) },
++            color = colorUpdateViewModel.colorOnSurface,
++            shouldAnimate = isClockStyleActive,
++            lifecycleOwner = lifecycleOwner,
++        )
+         ColorUpdateBinder.bind(
+             setColor = { color ->
+                 clockSizeContent

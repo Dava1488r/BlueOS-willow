@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sun, 25 Oct 2026 04:49:34 +0100
-Subject: [PATCH 03/12] BlueOS: ThemePicker: Widget transparency slider
+Subject: [PATCH 03/14] BlueOS: ThemePicker: Widget transparency slider
 
 A slider under "Bright colors" in the palette sheet sets the Secure setting
 blueos_widget_transparency (0..100); SystemUI redraws the BlueOS widgets.

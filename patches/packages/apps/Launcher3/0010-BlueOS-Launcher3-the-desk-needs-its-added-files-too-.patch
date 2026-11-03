@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 3 Nov 2026 05:44:09 +0100
+Subject: [PATCH 10/10] BlueOS: Launcher3: the desk needs its added files too
+ (0.8.1)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: Ia48d38b19b28b9df01799769fd28a74677548ac0
+---
+ src/com/android/launcher3/blueos/BlueOSAronaWidget.kt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt b/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt
+index 358870a362..57b18041e5 100644
+--- a/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt
++++ b/src/com/android/launcher3/blueos/BlueOSAronaWidget.kt
+@@ -205,7 +205,7 @@ class BlueOSAronaWidgetView(context: Context) : LauncherAppWidgetHostView(contex
+ 
+     // ---------------------------------------------------------------- 0.7.2: at her desk
+ 
+-    private fun deskWanted() = arona.character.hasDesk && K.on(cr, K.ARONA_DESK) && K.on(cr, K.LIVE_WIDGETS)
++    private fun deskWanted() = arona.character.deskAvailable && K.on(cr, K.ARONA_DESK) && K.on(cr, K.LIVE_WIDGETS)
+ 
+     private fun sitDown() {
+         val d = desk ?: AronaDeskView(context).also {

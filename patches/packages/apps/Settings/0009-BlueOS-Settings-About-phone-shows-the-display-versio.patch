@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 3 Nov 2026 06:38:59 +0100
+Subject: [PATCH 9/9] =?UTF-8?q?BlueOS:=20Settings:=20=C2=ABAbout=20phone?=
+ =?UTF-8?q?=C2=BB=20shows=20the=20display=20version?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: I03bc14fb180e9b654cf91978a5e093e00d148d19
+---
+ .../firmwareversion/LineageVersionDetailPreference.kt           | 2 +-
+ .../LineageVersionDetailPreferenceController.java               | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/com/android/settings/deviceinfo/firmwareversion/LineageVersionDetailPreference.kt b/src/com/android/settings/deviceinfo/firmwareversion/LineageVersionDetailPreference.kt
+index 78b1bc31fc4..f230c5c58ed 100644
+--- a/src/com/android/settings/deviceinfo/firmwareversion/LineageVersionDetailPreference.kt
++++ b/src/com/android/settings/deviceinfo/firmwareversion/LineageVersionDetailPreference.kt
+@@ -105,7 +105,7 @@ class LineageVersionDetailPreference :
+         const val ACTIVITY_TRIGGER_COUNT = 5
+         const val DELAY_TIMER_MILLIS = 2000L
+ 
+-        const val LINEAGE_VERSION_PROPERTY: String = "ro.lineage.version"
++        const val LINEAGE_VERSION_PROPERTY: String = "ro.lineage.display.version"
+ 
+         const val PLATLOGO_PACKAGE_NAME: String = "org.lineageos.lineageparts"
+         const val PLATLOGO_ACTIVITY_CLASS: String = PLATLOGO_PACKAGE_NAME + ".logo.PlatLogoActivity"
+diff --git a/src/com/android/settings/deviceinfo/firmwareversion/LineageVersionDetailPreferenceController.java b/src/com/android/settings/deviceinfo/firmwareversion/LineageVersionDetailPreferenceController.java
+index 67a0f5ac37d..670b3b902b3 100644
+--- a/src/com/android/settings/deviceinfo/firmwareversion/LineageVersionDetailPreferenceController.java
++++ b/src/com/android/settings/deviceinfo/firmwareversion/LineageVersionDetailPreferenceController.java
+@@ -43,7 +43,7 @@ public class LineageVersionDetailPreferenceController extends BasePreferenceCont
+     private static final int DELAY_TIMER_MILLIS = 2000;
+     private static final int ACTIVITY_TRIGGER_COUNT = 5;
+ 
+-    private static final String KEY_LINEAGE_VERSION_PROP = "ro.lineage.version";
++    private static final String KEY_LINEAGE_VERSION_PROP = "ro.lineage.display.version";
+ 
+     private static final String PLATLOGO_PACKAGE_NAME = "org.lineageos.lineageparts";
+     private static final String PLATLOGO_ACTIVITY_CLASS =

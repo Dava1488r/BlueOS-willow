@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sat, 24 Oct 2026 20:38:40 +0200
-Subject: [PATCH 6/7] BlueOS: Settings: Nunito is the default font
+Subject: [PATCH 6/9] BlueOS: Settings: Nunito is the default font
 
 Change-Id: I5128715f3ff235310c07c7a51b6cd1ebe6039cc7
 ---

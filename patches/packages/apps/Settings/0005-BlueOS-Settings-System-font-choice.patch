@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sat, 24 Oct 2026 18:08:48 +0200
-Subject: [PATCH 5/7] BlueOS: Settings: System font choice
+Subject: [PATCH 5/9] BlueOS: Settings: System font choice
 
 Display > Font: M PLUS Rounded 1c (BlueOS default), Google Sans Flex, Nunito, Comfortaa, Manrope, Rubik, each shown in itself. Stored in persist.sys.blueos.font; offers a reboot.
 

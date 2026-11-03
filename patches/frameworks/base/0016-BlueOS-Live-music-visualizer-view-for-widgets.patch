@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sun, 25 Oct 2026 04:49:34 +0100
-Subject: [PATCH 16/30] BlueOS: Live music visualizer view for widgets
+Subject: [PATCH 16/31] BlueOS: Live music visualizer view for widgets
 
 BlueOSVisualizerView is allowed in RemoteViews (@RemoteView, hidden), so
 home screen widgets can use it: it draws itself every frame inside the

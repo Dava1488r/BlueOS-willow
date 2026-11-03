@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sat, 24 Oct 2026 17:50:10 +0200
-Subject: [PATCH 4/7] BlueOS: Settings: BlueOS easter egg
+Subject: [PATCH 4/9] BlueOS: Settings: BlueOS easter egg
 
 5 taps on the BlueOS version in About phone open a screen with the animated logo; taps send halos flying. Logo drawables come from vendor/blueos/tools/make-logo-assets.py.
 

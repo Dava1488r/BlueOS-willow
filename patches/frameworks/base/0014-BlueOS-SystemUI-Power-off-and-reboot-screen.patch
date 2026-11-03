@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sun, 25 Oct 2026 00:18:28 +0200
-Subject: [PATCH 14/30] BlueOS: SystemUI: Power off and reboot screen
+Subject: [PATCH 14/31] BlueOS: SystemUI: Power off and reboot screen
 
 Instead of the stock spinner, an opaque screen in the theme colors with the
 BlueOS logo: on power off its halo bobs and disappears (halos never fly away,

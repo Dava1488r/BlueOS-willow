@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sat, 24 Oct 2026 17:43:53 +0200
-Subject: [PATCH 3/4] BlueOS: Let vendor/blueos set default accent and
+Subject: [PATCH 3/5] BlueOS: Let vendor/blueos set default accent and
  wallpaper
 
 The common overlay is turned into a runtime RRO for framework-res, which

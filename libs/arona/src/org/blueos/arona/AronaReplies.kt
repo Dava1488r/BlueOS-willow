@@ -21,7 +21,8 @@ import kotlin.math.sqrt
  */
 object AronaReplies {
     private const val TAG = "BlueOSArona"
-    private const val SFX_DIR = "/product/media/blueos/arona/sfx"
+    /** 0.8.1: on /product or added by the user (BlueOSMedia). */
+    private val SFX_DIR: String get() = BlueOSMedia.dir("arona/sfx")
 
     data class Line(
         val voice: String?, val sfx: String?, val emo: String,

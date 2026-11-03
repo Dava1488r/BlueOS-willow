@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sat, 24 Oct 2026 23:59:40 +0200
-Subject: [PATCH 02/12] BlueOS: ThemePicker: "Bright colors" switch in the
+Subject: [PATCH 02/14] BlueOS: ThemePicker: "Bright colors" switch in the
  palette sheet
 
 A switch under "Dark theme" previews and applies the VIBRANT variant of the

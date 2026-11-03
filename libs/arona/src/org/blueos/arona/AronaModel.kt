@@ -28,8 +28,8 @@ import java.util.concurrent.Executors
  */
 object AronaModel {
     private const val TAG = "BlueOSArona"
-    const val DIR = "/product/media/blueos/spine/arona"
-    const val DESK_DIR = "/product/media/blueos/spine/arona_desk"
+    /** 0.8.1: on /product or added by the user (BlueOSMedia). */
+    val DESK_DIR: String get() = BlueOSMedia.dir("spine/arona_desk", "arona_desk.skel")
 
     private class Model(val atlas: AndroidTextureAtlas, val data: SkeletonData)
 

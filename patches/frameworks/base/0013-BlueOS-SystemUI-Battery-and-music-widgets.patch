@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sun, 25 Oct 2026 00:14:05 +0200
-Subject: [PATCH 13/30] BlueOS: SystemUI: Battery and music widgets
+Subject: [PATCH 13/31] BlueOS: SystemUI: Battery and music widgets
 
 Two home screen widgets in the system palette colors (accent, dark theme):
 - Battery (2x2): phone charge ring, charging bolt, connected Bluetooth

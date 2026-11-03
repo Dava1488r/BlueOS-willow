@@ -30,7 +30,7 @@ body:
     attributes:
       label: "Версия / Version"
       description: "«Настройки» → «О телефоне» → версия BlueOS и дата сборки / Settings → About phone"
-      placeholder: "BlueOS 0.8, 30 окт. 2026"
+      placeholder: "BlueOS-0.8.1-bluejay-20261103"
     validations:
       required: true
   - type: textarea

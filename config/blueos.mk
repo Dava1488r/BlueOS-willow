@@ -76,8 +76,14 @@ $(call inherit-product, external/google-fonts/rubik/fonts.mk)
 PRODUCT_COPY_FILES += \
     vendor/blueos/config/default-permissions-blueos.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/default-permissions/default-permissions-blueos.xml
 
-# SELinux: boot animation and font settings
+# SELinux: boot animation and font settings; 0.8.1: the characters' files the user adds on the phone
 SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += vendor/blueos/sepolicy/private
+
+# 0.8.1: adding the characters' files on the phone (Settings → «Файлы персонажа»): the folder they go to and the
+# list of every optional file (names, sizes, sha256 — tools/list-assets.sh) the importer looks for
+PRODUCT_COPY_FILES += \
+    vendor/blueos/config/blueos.rc:$(TARGET_COPY_OUT_SYSTEM_EXT)/etc/init/blueos.rc \
+    vendor/blueos/config/assets-files.txt:$(TARGET_COPY_OUT_PRODUCT)/etc/blueos/assets-files.txt
 
 # Google Play / GMS (MindTheGapps, synced via .repo/local_manifests/gapps.xml)
 $(call inherit-product-if-exists, vendor/gapps/arm64/arm64-vendor.mk)

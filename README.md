@@ -10,7 +10,9 @@
 
 > BlueOS — неофициальный фанатский проект. Он не связан с Nexon, Yostar и NEXON Games. **Файлов из игры здесь нет**:
 > модели персонажей, их голоса, музыка, звуки и обои из игры не входят в исходники. Без них прошивка полностью
-> работает, просто без персонажа и этих звуков; как вернуть их из своей копии игры — [ASSETS.md](ASSETS.md).
+> работает, просто без персонажа и этих звуков. Файлы игры можно добавить **прямо на телефоне**, без сборки:
+> «Обои и стиль» → «Персонаж» → «Добавить файлы персонажа» ([ASSETS.md](ASSETS.md)). Где их взять: ссылка в описании
+> профиля автора в TikTok — [tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun).
 
 > ⚠️ **Без гарантий.** Установка любой прошивки стирает телефон и требует разблокированного загрузчика; часть
 > приложений (оплата телефоном, некоторые банки) может не работать. Всё — на ваш страх и риск. Подробно —
@@ -22,7 +24,7 @@
 | **Поставить готовую BlueOS на Pixel 6a** | **Releases** + [INSTALL.md](INSTALL.md) |
 | Собрать BlueOS под свой телефон | [BUILDING.md](BUILDING.md) |
 | Телефона нет в списке / что подстроить под другой экран | [PORTING.md](PORTING.md) |
-| Вернуть персонажа, звуки и обои | [ASSETS.md](ASSETS.md) |
+| Вернуть персонажа и звуки (на телефоне, без сборки) | [ASSETS.md](ASSETS.md) |
 | Собирать с помощью ИИ-агента (Claude Code и др.) | [AGENTS.md](AGENTS.md) |
 
 **Проще всего — с агентом.** Откройте папку с исходниками LineageOS в Claude Code (или другом агенте, который
@@ -54,7 +56,9 @@ music equalizer drawn on the wallpaper, and a live character on the lock screen 
 
 It is developed on the Google Pixel 6a (`bluejay`); these sources let you build it for any device that LineageOS
 24.0 supports. **No game files are included** — BlueOS is unofficial and not affiliated with Nexon / Yostar; it works
-fully without them (no character and no game sounds), and [ASSETS.md](ASSETS.md) explains how to add your own.
+fully without them (no character and no game sounds). Game files can be added on the phone, no build needed:
+Wallpaper & style → Character → Add character files ([ASSETS.md](ASSETS.md)). Where to get them: the link in the
+author's TikTok profile description, [tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun).
 
 **No warranty — flashing wipes the phone; use at your own risk.** A ready-made build for the Pixel 6a is under
 **Releases** ([INSTALL.md](INSTALL.md)). Start with [BUILDING.md](BUILDING.md) (build), [PORTING.md](PORTING.md) (other devices), [AGENTS.md](AGENTS.md)

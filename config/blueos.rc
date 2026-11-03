@@ -1,0 +1,4 @@
+# BlueOS 0.8.1: the characters' files the user adds on the phone (Settings → «Файлы персонажа»), in the layout of
+# /product/media/blueos. Device-encrypted storage: the lock screen needs them before the first unlock.
+on post-fs-data
+    mkdir /data/misc/blueos 0775 system system

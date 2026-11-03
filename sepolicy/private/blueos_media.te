@@ -1,0 +1,13 @@
+# 0.8.1: the characters' files the user adds on the phone — /data/misc/blueos (config/blueos.rc).
+# Settings (system_app) writes them. SystemUI (platform_app), Launcher3 and Wallpaper & style (privileged apps:
+# priv_app, priv_app_36 for older target SDKs) read them; the audio service (system_server) plays an added touch
+# sound; MediaPlayer hands the voices to the media services as fds.
+type blueos_media_file, file_type, data_file_type, core_data_file_type;
+
+allow system_app blueos_media_file:dir create_dir_perms;
+allow system_app blueos_media_file:file create_file_perms;
+
+allow { platform_app priv_app priv_app_36 system_server } blueos_media_file:dir r_dir_perms;
+allow { platform_app priv_app priv_app_36 system_server } blueos_media_file:file r_file_perms;
+
+allow { mediaserver mediaextractor audioserver } blueos_media_file:file { read getattr };

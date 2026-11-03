@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sun, 25 Oct 2026 10:26:41 +0100
-Subject: [PATCH 19/30] BlueOS: SystemUI: Widget layouts fit one row with the
+Subject: [PATCH 19/31] BlueOS: SystemUI: Widget layouts fit one row with the
  margin
 
 Size thresholds include the 8 dp margin (one row is 122.7 dp on the 5x6

@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sat, 24 Oct 2026 12:59:40 +0200
-Subject: [PATCH 2/7] BlueOS: Settings: No LineageOS easter egg on the BlueOS
+Subject: [PATCH 2/9] BlueOS: Settings: No LineageOS easter egg on the BlueOS
  version
 
 Change-Id: I4a36573dfca29fa1a03b7eb68498a7ed2d2d76ae

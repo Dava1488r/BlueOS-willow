@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sat, 24 Oct 2026 17:51:22 +0200
-Subject: [PATCH 4/4] BlueOS: Make the default ringtone optional
+Subject: [PATCH 4/5] BlueOS: Make the default ringtone optional
 
 Change-Id: Ic864b48f618a055167d49760f70c55f6b6760d76
 ---

@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sun, 25 Oct 2026 10:40:27 +0100
-Subject: [PATCH 20/30] BlueOS: SystemUI: Equalizer follows the real loudness
+Subject: [PATCH 20/31] BlueOS: SystemUI: Equalizer follows the real loudness
 
 The normalized FFT blew quiet talk up to full height, and a silent track
 (all-zero spectrum while "playing") made the widget fall back to its

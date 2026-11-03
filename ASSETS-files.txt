@@ -1,6 +1,5 @@
-# The optional files BlueOS 0.8 uses (ASSETS.md): path in vendor/blueos, size, sha256.
-# Sounds are listed with their names after tools/import-assets.py (Emoticon_*, Theme_*, …).
-media/arona/README  723  6171a27be0613d39075d6c0aa39d78c0c38d8f45fc76bbfea97812a303fcdd10
+#  The optional files BlueOS 0.8.1 uses (ASSETS.md): path in vendor/blueos, size, sha256.
+#  Sounds are listed with their names after tools/import-assets.py (Emoticon_*, Theme_*, …).
 media/arona/desk/arona_desk.atlas  5351  2ba9df077b1c404b28b40d6c82774a8042426ffd472716b069c22aac7d0942ae
 media/arona/desk/arona_desk.png  1634744  8b1f1d5ba49c44b7501acf89151544d09dc98aa7a5343c366277e8fc02fb54d8
 media/arona/desk/arona_desk.skel  277699  eeeb8e6e74f66bd4dd6cbd9d6a62d0094793cefdafd99489be58d922f653d296

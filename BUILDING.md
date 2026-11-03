@@ -30,7 +30,7 @@ repo sync -j8
   <project path="vendor/blueos" name="BlueOS" remote="blueos" revision="main" />
 </manifest>
 ```
-`revision="main"` — самая свежая BlueOS. Нужна ровно версия из релиза — `revision="refs/tags/v0.8"`.
+`revision="main"` — самая свежая BlueOS. Нужна ровно версия из релиза — `revision="refs/tags/v0.8.1"`.
 
 Подключить BlueOS к сборке — одна строка:
 ```
@@ -67,7 +67,7 @@ source build/envsetup.sh
 ```
    Чтобы вернуться на свежую LineageOS — удалите этот файл из `.repo/local_manifests/` и снова `repo sync`.
 
-Готовый архив: `out/target/product/<устройство>/lineage-24.0-<дата>-UNOFFICIAL-BlueOS-0.8-<устройство>.zip`.
+Готовый архив: `out/target/product/<устройство>/BlueOS-<версия>-<устройство>-<дата>.zip`.
 
 **Подпись.** Подписывайте сборки своими ключами (wiki LineageOS: «Signing builds»). Ключи никому не отдавайте и не
 выкладывайте; потеряете их — следующие сборки не встанут поверх без сброса.

@@ -16,6 +16,10 @@ import org.blueos.arona.BlueOSSettings as K
  * Lock screen (light text over the wallpaper): TEXT white · TINT near-white with the wallpaper's hue (big digits) ·
  * ACCENT one detail (halo, «Сэнсэй») · SECOND / THIRD the palette's other colours · CUSTOM the user's own, the only
  * one that doesn't follow the wallpaper. AOD: neutral grey at the chosen brightness. Home: Material roles of the theme.
+ *
+ * 0.8.1: on the lock screen what is picked is what is drawn, exactly. 0.8 moved the halo's, the minutes' and the details'
+ * tone up until they reached 3:1 on the wallpaper, so they turned white or not depending on the wallpaper under them and
+ * on «Сила защиты» (the user: «будто рандомно»). Readability is the dimming's job (BlueOSLockProtection counts these colours).
  */
 object BlueOSColorRoles {
     const val TEXT = 0
@@ -64,55 +68,12 @@ object BlueOSColorRoles {
     @JvmStatic
     fun contrast(lumA: Float, lumB: Float): Float = (maxOf(lumA, lumB) + .05f) / (minOf(lumA, lumB) + .05f)
 
-    /** [fg] with its tone moved away from a background of luminance [bgLum] until the contrast is at least [target]. */
-    @JvmStatic
-    fun ensure(fg: Int, bgLum: Float, target: Float): Int {
-        val x = hct(fg)
-        val up = luminance(fg) >= bgLum
-        var t = x[2]
-        var c = fg
-        repeat(40) {
-            if (contrast(luminance(c), bgLum) >= target) return c
-            t = if (up) minOf(100f, t + 2.5f) else maxOf(0f, t - 2.5f)
-            c = hct(x[0], x[1], t)
-            if (t == 100f || t == 0f) return c
-        }
-        return c
-    }
-
     private fun dim(color: Int, f: Float) =
         Color.rgb((Color.red(color) * f).toInt(), (Color.green(color) * f).toInt(), (Color.blue(color) * f).toInt())
 
     private const val OPAQUE = 0xFF000000.toInt()
 
     // ------------------------------------------------------------------ lock screen
-
-    /**
-     * How light the wallpaper under the lock screen's blocks is after the dimming (luminance 0…1), measured by
-     * SystemUI's BlueOSLockProtection. The details (halo, «Сэнсэй», weather) get brighter where it is light.
-     */
-    object Backdrop {
-        @Volatile @JvmField var top = 0f
-        @Volatile @JvmField var clock = 0f
-        @Volatile @JvmField var bottom = 0f
-    }
-
-    private val backdropListeners = java.util.concurrent.CopyOnWriteArraySet<Runnable>()
-
-    /** [listener] runs (on the caller's thread of [setBackdrop], the main one) when the lock backdrop changes. */
-    @JvmStatic fun addBackdropListener(listener: Runnable) { backdropListeners += listener }
-    @JvmStatic fun removeBackdropListener(listener: Runnable) { backdropListeners -= listener }
-
-    @JvmStatic
-    fun setBackdrop(top: Float, clock: Float, bottom: Float) {
-        val changed = kotlin.math.abs(top - Backdrop.top) > .01f || kotlin.math.abs(clock - Backdrop.clock) > .01f ||
-            kotlin.math.abs(bottom - Backdrop.bottom) > .01f
-        if (!changed) return
-        Backdrop.top = top
-        Backdrop.clock = clock
-        Backdrop.bottom = bottom
-        backdropListeners.forEach { it.run() }
-    }
 
     /** A lock screen role: light, over the wallpaper. */
     @JvmStatic
@@ -121,22 +82,28 @@ object BlueOSColorRoles {
         TINT -> accent(ctx).let { hct(it[0], minOf(it[1], 14f), 94f) }
         SECOND -> ctx.getColor(android.R.color.system_accent2_200)
         THIRD -> ctx.getColor(android.R.color.system_accent3_200)
-        CUSTOM -> hct(custom(ctx)).let { hct(it[0], it[1], maxOf(it[2], 78f)) }
+        CUSTOM -> custom(ctx)
         else -> ctx.getColor(android.R.color.system_accent1_200)
     }
 
-    @JvmStatic fun lockDigits(ctx: Context) = lockColor(ctx, role(ctx, K.COLOR_LOCK_DIGITS))
-    @JvmStatic fun lockText(ctx: Context) = lockColor(ctx, role(ctx, K.COLOR_LOCK_TEXT))
-    @JvmStatic fun lockHalo(ctx: Context) = ensure(lockColor(ctx, role(ctx, K.COLOR_LOCK_HALO)), Backdrop.clock, 3f)
-    @JvmStatic fun lockSensei(ctx: Context) = ensure(lockColor(ctx, role(ctx, K.COLOR_LOCK_SENSEI)), Backdrop.top, 3f)
-    @JvmStatic fun lockWeather(ctx: Context) = ensure(lockColor(ctx, role(ctx, K.COLOR_LOCK_WEATHER)), Backdrop.top, 3f)
-    @JvmStatic fun lockGlow(ctx: Context) = lockColor(ctx, role(ctx, K.COLOR_GLOW))
-    /**
-     * 0.8: the lock clock's minutes in their own role, like the minutes everywhere in BlueOS (the widgets' clocks:
-     * accent); null = «Как часы», the hours' colour. 3:1 on the wallpaper under the clock, like the halo.
-     */
+    /** The colour [role] gives the element [key]: «Свой цвет» is the element's own (the shared one until it has one). */
+    @JvmStatic
+    fun lockRoleColor(ctx: Context, key: String, role: Int): Int {
+        if (role == CUSTOM) K.int(ctx.contentResolver, key + K.COLOR_OWN).let { if (it != 0) return it or OPAQUE }
+        return lockColor(ctx, role)
+    }
+
+    private fun lockElement(ctx: Context, key: String) = lockRoleColor(ctx, key, role(ctx, key))
+
+    @JvmStatic fun lockDigits(ctx: Context) = lockElement(ctx, K.COLOR_LOCK_DIGITS)
+    @JvmStatic fun lockText(ctx: Context) = lockElement(ctx, K.COLOR_LOCK_TEXT)
+    @JvmStatic fun lockHalo(ctx: Context) = lockElement(ctx, K.COLOR_LOCK_HALO)
+    @JvmStatic fun lockSensei(ctx: Context) = lockElement(ctx, K.COLOR_LOCK_SENSEI)
+    @JvmStatic fun lockWeather(ctx: Context) = lockElement(ctx, K.COLOR_LOCK_WEATHER)
+    @JvmStatic fun lockGlow(ctx: Context) = lockElement(ctx, K.COLOR_GLOW)
+    /** 0.8: the lock clock's minutes in their own role; null = «Как цифры часов», the hours' colour. */
     @JvmStatic fun lockMinutes(ctx: Context): Int? =
-        role(ctx, K.COLOR_LOCK_MINUTES).let { if (it == SAME_AS_HOURS) null else ensure(lockColor(ctx, it), Backdrop.clock, 3f) }
+        if (role(ctx, K.COLOR_LOCK_MINUTES) == SAME_AS_HOURS) null else lockElement(ctx, K.COLOR_LOCK_MINUTES)
     const val SAME_AS_HOURS = -1
 
     // ------------------------------------------------------------------ AOD
@@ -151,13 +118,13 @@ object BlueOSColorRoles {
 
     @JvmStatic fun aodDigits(ctx: Context) = aodColor(ctx, lockDigits(ctx))
     @JvmStatic fun aodText(ctx: Context) = aodColor(ctx, lockText(ctx))
-    @JvmStatic fun aodSensei(ctx: Context) = aodColor(ctx, lockColor(ctx, role(ctx, K.COLOR_LOCK_SENSEI)))
-    @JvmStatic fun aodWeather(ctx: Context) = aodColor(ctx, lockColor(ctx, role(ctx, K.COLOR_LOCK_WEATHER)))
+    @JvmStatic fun aodSensei(ctx: Context) = aodColor(ctx, lockSensei(ctx))
+    @JvmStatic fun aodWeather(ctx: Context) = aodColor(ctx, lockWeather(ctx))
 
     @JvmStatic
     fun aodHalo(ctx: Context): Int = when (aodMode(ctx)) {
         AOD_HALO -> dim(accent(ctx).let { hct(it[0], minOf(it[1], 32f), 75f) }, aodBrightness(ctx))
-        else -> aodColor(ctx, lockColor(ctx, role(ctx, K.COLOR_LOCK_HALO)))
+        else -> aodColor(ctx, lockHalo(ctx))
     }
 
     @JvmStatic fun aodArona(ctx: Context) = role(ctx, K.COLOR_AOD_ARONA)
@@ -188,6 +155,16 @@ object BlueOSColorRoles {
         val max = maxOf(cap, minOf(cap * s, .92f))
         return minOf(max, (if (mode == PROTECT_ALWAYS) maxOf(a, .3f) else a) * s)
     }
+
+    /**
+     * 0.8.1: [protectAlpha] for the darkest of [colors], the colours really drawn on that part of the screen. A very dark
+     * colour the user picked can't be saved by dimming the wallpaper under it: it doesn't count.
+     */
+    @JvmStatic
+    fun protectAlpha(ctx: Context, p90: Float, colors: List<Int>, target: Float, cap: Float): Float =
+        colors.filter { luminance(it) >= PROTECT_MIN_LUMINANCE }.maxOfOrNull { protectAlpha(ctx, p90, it, target, cap) } ?: 0f
+
+    private const val PROTECT_MIN_LUMINANCE = .25f
 
     /** The dimming's colour: the palette's own deep tone (navy on blue wallpapers, wine on pink ones, never grey). */
     @JvmStatic fun protectTint(ctx: Context) = accent(ctx).let { hct(it[0], minOf(it[1], 30f), 8f) }

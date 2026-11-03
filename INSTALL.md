@@ -13,8 +13,9 @@
   загружаться. Заблокировать можно только после возврата на стоковую прошивку (ниже).
 - **Некоторые приложения могут не работать:** оплата телефоном (Google Wallet), часть банковских приложений и игр
   проверяют, что прошивка «заводская» (Play Integrity), и с BlueOS откажутся работать. Проверьте, нужны ли вам они.
-- **Персонажа и звуков из Blue Archive в этой сборке нет** — их нельзя распространять. Всё остальное работает.
-  Вернуть их можно только своей сборкой из своих файлов ([ASSETS.md](ASSETS.md)).
+- **Персонажа и звуков из Blue Archive в этой сборке нет.** Всё остальное работает. Файлы игры можно добавить
+  прямо на телефоне: «Обои и стиль» → «Персонаж» → «Добавить файлы персонажа» ([ASSETS.md](ASSETS.md)). Где их взять:
+  ссылка в описании профиля автора в TikTok — [tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun).
 - **Google Play внутри** (MindTheGapps).
 - **Обновления** ставятся без сброса, но только сборки с этой страницы: они подписаны одним ключом. Сборка, которую
   вы сделали сами, подписана вашим ключом — поверх неё эти обновления не встанут (и наоборот) без сброса данных.
@@ -23,11 +24,11 @@
 ## Что скачать
 | Файл | Зачем |
 |---|---|
-| `BlueOS-0.8-bluejay.zip` | сама прошивка |
+| `BlueOS-0.8.1-bluejay-20261103.zip` | сама прошивка |
 | `boot.img`, `dtbo.img`, `vendor_boot.img` | для первой установки: загрузочный раздел и recovery BlueOS |
 | `SHA256SUMS` | контрольные суммы — проверить, что файлы скачались целиком |
 
-Проверка: Windows (PowerShell) — `Get-FileHash .\BlueOS-0.8-bluejay.zip`, Linux/macOS — `sha256sum -c SHA256SUMS`.
+Проверка: Windows (PowerShell) — `Get-FileHash .\BlueOS-0.8.1-bluejay-20261103.zip`, Linux/macOS — `sha256sum -c SHA256SUMS`.
 Суммы должны совпасть. Не совпали — скачайте заново, не прошивайте.
 
 ## Перед началом
@@ -64,7 +65,7 @@ fastboot flash vendor_boot vendor_boot.img
 2. Назад → **Apply update → Apply from ADB**.
 3. На компьютере:
 ```
-adb sideload BlueOS-0.8-bluejay.zip
+adb sideload BlueOS-0.8.1-bluejay-20261103.zip
 ```
    Дойдёт до 47 % или 100 % и напишет «Total xfer» — это нормально. На телефоне должно быть «Install completed».
 4. **Reboot system now.** Первая загрузка — несколько минут.
@@ -90,9 +91,10 @@ Ready-made builds exist **only for the Pixel 6a (`bluejay`)** — see **Releases
 use at your own risk**; not a LineageOS build — don't report its bugs to LineageOS. Unlocking the bootloader and
 installing **wipe the phone**. **Never relock the bootloader while BlueOS is installed** (the phone won't boot); go back
 to stock with flash.android.com first. Tap-to-pay and some banking apps/games may refuse to work (Play Integrity).
-No Blue Archive files are included (no character, no game sounds). Google Play is included (MindTheGapps).
+No Blue Archive files are included (no character, no game sounds); to add them on the phone see [ASSETS.md](ASSETS.md),
+where to get them: the link in the author's TikTok profile description, [tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun). Google Play is included (MindTheGapps).
 Updates install without a wipe only from builds on this page (same signing key).
 
 Steps: update stock to Android 17 (October 2026 or newer) → `fastboot flashing unlock` → `fastboot flash boot boot.img`,
 `dtbo dtbo.img`, `vendor_boot vendor_boot.img` → Recovery mode → Factory reset → Format data → Apply update → Apply
-from ADB → `adb sideload BlueOS-0.8-bluejay.zip` → Reboot. Check files against `SHA256SUMS` first.
+from ADB → `adb sideload BlueOS-0.8.1-bluejay-20261103.zip` → Reboot. Check files against `SHA256SUMS` first.

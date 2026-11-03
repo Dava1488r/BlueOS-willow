@@ -1,0 +1,390 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 3 Nov 2026 05:45:27 +0100
+Subject: [PATCH 31/31] BlueOS: SystemUI: lock clock colours are drawn as
+ picked, on every clock form; digit size
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: I8aad51a2f8d7f07f1c24295e2be8ced954ad9012
+---
+ .../clocks/view/DefaultClockFaceLayout.kt     |  5 +++-
+ .../clocks/view/DigitalClockTextView.kt       | 13 +++++++--
+ .../controller/FlexClockTextViewController.kt | 14 +++++++--
+ .../FlexClockViewGroupController.kt           | 13 +++++++--
+ .../systemui/shared/clocks/view/BlueOSHalo.kt | 10 +++----
+ .../shared/clocks/view/FlexClockTextView.kt   |  5 +++-
+ .../shared/clocks/view/FlexClockViewGroup.kt  | 29 ++++++++++++++-----
+ .../android/keyguard/ClockEventController.kt  |  9 +++---
+ .../keyguard/KeyguardSliceViewController.java |  5 ----
+ .../blueos/lockscreen/BlueOSLockProtection.kt |  8 +++--
+ .../ui/binder/KeyguardClockViewBinder.kt      | 10 +++++++
+ .../ui/view/layout/sections/ClockSection.kt   |  6 ++--
+ .../KeyguardPreviewSmartspaceViewModel.kt     |  3 +-
+ 13 files changed, 91 insertions(+), 39 deletions(-)
+
+diff --git a/packages/SystemUI/customization/clocks/common/src/com/android/systemui/customization/clocks/view/DefaultClockFaceLayout.kt b/packages/SystemUI/customization/clocks/common/src/com/android/systemui/customization/clocks/view/DefaultClockFaceLayout.kt
+index 03ff0004240d..0ccb3a9cace9 100644
+--- a/packages/SystemUI/customization/clocks/common/src/com/android/systemui/customization/clocks/view/DefaultClockFaceLayout.kt
++++ b/packages/SystemUI/customization/clocks/common/src/com/android/systemui/customization/clocks/view/DefaultClockFaceLayout.kt
+@@ -217,7 +217,10 @@ open class DefaultClockFaceLayout(val view: View) : ClockFaceLayout {
+             constrainWidth(ClockViewIds.LOCKSCREEN_CLOCK_VIEW_SMALL, WRAP_CONTENT)
+             constrainHeight(
+                 ClockViewIds.LOCKSCREEN_CLOCK_VIEW_SMALL,
+-                res.getDimensionPixelSize(clocksR.dimen.small_clock_height),
++                // BlueOS 0.8.1: «Размер цифр» (BlueOSSettings.LOCK_CLOCK_SIZE; this library doesn't link BlueOSAronaLib)
++                (res.getDimensionPixelSize(clocksR.dimen.small_clock_height) *
++                    android.provider.Settings.Secure.getInt(view.context.contentResolver,
++                        "blueos_lock_clock_size", 100).coerceIn(70, 140) / 100f).toInt(),
+             )
+             connect(
+                 ClockViewIds.LOCKSCREEN_CLOCK_VIEW_SMALL,
+diff --git a/packages/SystemUI/customization/clocks/common/src/com/android/systemui/customization/clocks/view/DigitalClockTextView.kt b/packages/SystemUI/customization/clocks/common/src/com/android/systemui/customization/clocks/view/DigitalClockTextView.kt
+index a4497b6c3c04..01c324b9af02 100644
+--- a/packages/SystemUI/customization/clocks/common/src/com/android/systemui/customization/clocks/view/DigitalClockTextView.kt
++++ b/packages/SystemUI/customization/clocks/common/src/com/android/systemui/customization/clocks/view/DigitalClockTextView.kt
+@@ -374,6 +374,8 @@ abstract class DigitalClockTextView(private val clockCtx: ClockContext) :
+             field = value
+             invalidate()
+         }
++    /** BlueOS 0.8.1: the minutes' colour on AOD when it differs from the hours' («Как на блокировке»); null = they fade. */
++    var blueOSMinutesAodColor: Int? = null
+     private val blueOSTint = Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_ATOP) }
+ 
+     protected open fun drawAnimators(canvas: Canvas, drawTranslation: VPointF) {
+@@ -381,7 +383,8 @@ abstract class DigitalClockTextView(private val clockCtx: ClockContext) :
+         val l = layout
+         val colon = text?.indexOf(':') ?: -1
+         val k = 1f - dozeFraction.coerceIn(0f, 1f)
+-        if (minutes == null || l == null || colon < 0 || isVertical || k <= 0f) {
++        val minutesAod = blueOSMinutesAodColor
++        if (minutes == null || l == null || colon < 0 || isVertical || (k <= 0f && minutesAod == null)) {
+             textAnimator.draw(canvas)
+             return
+         }
+@@ -395,8 +398,12 @@ abstract class DigitalClockTextView(private val clockCtx: ClockContext) :
+             clipRect(split, -BIG, BIG, BIG)
+             val layer = saveLayer(null, null)
+             textAnimator.draw(this)
+-            blueOSTint.color = minutes
+-            blueOSTint.alpha = (k * Color.alpha(minutes)).toInt()
++            if (minutesAod != null) {
++                blueOSTint.color = androidx.core.graphics.ColorUtils.blendARGB(minutes, minutesAod, 1f - k)
++            } else {
++                blueOSTint.color = minutes
++                blueOSTint.alpha = (k * Color.alpha(minutes)).toInt()
++            }
+             drawPaint(blueOSTint)
+             restoreToCount(layer)
+         }
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockTextViewController.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockTextViewController.kt
+index 39e86d707623..fd113c60b678 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockTextViewController.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockTextViewController.kt
+@@ -195,12 +195,15 @@ class FlexClockTextViewController(
+             }
+ 
+             override fun onFontSettingChanged(fontSizePx: Float) {
+-                view.applyTextSize(fontSizePx, constrainedByHeight = false)
++                // BlueOS 0.8.1: «Размер цифр»
++                view.applyTextSize(fontSizePx *
++                    org.blueos.arona.BlueOSSettings.lockClockScale(clockCtx.context.contentResolver), constrainedByHeight = false)
+             }
+ 
+             override fun onThemeChanged(theme: ThemeConfig) {
+                 // BlueOS Halo: a clock color picked by the user replaces the accent
+                 view.haloUsesAccent = theme.seedColor == null
++                view.haloLightDigits = theme.isDarkTheme
+                 val lockscreenColor =
+                     if (clockCtx.isBlueOSHalo) theme.blueOSHaloDefaultColor(clockCtx.context)
+                     else theme.blueOSDefaultColor(clockCtx.context)
+@@ -209,9 +212,14 @@ class FlexClockTextViewController(
+                     aodColor = theme.blueOSAodColor(clockCtx.context, lockscreenColor),
+                 )
+                 // BlueOS 0.8: the minutes in their own role («Минуты» in «Цвета»), unless a clock colour is picked
+-                view.blueOSMinutesColor =
+-                    if (theme.seedColor == null) org.blueos.arona.BlueOSColorRoles.lockMinutes(clockCtx.context)
++                val minutes =
++                    if (theme.seedColor == null && theme.isDarkTheme) org.blueos.arona.BlueOSColorRoles.lockMinutes(clockCtx.context)
+                     else null
++                view.blueOSMinutesColor = minutes
++                // 0.8.1: AOD «Как на блокировке» keeps them apart too, like the stacked clock
++                view.blueOSMinutesAodColor = minutes?.takeIf {
++                    org.blueos.arona.BlueOSColorRoles.aodMode(clockCtx.context) == org.blueos.arona.BlueOSColorRoles.AOD_LOCK
++                }?.let { theme.blueOSAodColor(clockCtx.context, it) }
+                 refreshTime()
+             }
+ 
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockViewGroupController.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockViewGroupController.kt
+index 683c72e65d5b..2c194a5cc7dc 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockViewGroupController.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/controller/FlexClockViewGroupController.kt
+@@ -194,7 +194,14 @@ constructor(
+ 
+             override fun onThemeChanged(theme: ThemeConfig) {
+                 // BlueOS Halo: a clock color picked by the user replaces the accent
+-                (view as? FlexClockViewGroup)?.haloUsesAccent = theme.seedColor == null
++                (view as? FlexClockViewGroup)?.run {
++                    haloUsesAccent = theme.seedColor == null
++                    haloLightDigits = theme.isDarkTheme
++                    blueOSMinutesColors =
++                        if (theme.seedColor != null || !theme.isDarkTheme) null
++                        else org.blueos.arona.BlueOSColorRoles.lockMinutes(clockCtx.context)
++                            ?.let { it to theme.blueOSAodColor(clockCtx.context, it) }
++                }
+                 val lockscreenColor =
+                     if (clockCtx.isBlueOSHalo) theme.blueOSHaloDefaultColor(clockCtx.context)
+                     else theme.blueOSDefaultColor(clockCtx.context)
+@@ -205,7 +212,9 @@ constructor(
+             }
+ 
+             override fun onFontSettingChanged(fontSizePx: Float) {
+-                view.onFontSettingChanged(fontSizePx)
++                // BlueOS 0.8.1: «Размер цифр»
++                view.onFontSettingChanged(fontSizePx *
++                    org.blueos.arona.BlueOSSettings.lockClockScale(clockCtx.context.contentResolver))
+             }
+ 
+             override fun onTargetRegionChanged(targetRegion: VRect) {}
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt
+index 5729caae14dc..2535f1a91466 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/BlueOSHalo.kt
+@@ -351,12 +351,12 @@ internal fun View.liveHalo() {
+ }
+ 
+ /**
+- * The halo's colour next to [digitColor]. BlueOS 0.8: light digits → the role chosen for the halo in «Цвета» (default
+- * the accent, brighter where the wallpaper under it is light); AOD → the AOD halo (grey unless «Нимб акцентом»);
+- * dark digits («По обоям» on a light wallpaper) → a deep accent.
++ * The halo's colour. BlueOS 0.8: light digits → the role chosen for the halo in «Цвета»; AOD → the AOD halo (grey unless
++ * «Нимб акцентом»); dark digits («По обоям» on a light wallpaper) → a deep accent. 0.8.1: [lightDigits] comes from the
++ * clock's theme: guessing from the digits' luminance sent the halo to the deep accent with a darker picked colour.
+  */
+-internal fun haloAccentFor(context: Context, digitColor: Int, dozing: Boolean): Int = when {
++internal fun haloAccentFor(context: Context, lightDigits: Boolean, dozing: Boolean): Int = when {
+     dozing -> org.blueos.arona.BlueOSColorRoles.aodHalo(context)
+-    Color.luminance(digitColor) > 0.5f -> org.blueos.arona.BlueOSColorRoles.lockHalo(context)
++    lightDigits -> org.blueos.arona.BlueOSColorRoles.lockHalo(context)
+     else -> context.getColor(android.R.color.system_accent1_700)
+ }
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt
+index 94753904a339..40e75bb3c9f2 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockTextView.kt
+@@ -66,6 +66,9 @@ class FlexClockTextView(clockCtx: FlexClockContext, private val isLargeClock: Bo
+     /** False when the user picked a clock color: then the halo uses that color. */
+     var haloUsesAccent = true
+ 
++    /** BlueOS 0.8.1: the clock's theme says the digits are light (see haloAccentFor). */
++    var haloLightDigits = true
++
+     override var blueOSHaloAlpha = 1f
+         set(value) {
+             if (field == value) return
+@@ -104,7 +107,7 @@ class FlexClockTextView(clockCtx: FlexClockContext, private val isLargeClock: Bo
+         // BlueOS 0.7.2: the colour the digits are really drawn with (the text animator's), not lockscreenColor —
+         // after a theme change in AOD the digits kept their light AOD colour while the halo took the dark one
+         val digitColor = drawnDigitColor() ?: if (isDozing) aodColor else lockscreenColor
+-        val color = if (haloUsesAccent) haloAccentFor(context, digitColor, isDozing) else digitColor
++        val color = if (haloUsesAccent) haloAccentFor(context, haloLightDigits, isDozing) else digitColor
+         drawHaloShape(canvas, minutesStart + minutesWidth / 2f, extraTopSpace / 2f, rx, isDozing,
+             haloPaint, haloOval, withVisibility(color, visibility))
+     }
+diff --git a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt
+index ccdf944a07c0..c7a939cdbfb0 100644
+--- a/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt
++++ b/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/view/FlexClockViewGroup.kt
+@@ -140,6 +140,15 @@ class FlexClockViewGroup(clockCtx: FlexClockContext) :
+     /** False when the user picked a clock color: then everything uses that color. */
+     var haloUsesAccent = true
+ 
++    /** BlueOS 0.8.1: the clock's theme says the digits are light (see haloAccentFor). */
++    var haloLightDigits = true
++
++    /**
++     * BlueOS 0.8.1: «Цифры минут» (lock screen, AOD colour) on the stacked clock too; null = like the hours. The setting
++     * only reached the one-line clock, so the same setting gave different minutes on the big and the small clock.
++     */
++    var blueOSMinutesColors: Pair<Int, Int>? = null
++
+     // Horizontal radius of the halo: 30% of the width of the hours
+     private val haloRx: Float
+         get() {
+@@ -157,6 +166,11 @@ class FlexClockViewGroup(clockCtx: FlexClockContext) :
+             id == ClockViewIds.HOUR_FIRST_DIGIT ||
+             id == ClockViewIds.HOUR_SECOND_DIGIT
+ 
++    private fun isMinuteView(id: Int) =
++        id == ClockViewIds.MINUTE_DIGIT_PAIR ||
++            id == ClockViewIds.MINUTE_FIRST_DIGIT ||
++            id == ClockViewIds.MINUTE_SECOND_DIGIT
++
+     private fun drawHalo(canvas: Canvas) {
+         val hours = children.filter { isHourView(it.id) }.toList()
+         if (hours.isEmpty()) return
+@@ -184,15 +198,14 @@ class FlexClockViewGroup(clockCtx: FlexClockContext) :
+ 
+     override fun updateColor(lockscreenColor: Int, aodColor: Int) {
+         if (isBlueOSHalo) {
+-            // BlueOS 0.8: the halo is the one accent; hours and minutes share the digits' colour (approved mockup —
+-            // 0.7 painted the minutes in the halo's accent, a second loud colour in the same block)
+-            haloLockscreenColor = if (haloUsesAccent) haloAccentFor(context, lockscreenColor, false) else lockscreenColor
+-            haloAodColor = if (haloUsesAccent) haloAccentFor(context, aodColor, true) else aodColor
+-            children.forEach { view -> view.updateColor(lockscreenColor, aodColor) }
+-            invalidate()
+-            return
++            haloLockscreenColor = if (haloUsesAccent) haloAccentFor(context, haloLightDigits, false) else lockscreenColor
++            haloAodColor = if (haloUsesAccent) haloAccentFor(context, haloLightDigits, true) else aodColor
++        }
++        val minutes = blueOSMinutesColors
++        children.forEach { view ->
++            if (minutes != null && isMinuteView(view.id)) view.updateColor(minutes.first, minutes.second)
++            else view.updateColor(lockscreenColor, aodColor)
+         }
+-        children.forEach { view -> view.updateColor(lockscreenColor, aodColor) }
+         invalidate()
+     }
+ 
+diff --git a/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt b/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt
+index 6abcae9a8aba..4d49bf2fa865 100644
+--- a/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt
++++ b/packages/SystemUI/src/com/android/keyguard/ClockEventController.kt
+@@ -515,15 +515,14 @@ constructor(
+             IntentFilter(Intent.ACTION_LOCALE_CHANGED),
+         )
+         configurationController.addCallback(configListener)
+-        // BlueOS 0.7.2: «Цвет текста на блокировке» applies at once; 0.8: so do the roles of «Цвета», and the halo
+-        // follows the light-wallpaper dimming under it (BlueOSLockProtection → BlueOSColorRoles.Backdrop)
++        // BlueOS 0.7.2: «Цвет текста на блокировке» applies at once; 0.8: so do the roles of «Цвета»; 0.8.1: «Размер цифр»
+         val unobserveKeys = org.blueos.arona.BlueOSSettings.observe(context,
+             listOf(org.blueos.arona.BlueOSSettings.LOCK_TEXT_COLOR) + org.blueos.arona.BlueOSSettings.COLOR_KEYS) { updateColors() }
+-        val onBackdrop = Runnable { updateColors() }
+-        org.blueos.arona.BlueOSColorRoles.addBackdropListener(onBackdrop)
++        val unobserveSize = org.blueos.arona.BlueOSSettings.observe(context,
++            listOf(org.blueos.arona.BlueOSSettings.LOCK_CLOCK_SIZE)) { updateFontSizes() }
+         unobserveBlueOS = {
+             unobserveKeys()
+-            org.blueos.arona.BlueOSColorRoles.removeBackdropListener(onBackdrop)
++            unobserveSize()
+         }
+         batteryController.addCallback(batteryCallback)
+         keyguardUpdateMonitor.registerCallback(keyguardUpdateMonitorCallback)
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java
+index 64cedfb8ab97..936349e8933a 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardSliceViewController.java
+@@ -122,8 +122,6 @@ public class KeyguardSliceViewController extends ViewController<KeyguardSliceVie
+                 : mRegionSampler.currentForegroundColor());
+     }
+ 
+-    private final Runnable mOnBackdrop = this::applyTextColor;
+-
+     Observer<Slice> mObserver = new Observer<Slice>() {
+         @Override
+         public void onChanged(Slice slice) {
+@@ -215,8 +213,6 @@ public class KeyguardSliceViewController extends ViewController<KeyguardSliceVie
+             applyTextColor();
+             return Unit.INSTANCE;
+         });
+-        // 0.8: «Сэнсэй» and the weather get brighter where the wallpaper under them is light
+-        org.blueos.arona.BlueOSColorRoles.addBackdropListener(mOnBackdrop);
+         mDumpManager.registerNormalDumpable(
+                 TAG + "@" + Integer.toHexString(
+                         KeyguardSliceViewController.this.hashCode()),
+@@ -238,7 +234,6 @@ public class KeyguardSliceViewController extends ViewController<KeyguardSliceVie
+             mUnobserveBlueOS.invoke();
+             mUnobserveBlueOS = null;
+         }
+-        org.blueos.arona.BlueOSColorRoles.removeBackdropListener(mOnBackdrop);
+         mDumpManager.unregisterDumpable(
+                 TAG + "@" + Integer.toHexString(
+                         KeyguardSliceViewController.this.hashCode()));
+diff --git a/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSLockProtection.kt b/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSLockProtection.kt
+index 98bd08fb5fb8..f8dfb3898256 100644
+--- a/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSLockProtection.kt
++++ b/packages/SystemUI/src/com/android/systemui/blueos/lockscreen/BlueOSLockProtection.kt
+@@ -158,13 +158,15 @@ class BlueOSLockProtection(context: Context) : View(context), WallpaperManager.L
+         // the same rule as the clock (ClockEventController): light text with «Всегда светлый», or «По теме» in the dark
+         val lightText = mode == 2 || (mode == 0 && C.isDark())
+         if (lightText) {
+-            dimming[0] = C.protectAlpha(context, bright[0], C.lockText(context), 4.5f, .86f)
+-            dimming[1] = C.protectAlpha(context, bright[1], C.lockDigits(context), 3f, .78f)
++            // 0.8.1: every colour on that part of the screen counts — the colours themselves never change
++            dimming[0] = maxOf(C.protectAlpha(context, bright[0], listOf(C.lockText(context)), 4.5f, .86f),
++                C.protectAlpha(context, bright[0], listOf(C.lockSensei(context), C.lockWeather(context)), 3f, .86f))
++            val digits = C.lockDigits(context)
++            dimming[1] = C.protectAlpha(context, bright[1], listOf(digits, C.lockMinutes(context) ?: digits, C.lockHalo(context)), 3f, .78f)
+             dimming[2] = C.protectAlpha(context, bright[2], Color.WHITE, 4.5f, .86f)
+         } else {
+             dimming.fill(0f)
+         }
+-        C.setBackdrop(bright[0] * (1 - dimming[0]), bright[1] * (1 - dimming[1]), bright[2] * (1 - dimming[2]))
+         val tint = C.protectTint(context)
+         fun k(a: Float) = ColorUtils.setAlphaComponent(tint, (a * 255).toInt().coerceIn(0, 255))
+         paint.shader = if (dimming.all { it < .005f }) null else LinearGradient(0f, 0f, 0f, height.coerceAtLeast(1).toFloat(),
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/ui/binder/KeyguardClockViewBinder.kt b/packages/SystemUI/src/com/android/systemui/keyguard/ui/binder/KeyguardClockViewBinder.kt
+index 0148ecb3b73d..d73ca7d21cc9 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/ui/binder/KeyguardClockViewBinder.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/ui/binder/KeyguardClockViewBinder.kt
+@@ -43,6 +43,7 @@ import com.android.systemui.plugins.keyguard.ui.clocks.AodClockBurnInModel
+ import com.android.systemui.plugins.keyguard.ui.clocks.ClockController
+ import com.android.systemui.util.kotlin.DisposableHandles
+ import com.android.systemui.util.ui.value
++import kotlinx.coroutines.channels.awaitClose
+ import kotlinx.coroutines.DisposableHandle
+ import kotlinx.coroutines.flow.combine
+ import kotlinx.coroutines.flow.distinctUntilChanged
+@@ -163,6 +164,15 @@ object KeyguardClockViewBinder {
+                         }
+                     }
+ 
++                    // BlueOS 0.8.1: «Размер цифр» changes the small clock's height and moves what's under it
++                    launch("$TAG#blueOSClockSize") {
++                        kotlinx.coroutines.flow.callbackFlow {
++                            val unobserve = org.blueos.arona.BlueOSSettings.observe(keyguardRootView.context,
++                                listOf(org.blueos.arona.BlueOSSettings.LOCK_CLOCK_SIZE)) { trySend(Unit) }
++                            awaitClose { unobserve() }
++                        }.collect { blueprintInteractor.refreshBlueprint(Type.ClockSize) }
++                    }
++
+                     launch("$TAG#clockViewModel.shouldDateWeatherBeBelowSmallClock") {
+                         viewModel.shouldDateWeatherBeBelowSmallClock.collect {
+                             blueprintInteractor.refreshBlueprint(
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/ClockSection.kt b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/ClockSection.kt
+index e40bd7a49dc1..4ee0d1044c22 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/ClockSection.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/ClockSection.kt
+@@ -224,7 +224,8 @@ constructor(
+             constrainWidth(ClockViewIds.LOCKSCREEN_CLOCK_VIEW_SMALL, WRAP_CONTENT)
+             constrainHeight(
+                 ClockViewIds.LOCKSCREEN_CLOCK_VIEW_SMALL,
+-                context.resources.getDimensionPixelSize(clocksR.dimen.small_clock_height),
++                (context.resources.getDimensionPixelSize(clocksR.dimen.small_clock_height) *
++                    org.blueos.arona.BlueOSSettings.lockClockScale(context.contentResolver)).toInt(),
+             )
+             connect(
+                 ClockViewIds.LOCKSCREEN_CLOCK_VIEW_SMALL,
+@@ -251,7 +252,8 @@ constructor(
+ 
+             val smallClockBottom =
+                 keyguardClockViewModel.getSmallClockTopMargin() +
+-                    context.resources.getDimensionPixelSize(clocksR.dimen.small_clock_height)
++                    (context.resources.getDimensionPixelSize(clocksR.dimen.small_clock_height) *
++                    org.blueos.arona.BlueOSSettings.lockClockScale(context.contentResolver)).toInt()
+             val marginBetweenSmartspaceAndNotification =
+                 context.resources.getDimensionPixelSize(
+                     R.dimen.keyguard_status_view_bottom_margin
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/ui/viewmodel/KeyguardPreviewSmartspaceViewModel.kt b/packages/SystemUI/src/com/android/systemui/keyguard/ui/viewmodel/KeyguardPreviewSmartspaceViewModel.kt
+index 4d94b218cc90..7ea91afd785a 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/ui/viewmodel/KeyguardPreviewSmartspaceViewModel.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/ui/viewmodel/KeyguardPreviewSmartspaceViewModel.kt
+@@ -88,7 +88,8 @@ constructor(
+     fun getSmallClockSmartspaceTopPadding(context: Context, config: ClockPreviewConfig): Int {
+         return config.getSmallClockTopPadding(
+             systemBarUtils.getStatusBarHeaderHeightKeyguard(context)
+-        ) + context.resources.getDimensionPixelSize(clocksR.dimen.small_clock_height)
++        ) + (context.resources.getDimensionPixelSize(clocksR.dimen.small_clock_height) *
++                    org.blueos.arona.BlueOSSettings.lockClockScale(context.contentResolver)).toInt()
+     }
+ 
+     /** SmallClockTopPadding decides the top position of smartspace */

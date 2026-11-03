@@ -144,9 +144,14 @@ object BlueOSSettings {
     const val COLOR_LABELS = "blueos_color_labels"           // 0 by the wallpaper (dark on light ones), 1 always white, 2 pill
     const val COLOR_EQ = "blueos_color_eq"                   // 0 accent, 1 accent → third, 2 like text
     const val COLOR_CUSTOM = "blueos_color_custom"           // ARGB of «Свой цвет»
+    const val COLOR_OWN = "_own"                             // 0.8.1: key + this = that element's own «Свой цвет» (unset: the shared one)
+    const val LOCK_CLOCK_SIZE = "blueos_lock_clock_size"     // 0.8.1: 70…140 %, the digits of the lock screen's clock
+    const val LOCK_CLOCK_SIZE_MIN = 70
+    const val LOCK_CLOCK_SIZE_MAX = 140
+    private val LOCK_ROLE_KEYS = listOf(COLOR_LOCK_DIGITS, COLOR_LOCK_MINUTES, COLOR_LOCK_HALO, COLOR_GLOW, COLOR_LOCK_SENSEI, COLOR_LOCK_TEXT, COLOR_LOCK_WEATHER)
     @JvmField val COLOR_KEYS = listOf(COLOR_PROTECT, COLOR_PROTECT_STR, COLOR_LOCK_DIGITS, COLOR_LOCK_MINUTES, COLOR_LOCK_HALO, COLOR_LOCK_SENSEI, COLOR_LOCK_TEXT,
         COLOR_LOCK_WEATHER, COLOR_GLOW, COLOR_AOD, COLOR_AOD_BRIGHT, COLOR_AOD_ARONA, COLOR_HOME_ACCENT, COLOR_ICONS,
-        COLOR_LABELS, COLOR_EQ, COLOR_CUSTOM)
+        COLOR_LABELS, COLOR_EQ, COLOR_CUSTOM) + LOCK_ROLE_KEYS.map { it + COLOR_OWN }
 
     // 0.8 (2026-10-30): the firmware defaults = the user's own settings of that day (the old value in the comment);
     // a fresh phone also gets them written once by SystemUI's BlueOSDefaults (some apps read keys with defaults of
@@ -170,7 +175,7 @@ object BlueOSSettings {
         ARONA_WIDGET_TEXT to 0, ARONA_WIDGET_PHRASES to 1, WALL_WEATHER to 0 /* 1 */, WALL_WEATHER_STR to 70 /* 80 */,
         WALL_EQ to 3 /* 0 */, WALL_EQ_STYLE to 2 /* 0 */, WALL_EQ_LOCK_POS to 0, WALL_EQ_STR to 60, HALO_BEAT to 1 /* 0 */,
         EQ_PLAYER_SKIP to 1 /* 0 */, EQ_PLAYER_STYLE to 0, HOME_WALL_BLUR to 28 /* 0 */,
-        COLOR_PROTECT to 0, COLOR_PROTECT_STR to 100, COLOR_LOCK_DIGITS to 3 /* 1 */, COLOR_LOCK_MINUTES to 2, COLOR_LOCK_HALO to 2, COLOR_LOCK_SENSEI to 2, COLOR_LOCK_TEXT to 0,
+        LOCK_CLOCK_SIZE to 100, COLOR_PROTECT to 0, COLOR_PROTECT_STR to 100, COLOR_LOCK_DIGITS to 3 /* 1 */, COLOR_LOCK_MINUTES to 2, COLOR_LOCK_HALO to 2, COLOR_LOCK_SENSEI to 2, COLOR_LOCK_TEXT to 0,
         COLOR_LOCK_WEATHER to 2 /* 0 */, COLOR_GLOW to 2, COLOR_AOD to 0, COLOR_AOD_BRIGHT to 80, COLOR_AOD_ARONA to 1 /* 0 */,
         COLOR_HOME_ACCENT to 2, COLOR_ICONS to 2, COLOR_LABELS to 0, COLOR_EQ to 0, COLOR_CUSTOM to 0xFF128AFA.toInt(),
     )
@@ -181,6 +186,11 @@ object BlueOSSettings {
     const val DEFAULT_ARONA_CUSTOM = "0.4706;0.2816;0.7202"
 
     @JvmStatic fun default(key: String): Int = DEFAULTS[key] ?: 0
+
+    /** 0.8.1 «Размер цифр»: what the lock screen clock's text size and the small clock's height are multiplied by. */
+    @JvmStatic
+    fun lockClockScale(cr: ContentResolver): Float =
+        int(cr, LOCK_CLOCK_SIZE).coerceIn(LOCK_CLOCK_SIZE_MIN, LOCK_CLOCK_SIZE_MAX) / 100f
 
     /** From Java: BlueOSSettings.getInt(cr, key) (`int` is a Java keyword). */
     @JvmStatic @JvmName("getInt")

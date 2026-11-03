@@ -5,9 +5,11 @@ They are often beginners at Android/Linux. Answer in their language, explain *wh
 check that it worked. Long steps (sync, build) take hours — run them in the background and keep watching.
 
 ## Ground rules
-- **No game files.** Never download Blue Archive assets for the user, never point them to collections of other
-  people's ripped files, never add such files to a public repository. The user may add files from their own copy of
-  the game for their own build ([ASSETS.md](ASSETS.md)); everything works without them.
+- **No game files.** Never download Blue Archive assets for the user, never point them to other collections of ripped
+  files, never add such files to a public repository (`scripts/check-public.sh` refuses them: run it before committing
+  here). The only pointer to give is the one in [ASSETS.md](ASSETS.md), the author's profile. The files can be added on
+  the phone (Wallpaper & style → Character → Add character files, no build) or into the user's own build
+  (`tools/import-assets.py <any folder>`); everything works without them.
 - **Never publish or commit signing keys** (`vendor/lineage-priv/keys`, `~/.android-certs`). Back them up.
 - **The phone is the source of truth.** "It's in the apk" proves nothing — check on the device (`adb`, screenshots,
   `dumpsys`). Before flashing: `adb devices`; after: `adb shell getprop ro.build.date` (a dropped connection once made
@@ -31,7 +33,8 @@ check that it worked. Long steps (sync, build) take hours — run them in the ba
 - `config/blueos.mk` — the product config (overlays, boot animations, fonts, sounds, characters, sepolicy, GApps).
   Optional files are copied with `$(wildcard)`: a missing file must never break the build. Don't turn them into
   Android.bp modules — Soong fails on a missing `src`.
-- `vendorsetup.sh` — `BLUEOS_VERSION` + `TARGET_UNOFFICIAL_BUILD_ID`, then `scripts/apply-patches.sh`.
+- `vendorsetup.sh` — `BLUEOS_VERSION` + `TARGET_UNOFFICIAL_BUILD_ID`, then `scripts/apply-patches.sh`. The name shown
+  in «About phone» and the zip's name: `BlueOS-<version>-<device>-<date>` (`vendor/lineage` patch).
 - `patches/<project path>/*.patch` — BlueOS commits on top of LineageOS projects. `apply-patches.sh` applies them with
   `git am --3way` and skips any whose subject is already in the project's last 200 commits (idempotent, re-run after
   `repo sync`). To change code: edit in the project, commit with a subject starting `BlueOS:`, run
@@ -39,7 +42,11 @@ check that it worked. Long steps (sync, build) take hours — run them in the ba
 - `libs/arona` (`BlueOSAronaLib`, linked by SystemUI, Launcher3, ThemePicker): `BlueOSSettings` (every
   `Settings.Secure` key `blueos_*` and its default), `BlueOSColorRoles` (the only place colours are decided —
   never compute a colour elsewhere), `BlueOSMotion` (sensors) + `BlueOSOnScreen` (live views stop off screen),
-  `Character` / `AronaModel` / `AronaView` (Spine characters; `Character.available` = model files on /product),
+  `Character` / `AronaModel` / `AronaView` (Spine characters; `Character.available` = model files on /product or
+  added by the user), `BlueOSMedia` (0.8.1: /product/media/blueos first, else `/data/misc/blueos` — the files the user
+  added on the phone with Settings `blueos/BlueOSAssetsActivity`, sepolicy `blueos_media_file`: Settings writes,
+  platform apps read; the importer finds files by name using `config/assets-files.txt`, cuts the desk with
+  `BlueOSDeskCutter`; `tools/import-assets.py` does the same on the PC for a build),
   `Weather`, `WeatherIconView`.
 - SystemUI (`frameworks/base/packages/SystemUI/src/com/android/systemui/blueos/`): lock screen character section,
   widgets (`widgets/`), weather, wallpaper look + live weather + wallpaper equalizer (`wallpaper/`, used by

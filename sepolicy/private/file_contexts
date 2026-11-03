@@ -1,0 +1,2 @@
+# 0.8.1: the characters' files the user adds on the phone (blueos_media.te)
+/data/misc/blueos(/.*)?     u:object_r:blueos_media_file:s0

@@ -1,8 +1,8 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Fri, 30 Oct 2026 22:08:22 +0100
-Subject: [PATCH 9/9] BlueOS: Launcher3: a custom widget the build lacks shows
- the error card
+Subject: [PATCH 09/10] BlueOS: Launcher3: a custom widget the build lacks
+ shows the error card
 
 A build without the character's files has no Arona widget. Its placeholder
 was a plain AppWidgetHostView, not draggable: a long press on its empty

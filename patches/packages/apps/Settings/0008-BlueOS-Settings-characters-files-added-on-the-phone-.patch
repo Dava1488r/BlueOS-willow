@@ -1,0 +1,775 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Tue, 3 Nov 2026 05:44:09 +0100
+Subject: [PATCH 8/9] BlueOS: Settings: characters' files added on the phone
+ (0.8.1)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: I95d373651c32ec08b8dbbfb5a8946780d7016d30
+---
+ AndroidManifest.xml                           |   7 +
+ res/values-ru/blueos_strings.xml              |  29 ++
+ res/values/blueos_strings.xml                 |  29 ++
+ .../settings/blueos/BlueOSAssetsActivity.kt   | 457 ++++++++++++++++++
+ .../settings/blueos/BlueOSDeskCutter.kt       | 118 +++++
+ .../BlueOSLockSoundPreferenceController.java  |  22 +-
+ .../BlueOSTouchSoundPreferenceController.java |   8 +-
+ 7 files changed, 663 insertions(+), 7 deletions(-)
+ create mode 100644 src/com/android/settings/blueos/BlueOSAssetsActivity.kt
+ create mode 100644 src/com/android/settings/blueos/BlueOSDeskCutter.kt
+
+diff --git a/AndroidManifest.xml b/AndroidManifest.xml
+index 3bf87beb071..81be50c5712 100644
+--- a/AndroidManifest.xml
++++ b/AndroidManifest.xml
+@@ -6317,6 +6317,13 @@
+             android:excludeFromRecents="true"
+             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+ 
++        <!-- BlueOS 0.8.1: «Файлы персонажа» — the user adds the characters' files (opened from Wallpaper & style) -->
++        <activity
++            android:name=".blueos.BlueOSAssetsActivity"
++            android:exported="true"
++            android:label="@string/blueos_assets_title"
++            android:theme="@android:style/Theme.DeviceDefault.DayNight" />
++
+         <!-- This is the longest AndroidManifest.xml ever. -->
+ 
+     </application>
+diff --git a/res/values-ru/blueos_strings.xml b/res/values-ru/blueos_strings.xml
+index efab4f19d7a..2bd0a6ba172 100644
+--- a/res/values-ru/blueos_strings.xml
++++ b/res/values-ru/blueos_strings.xml
+@@ -46,4 +46,33 @@
+         <item>Шахматы</item>
+         <item>Android</item>
+     </string-array>
++
++    <!-- 0.8.1: «Файлы персонажа» -->
++    <string name="blueos_assets_title">Файлы персонажа</string>
++    <string name="blueos_assets_intro">В этой прошивке нет файлов из Blue Archive — их нельзя распространять. Если у вас есть свои файлы игры (модели Ароны и Планы, их голоса, звуки), выберите папку или архив .zip с ними — в любом виде, как распаковали. BlueOS сам найдёт нужные, проверит и добавит. Файлы останутся только на этом телефоне.</string>
++    <string name="blueos_assets_folder">Выбрать папку</string>
++    <string name="blueos_assets_zip">Выбрать архив .zip</string>
++    <string name="blueos_assets_apply">Перезагрузить телефон</string>
++    <string name="blueos_assets_delete">Удалить добавленные файлы</string>
++    <string name="blueos_assets_added_now">Сейчас добавлено файлов: <xliff:g id="count" example="72">%d</xliff:g></string>
++    <string name="blueos_assets_searching">Ищу нужные файлы…</string>
++    <string name="blueos_assets_copying">Копирую и проверяю…</string>
++    <string name="blueos_assets_desk">Вырезаю парту из сцены кабинета…</string>
++    <string name="blueos_assets_error">Не получилось: <xliff:g id="error" example="no space">%s</xliff:g></string>
++    <string name="blueos_assets_none">Не нашёл ни одного нужного файла. Нужны, например, arona_spr.skel, arona_spr.atlas и arona_spr.png (модель Ароны) или NP0035_spr.* (Плана). Полный список — ASSETS-files.txt в исходниках BlueOS на GitHub.</string>
++    <string name="blueos_assets_desk_cut">вырезана из сцены кабинета</string>
++    <string name="blueos_assets_of"><xliff:g id="found" example="40">%1$d</xliff:g> из <xliff:g id="all" example="47">%2$d</xliff:g></string>
++    <string name="blueos_assets_odd">Файлов, которые отличаются от проверенных: <xliff:g id="count" example="3">%d</xliff:g>. Скорее всего, они из другой версии игры — могут работать не так.</string>
++    <string name="blueos_assets_done">Перезагрузите телефон — после этого персонаж появится на экране блокировки, виджет «Персонаж» — в списке виджетов, её настройки — в «Обоях и стиле» → «Персонаж». Звонки, уведомления и будильники из игры уже в списках звуков, звуки блокировки — в «Настройки» → «Звук».</string>
++    <string name="blueos_assets_deleted">Добавленные файлы удалены — перезагрузите телефон. Звуки в папках «Ringtones», «Notifications» и «Alarms» (BlueOS) остаются — их можно удалить в «Файлах».</string>
++    <string name="blueos_assets_g_arona">Арона</string>
++    <string name="blueos_assets_g_arona_voice">Голос Ароны</string>
++    <string name="blueos_assets_g_sfx">Звуки эмоций</string>
++    <string name="blueos_assets_g_desk">Парта</string>
++    <string name="blueos_assets_g_plana">Плана</string>
++    <string name="blueos_assets_g_plana_voice">Голос Планы</string>
++    <string name="blueos_assets_g_ui">Звуки блокировки и касания</string>
++    <string name="blueos_assets_g_ringtones">Мелодии звонка</string>
++    <string name="blueos_assets_g_notifications">Уведомления</string>
++    <string name="blueos_assets_g_alarms">Будильники</string>
+ </resources>
+diff --git a/res/values/blueos_strings.xml b/res/values/blueos_strings.xml
+index 218e158a003..56048608fb4 100644
+--- a/res/values/blueos_strings.xml
++++ b/res/values/blueos_strings.xml
+@@ -52,4 +52,33 @@
+         <item>Chess</item>
+         <item>Android</item>
+     </string-array>
++
++    <!-- 0.8.1: the user adds the characters' files (BlueOSAssetsActivity) -->
++    <string name="blueos_assets_title">Character files</string>
++    <string name="blueos_assets_intro">This build has no files from Blue Archive — they can\'t be shared. If you have your own game files (the Arona and Plana models, their voices, sounds), pick a folder or a .zip with them, in any layout. BlueOS finds what it needs, checks it and adds it. The files stay on this phone only.</string>
++    <string name="blueos_assets_folder">Pick a folder</string>
++    <string name="blueos_assets_zip">Pick a .zip archive</string>
++    <string name="blueos_assets_apply">Restart the phone</string>
++    <string name="blueos_assets_delete">Remove added files</string>
++    <string name="blueos_assets_added_now">Files added now: <xliff:g id="count" example="72">%d</xliff:g></string>
++    <string name="blueos_assets_searching">Looking for the files…</string>
++    <string name="blueos_assets_copying">Copying and checking…</string>
++    <string name="blueos_assets_desk">Cutting the desk out of the office scene…</string>
++    <string name="blueos_assets_error">Didn\'t work: <xliff:g id="error" example="no space">%s</xliff:g></string>
++    <string name="blueos_assets_none">None of the needed files found. For example arona_spr.skel, arona_spr.atlas and arona_spr.png (Arona) or NP0035_spr.* (Plana). The full list is ASSETS-files.txt in the BlueOS sources on GitHub.</string>
++    <string name="blueos_assets_desk_cut">cut out of the office scene</string>
++    <string name="blueos_assets_of"><xliff:g id="found" example="40">%1$d</xliff:g> of <xliff:g id="all" example="47">%2$d</xliff:g></string>
++    <string name="blueos_assets_odd">Files that differ from the checked ones: <xliff:g id="count" example="3">%d</xliff:g>. Probably from another game version — they may not work right.</string>
++    <string name="blueos_assets_done">Restart the phone: then the character is on the lock screen, the Character widget in the widget list, her settings in Wallpaper &amp; style > Character. Ringtones, notification and alarm sounds from the game are in the sound lists already, lock sounds under Settings > Sound.</string>
++    <string name="blueos_assets_deleted">Added files removed — restart the phone. Sounds in the Ringtones, Notifications and Alarms folders (BlueOS) stay — remove them in Files.</string>
++    <string name="blueos_assets_g_arona">Arona</string>
++    <string name="blueos_assets_g_arona_voice">Arona\'s voice</string>
++    <string name="blueos_assets_g_sfx">Emotion sounds</string>
++    <string name="blueos_assets_g_desk">Desk</string>
++    <string name="blueos_assets_g_plana">Plana</string>
++    <string name="blueos_assets_g_plana_voice">Plana\'s voice</string>
++    <string name="blueos_assets_g_ui">Lock and touch sounds</string>
++    <string name="blueos_assets_g_ringtones">Ringtones</string>
++    <string name="blueos_assets_g_notifications">Notifications</string>
++    <string name="blueos_assets_g_alarms">Alarms</string>
+ </resources>
+diff --git a/src/com/android/settings/blueos/BlueOSAssetsActivity.kt b/src/com/android/settings/blueos/BlueOSAssetsActivity.kt
+new file mode 100644
+index 00000000000..4e8422c00dc
+--- /dev/null
++++ b/src/com/android/settings/blueos/BlueOSAssetsActivity.kt
+@@ -0,0 +1,457 @@
++/*
++ * SPDX-FileCopyrightText: BlueOS
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.settings.blueos
++
++import android.app.Activity
++import android.content.ContentValues
++import android.content.Intent
++import android.net.Uri
++import android.os.Bundle
++import android.os.Environment
++import android.os.Handler
++import android.os.Looper
++import android.os.PowerManager
++import android.provider.DocumentsContract
++import android.provider.DocumentsContract.Document
++import android.provider.MediaStore
++import android.system.Os
++import android.util.Log
++import android.util.TypedValue
++import android.view.View
++import android.view.ViewGroup
++import android.view.WindowInsets
++import android.widget.Button
++import android.widget.LinearLayout
++import android.widget.ProgressBar
++import android.widget.ScrollView
++import android.widget.TextView
++import com.android.settings.R
++import java.io.File
++import java.io.InputStream
++import java.security.MessageDigest
++import java.util.zip.ZipInputStream
++
++/**
++ * BlueOS 0.8.1: «Файлы персонажа». A public build has no files from the game; here the user picks a folder or a .zip
++ * with their own (in any layout, as they unpacked them) and BlueOS finds what it needs by name — the list of every
++ * optional file with its size and sha256 is /product/etc/blueos/assets-files.txt (vendor/blueos/tools/list-assets.sh).
++ * The characters' files go to /data/misc/blueos (org.blueos.arona.BlueOSMedia reads it, sepolicy blueos_media_file:
++ * only Settings may write), ringtones, notifications and alarms into the phone's shared sound folders. The desk is
++ * cut out of the work page scene when the cut files aren't there (BlueOSDeskCutter). SystemUI and the launcher load
++ * the characters once per process, so «Применить» restarts them.
++ */
++class BlueOSAssetsActivity : Activity() {
++
++    private class Target(val rel: String, val size: Long, val sha: String) {
++        val name = rel.substringAfterLast('/')
++        val group = rel.substringBeforeLast('/')                     // media/arona/voice …
++    }
++
++    /** A file in the picked folder / archive: [path] = its folders, lowercased (who it belongs to). */
++    private class Source(val name: String, val path: String, val size: Long, val key: String)
++
++    private val main = Handler(Looper.getMainLooper())
++    private lateinit var status: TextView
++    private lateinit var report: TextView
++    private lateinit var progress: ProgressBar
++    private lateinit var pickers: List<Button>
++    private lateinit var apply: Button
++    private lateinit var delete: Button
++    private var busy = false
++
++    override fun onCreate(savedInstanceState: Bundle?) {
++        super.onCreate(savedInstanceState)
++        setTitle(R.string.blueos_assets_title)
++        val pad = dp(24)
++        val col = LinearLayout(this).apply {
++            orientation = LinearLayout.VERTICAL
++            setPadding(pad, dp(16), pad, pad)
++        }
++        col.addView(text(getString(R.string.blueos_assets_intro)))
++        pickers = listOf(
++            button(R.string.blueos_assets_folder) {
++                startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), REQ_TREE)
++            },
++            button(R.string.blueos_assets_zip) {
++                startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT)
++                    .addCategory(Intent.CATEGORY_OPENABLE).setType("application/zip"), REQ_ZIP)
++            },
++        )
++        pickers.forEach { col.addView(it) }
++        progress = ProgressBar(this).apply { isIndeterminate = true; visibility = View.GONE }
++        col.addView(progress)
++        status = text("").also { col.addView(it) }
++        report = text("").also { col.addView(it) }
++        apply = button(R.string.blueos_assets_apply) { restart() }.apply { visibility = View.GONE }
++        col.addView(apply)
++        delete = button(R.string.blueos_assets_delete) { deleteAdded() }
++        col.addView(delete)
++        val scroll = ScrollView(this).apply { addView(col) }
++        // edge to edge: the window reaches under the status bar and the action bar too (0.8.1 test build: the
++        // text started under the title) — keep clear of them, the navigation bar and the sides
++        val bar = TypedValue().let { tv ->
++            if (theme.resolveAttribute(android.R.attr.actionBarSize, tv, true))
++                TypedValue.complexToDimensionPixelSize(tv.data, resources.displayMetrics) else 0
++        }
++        scroll.setOnApplyWindowInsetsListener { v, insets ->
++            val i = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
++            v.setPadding(i.left, i.top + bar, i.right, i.bottom)
++            insets
++        }
++        scroll.clipToPadding = false
++        setContentView(scroll)
++        showAdded()
++    }
++
++    // ------------------------------------------------------------------ ui
++
++    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
++
++    private fun text(s: String) = TextView(this).apply {
++        text = s
++        // the theme's main text colour (the default is the dim secondary one)
++        val tv = TypedValue()
++        if (context.theme.resolveAttribute(android.R.attr.textColorPrimary, tv, true)) {
++            setTextColor(if (tv.resourceId != 0) context.getColorStateList(tv.resourceId) else
++                android.content.res.ColorStateList.valueOf(tv.data))
++        }
++        setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
++        setLineSpacing(0f, 1.15f)
++        setPadding(0, dp(8), 0, dp(8))
++    }
++
++    private fun button(title: Int, onClick: () -> Unit) = Button(this).apply {
++        setText(title)
++        isAllCaps = false
++        setOnClickListener { if (!busy) onClick() }
++        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
++            ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) }
++    }
++
++    private fun addedCount() = File(ADDED).walkTopDown().count { it.isFile }
++
++    private fun showAdded() {
++        val n = addedCount()
++        delete.visibility = if (n > 0) View.VISIBLE else View.GONE
++        if (!busy && report.text.isEmpty()) {
++            status.text = if (n > 0) getString(R.string.blueos_assets_added_now, n) else ""
++        }
++    }
++
++    private fun setBusy(b: Boolean, msg: Int? = null) = main.post {
++        busy = b
++        progress.visibility = if (b) View.VISIBLE else View.GONE
++        pickers.forEach { it.isEnabled = !b }
++        delete.isEnabled = !b
++        if (msg != null) status.setText(msg)
++    }
++
++    // ------------------------------------------------------------------ picking
++
++    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
++        super.onActivityResult(requestCode, resultCode, data)
++        val uri = data?.data ?: return
++        if (resultCode != RESULT_OK) return
++        report.text = ""
++        apply.visibility = View.GONE
++        setBusy(true, R.string.blueos_assets_searching)
++        Thread({
++            val text = try {
++                if (requestCode == REQ_TREE) importTree(uri) else importZip(uri)
++            } catch (e: Exception) {
++                Log.e(TAG, "import failed", e)
++                getString(R.string.blueos_assets_error, e.message ?: e.javaClass.simpleName)
++            }
++            main.post {
++                setBusy(false)
++                status.text = ""
++                report.text = text
++                apply.visibility = if (changed) View.VISIBLE else View.GONE
++                showAdded()
++            }
++        }, "BlueOSAssets").start()
++    }
++
++    private var changed = false
++
++    private fun importTree(tree: Uri): String {
++        val sources = mutableListOf<Source>()
++        fun walk(docId: String, path: String) {
++            val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, docId)
++            contentResolver.query(children, arrayOf(Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME,
++                    Document.COLUMN_MIME_TYPE, Document.COLUMN_SIZE), null, null, null)?.use { c ->
++                while (c.moveToNext()) {
++                    val id = c.getString(0)
++                    val name = c.getString(1) ?: continue
++                    if (c.getString(2) == Document.MIME_TYPE_DIR) walk(id, "$path/${name.lowercase()}")
++                    else sources += Source(name, path, c.getLong(3), id)
++                }
++            }
++        }
++        val root = DocumentsContract.getTreeDocumentId(tree)
++        walk(root, root.lowercase())
++        return import(sources) { wanted ->
++            for ((s, sink) in wanted) {
++                contentResolver.openInputStream(DocumentsContract.buildDocumentUriUsingTree(tree, s.key))!!
++                    .use { sink(it) }
++            }
++        }
++    }
++
++    private fun importZip(zip: Uri): String {
++        val sources = mutableListOf<Source>()
++        ZipInputStream(contentResolver.openInputStream(zip)!!).use { z ->
++            while (true) {
++                val e = z.nextEntry ?: break
++                if (e.isDirectory) continue
++                val path = e.name.substringBeforeLast('/', "").lowercase()
++                sources += Source(e.name.substringAfterLast('/'), path, e.size, e.name)
++            }
++        }
++        return import(sources) { wanted ->
++            val byKey = wanted.associateBy { it.first.key }
++            ZipInputStream(contentResolver.openInputStream(zip)!!).use { z ->
++                while (true) {
++                    val e = z.nextEntry ?: break
++                    byKey[e.name]?.second?.invoke(z)              // the entry's bytes; the zip stays open
++                }
++            }
++        }
++    }
++
++    // ------------------------------------------------------------------ finding and copying
++
++    private fun targets(): List<Target> = File(LIST).readLines()
++        .filter { it.isNotBlank() && !it.startsWith("#") }
++        .map { it.trim().split(Regex("\\s+")) }
++        .filter { it.size >= 3 }
++        .map { Target(it[0], it[1].toLong(), it[2]) }
++
++    /** On the phone: a folder under /data/misc/blueos, or a shared sound folder; null = not used here. */
++    private fun dest(t: Target): String? = when (t.group) {
++        "media/arona/spine" -> "spine/arona"
++        "media/arona/desk" -> "spine/arona_desk"
++        "media/plana/spine" -> "spine/plana"
++        "media/arona/voice" -> "arona/voice"
++        "media/plana/voice" -> "plana/voice"
++        "media/arona/sfx" -> "arona/sfx"
++        "media/audio/ui" -> "audio/ui"
++        else -> null
++    }
++
++    private fun soundDir(t: Target): String? = when (t.group) {
++        "media/audio/notifications" -> Environment.DIRECTORY_NOTIFICATIONS
++        "media/audio/alarms" -> Environment.DIRECTORY_ALARMS
++        "media/audio/ringtones" -> Environment.DIRECTORY_RINGTONES
++        else -> null
++    }
++
++    /** Unity exports text assets as name.skel.bytes / name.atlas.txt. */
++    private fun norm(name: String): String {
++        var s = name.lowercase()
++        for (suffix in arrayOf(".bytes", ".txt")) {
++            if (s.endsWith(suffix) && s.removeSuffix(suffix).contains('.')) s = s.removeSuffix(suffix)
++        }
++        return s
++    }
++
++    private fun match(targets: List<Target>, sources: List<Source>): Map<Target, Source> {
++        val byName = sources.groupBy { norm(it.name) }
++        // a line both of them have (Default_TTS…) needs to know whose it is
++        val voiceOwners = targets.filter { it.group.endsWith("/voice") }.groupBy { it.name.lowercase() }
++        val out = HashMap<Target, Source>()
++        for (t in targets) {
++            if (dest(t) == null && soundDir(t) == null) continue
++            val n = t.name.lowercase()
++            val candidates = if (t.group.endsWith("/voice")) {
++                val owner = t.group.split('/')[1]                       // arona / plana
++                val mine = OWNERS.getValue(owner)
++                val others = OWNERS.filterKeys { it != owner }.values.flatten()
++                val shared = (voiceOwners[n]?.size ?: 0) > 1
++                // the wiki's names carry her name (Arona_Work_In_1.ogg); else the folder tells whose it is; a line
++                // both of them have, in a folder that doesn't tell, is hers if it's exactly her file's size
++                mine.flatMap { byName["${it}_$n"].orEmpty() } + byName[n].orEmpty().filter { s ->
++                    mine.any { it in s.path } || (others.none { it in s.path } && (!shared || s.size == t.size))
++                }
++            } else {
++                byName[n].orEmpty()
++            }
++            (candidates.firstOrNull { it.size == t.size } ?: candidates.firstOrNull())?.let { out[t] = it }
++        }
++        return out
++    }
++
++    /** [copy] gets each wanted source with what to do with its bytes. Returns the report. */
++    private fun import(sources: List<Source>,
++                       copy: (List<Pair<Source, (InputStream) -> Unit>>) -> Unit): String {
++        val targets = targets()
++        val found = match(targets, sources)
++        // no cut desk: the work page scene it is cut from (its atlas, skeleton and pages)
++        val deskFound = found.keys.any { it.group == "media/arona/desk" }
++        val scene = if (deskFound) emptyList() else sources.filter {
++            norm(it.name).startsWith(SCENE) && norm(it.name).substringAfterLast('.') in setOf("atlas", "skel", "png")
++        }
++        if (found.isEmpty() && scene.isEmpty()) return getString(R.string.blueos_assets_none)
++
++        setBusy(true, R.string.blueos_assets_copying)
++        val verified = HashSet<Target>()
++        val sceneDir = File(cacheDir, "workpage").apply { deleteRecursively(); mkdirs() }
++        val wanted = mutableListOf<Pair<Source, (InputStream) -> Unit>>()
++        for ((t, s) in found) {
++            val d = dest(t)
++            wanted += Pair<Source, (InputStream) -> Unit>(s) { input ->
++                if (d != null) {
++                    if (write(input, File("$ADDED/$d/${t.name}")) == t.sha) verified += t
++                } else if (addSound(input, t)) {
++                    verified += t
++                }
++            }
++        }
++        for (s in scene) {
++            wanted += Pair<Source, (InputStream) -> Unit>(s) { input -> write(input, File(sceneDir, norm(s.name))) }
++        }
++        copy(wanted)
++        changed = true
++
++        var deskCut = false
++        if (scene.isNotEmpty()) {
++            setBusy(true, R.string.blueos_assets_desk)
++            val atlas = File(sceneDir, "$SCENE.atlas")
++            val skel = File(sceneDir, "$SCENE.skel")
++            if (atlas.isFile && skel.isFile) {
++                try {
++                    val out = File("$ADDED/spine/arona_desk")
++                    mkdirs(out)
++                    BlueOSDeskCutter.cut(atlas, skel, out)
++                    out.listFiles()?.forEach { Os.chmod(it.path, MODE_FILE) }
++                    deskCut = true
++                } catch (e: Exception) {
++                    Log.e(TAG, "desk", e)
++                }
++            }
++        }
++        sceneDir.deleteRecursively()
++        return report(targets, found.keys, verified, deskCut)
++    }
++
++    /** Copies to [to] via a temporary file (readable by SystemUI and the launcher); returns its sha256. */
++    private fun write(input: InputStream, to: File): String {
++        mkdirs(to.parentFile!!)
++        val tmp = File(to.path + ".part")
++        val md = MessageDigest.getInstance("SHA-256")
++        tmp.outputStream().use { o ->
++            val buf = ByteArray(1 shl 16)
++            while (true) {
++                val r = input.read(buf)
++                if (r < 0) break
++                md.update(buf, 0, r)
++                o.write(buf, 0, r)
++            }
++        }
++        if (to.path.startsWith(ADDED)) Os.chmod(tmp.path, MODE_FILE)
++        if (!tmp.renameTo(to)) throw IllegalStateException("can't write ${to.name}")
++        return md.digest().joinToString("") { "%02x".format(it) }
++    }
++
++    private fun mkdirs(d: File) {
++        if (d.isDirectory) return
++        d.parentFile?.let { mkdirs(it) }
++        if (!d.mkdir() && !d.isDirectory) throw IllegalStateException("can't create ${d.path}")
++        if (d.path.startsWith(ADDED)) Os.chmod(d.path, MODE_DIR)
++    }
++
++    /** Into the phone's shared Notifications / Alarms / Ringtones (folder BlueOS); false if it was there already. */
++    private fun addSound(input: InputStream, t: Target): Boolean {
++        val dir = "${soundDir(t)}/BlueOS/"
++        val uri = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
++        contentResolver.query(uri, arrayOf(MediaStore.MediaColumns._ID),
++            "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${MediaStore.MediaColumns.DISPLAY_NAME}=?",
++            arrayOf(dir, t.name), null)?.use { if (it.count > 0) return true }
++        val values = ContentValues().apply {
++            put(MediaStore.MediaColumns.DISPLAY_NAME, t.name)
++            put(MediaStore.MediaColumns.MIME_TYPE, "audio/ogg")
++            put(MediaStore.MediaColumns.RELATIVE_PATH, dir)
++            put(MediaStore.MediaColumns.IS_PENDING, 1)
++            put(when (t.group) {
++                "media/audio/notifications" -> MediaStore.Audio.AudioColumns.IS_NOTIFICATION
++                "media/audio/alarms" -> MediaStore.Audio.AudioColumns.IS_ALARM
++                else -> MediaStore.Audio.AudioColumns.IS_RINGTONE
++            }, 1)
++        }
++        val item = contentResolver.insert(uri, values) ?: return false
++        contentResolver.openOutputStream(item)!!.use { input.copyTo(it) }
++        contentResolver.update(item, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
++        return true
++    }
++
++    private fun report(targets: List<Target>, found: Set<Target>, verified: Set<Target>, deskCut: Boolean): String {
++        val lines = mutableListOf<String>()
++        for ((group, label) in GROUPS) {
++            val all = targets.filter { it.group == group }
++            if (all.isEmpty()) continue
++            val n = found.count { it.group == group }
++            val desk = group == "media/arona/desk" && n == 0 && deskCut
++            val mark = if (n == all.size || desk) "✓" else if (n > 0) "•" else "—"
++            lines += if (desk) "$mark ${getString(label)}: ${getString(R.string.blueos_assets_desk_cut)}"
++                     else "$mark ${getString(label)}: ${getString(R.string.blueos_assets_of, n, all.size)}"
++        }
++        val odd = found.size - verified.size
++        if (odd > 0) lines += "\n" + getString(R.string.blueos_assets_odd, odd)
++        lines += "\n" + getString(R.string.blueos_assets_done)
++        return lines.joinToString("\n")
++    }
++
++    // ------------------------------------------------------------------ applying, removing
++
++    /**
++     * SystemUI, the launcher and Wallpaper & style load the characters once per process: a restart it is. Not by
++     * force-stopping SystemUI — it hosts the wallpaper, and Android resets a force-stopped wallpaper to the default
++     * (0.8.1 test build: the user's wallpaper was lost that way). A reboot keeps everything.
++     */
++    private fun restart() {
++        getSystemService(PowerManager::class.java).reboot(null)
++    }
++
++    private fun deleteAdded() {
++        setBusy(true)
++        Thread({
++            File(ADDED).listFiles()?.forEach { it.deleteRecursively() }
++            main.post {
++                setBusy(false)
++                report.text = getString(R.string.blueos_assets_deleted)
++                changed = true
++                apply.visibility = View.VISIBLE
++                showAdded()
++            }
++        }, "BlueOSAssets").start()
++    }
++
++    companion object {
++        private const val TAG = "BlueOSAssets"
++        private const val REQ_TREE = 1
++        private const val REQ_ZIP = 2
++        /** org.blueos.arona.BlueOSMedia.ADDED; created at boot by vendor/blueos/config/blueos.rc */
++        private const val ADDED = "/data/misc/blueos"
++        private const val LIST = "/product/etc/blueos/assets-files.txt"
++        private const val SCENE = "arona_workpage_daytime"
++        private val MODE_FILE = "644".toInt(8)
++        private val MODE_DIR = "755".toInt(8)
++        /** Words in a file's name or folders that tell whose voice it is. */
++        private val OWNERS = mapOf("arona" to listOf("arona", "арона"), "plana" to listOf("plana", "np0035", "плана"))
++        private val GROUPS = listOf(
++            "media/arona/spine" to R.string.blueos_assets_g_arona,
++            "media/arona/voice" to R.string.blueos_assets_g_arona_voice,
++            "media/arona/sfx" to R.string.blueos_assets_g_sfx,
++            "media/arona/desk" to R.string.blueos_assets_g_desk,
++            "media/plana/spine" to R.string.blueos_assets_g_plana,
++            "media/plana/voice" to R.string.blueos_assets_g_plana_voice,
++            "media/audio/ui" to R.string.blueos_assets_g_ui,
++            "media/audio/ringtones" to R.string.blueos_assets_g_ringtones,
++            "media/audio/notifications" to R.string.blueos_assets_g_notifications,
++            "media/audio/alarms" to R.string.blueos_assets_g_alarms,
++        )
++    }
++}
+diff --git a/src/com/android/settings/blueos/BlueOSDeskCutter.kt b/src/com/android/settings/blueos/BlueOSDeskCutter.kt
+new file mode 100644
+index 00000000000..001ca674a2f
+--- /dev/null
++++ b/src/com/android/settings/blueos/BlueOSDeskCutter.kt
+@@ -0,0 +1,118 @@
++/*
++ * SPDX-FileCopyrightText: BlueOS
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.settings.blueos
++
++import android.graphics.Bitmap
++import android.graphics.BitmapFactory
++import java.io.File
++
++/**
++ * BlueOS 0.8.1: Arona at her desk for the home screen widget, cut out of the game's work page scene on the phone —
++ * vendor/blueos/tools/cut-workpage.py, line for line. The scene is a whole classroom (two 2048² pages); the widget
++ * needs only Arona sitting on the desk (A_02_*, A_02B_*), asleep at it and the desk (A_00_*). Those regions go into
++ * one smaller page with a new atlas (libgdx's new format); the skeleton stays as it is (the runtime skips
++ * attachments whose region is missing).
++ */
++object BlueOSDeskCutter {
++    private val KEEP = Regex("^(A_00_|A_02_|A_02B_)")
++    private const val PAD = 2
++    private const val WIDTH = 2048
++
++    private class Region(val name: String) {
++        var x = 0; var y = 0; var w = 0; var h = 0
++        var ox = 0; var oy = 0; var ow = -1; var oh = -1
++        var degrees = 0
++    }
++
++    private class Page(val file: String) {
++        val regions = mutableListOf<Region>()
++    }
++
++    /** Old (xy/size/orig/offset) or new (bounds/offsets) atlas → its pages and regions. */
++    private fun parse(atlas: File): List<Page> {
++        val pages = mutableListOf<Page>()
++        var page: Page? = null
++        var region: Region? = null
++        for (line in atlas.readLines()) {
++            if (line.isBlank()) { page = null; region = null; continue }
++            if (':' !in line) {
++                val p = page
++                if (p == null) page = Page(line.trim()).also { pages += it }
++                else region = Region(line.trim()).also { p.regions += it }
++                continue
++            }
++            val r = region ?: continue                       // page settings: we write our own
++            val key = line.substringBefore(':').trim()
++            val value = line.substringAfter(':').trim()
++            val n = if (Regex("^-?\\d").containsMatchIn(value)) value.split(',').map { it.trim().toInt() } else emptyList()
++            when (key) {
++                "xy" -> { r.x = n[0]; r.y = n[1] }
++                "size" -> { r.w = n[0]; r.h = n[1] }
++                "bounds" -> { r.x = n[0]; r.y = n[1]; r.w = n[2]; r.h = n[3] }
++                "orig" -> { r.ow = n[0]; r.oh = n[1] }
++                "offset" -> { r.ox = n[0]; r.oy = n[1] }
++                "offsets" -> { r.ox = n[0]; r.oy = n[1]; r.ow = n[2]; r.oh = n[3] }
++                // "true" = 90; the game's atlases also have 180 and 270 (the texture is stored turned that way)
++                "rotate" -> r.degrees = when (value) { "true" -> 90; "false" -> 0; else -> value.toInt() }
++            }
++        }
++        return pages
++    }
++
++    private class Crop(val r: Region, val w: Int, val h: Int, val px: IntArray)
++
++    /** The scene's [atlas] (its pages next to it) and [skel] → arona_desk.{atlas,png,skel} in [out]. */
++    fun cut(atlas: File, skel: File, out: File) {
++        val crops = mutableListOf<Crop>()
++        // unpremultiplied both ways: the pixels go to the new page exactly as they are
++        val opts = BitmapFactory.Options().apply { inPremultiplied = false; inPreferredConfig = Bitmap.Config.ARGB_8888 }
++        for (p in parse(atlas)) {
++            val keep = p.regions.filter { KEEP.containsMatchIn(it.name) }
++            if (keep.isEmpty()) continue
++            val img = BitmapFactory.decodeFile(File(atlas.parentFile, p.file).path, opts)
++                ?: throw IllegalStateException("no atlas page ${p.file}")
++            for (r in keep) {
++                // as stored in the texture: turned by 90 or 270 → width and height swapped (180 keeps them)
++                val tw = if (r.degrees == 90 || r.degrees == 270) r.h else r.w
++                val th = if (r.degrees == 90 || r.degrees == 270) r.w else r.h
++                val px = IntArray(tw * th)
++                img.getPixels(px, 0, tw, r.x, r.y, tw, th)
++                crops += Crop(r, tw, th, px)
++            }
++            img.recycle()
++        }
++        if (crops.isEmpty()) throw IllegalStateException("no desk regions in ${atlas.name}")
++        // shelf packing, tallest first
++        crops.sortByDescending { it.h }
++        var x = 0; var y = 0; var shelf = 0
++        val placed = mutableListOf<Triple<Crop, Int, Int>>()
++        for (c in crops) {
++            if (x + c.w + PAD > WIDTH) { x = 0; y += shelf + PAD; shelf = 0 }
++            placed += Triple(c, x, y)
++            x += c.w + PAD
++            shelf = maxOf(shelf, c.h)
++        }
++        val height = y + shelf
++        val page = Bitmap.createBitmap(WIDTH, height, Bitmap.Config.ARGB_8888)
++        page.isPremultiplied = false
++        val lines = mutableListOf("arona_desk.png", "size:$WIDTH,$height", "filter:Linear,Linear")
++        for ((c, px, py) in placed) {
++            page.setPixels(c.px, 0, c.w, px, py, c.w, c.h)
++            val r = c.r
++            lines += r.name
++            lines += "bounds:$px,$py,${r.w},${r.h}"
++            val ow = if (r.ow < 0) r.w else r.ow
++            val oh = if (r.oh < 0) r.h else r.oh
++            if (r.ox != 0 || r.oy != 0 || ow != r.w || oh != r.h) lines += "offsets:${r.ox},${r.oy},$ow,$oh"
++            if (r.degrees != 0) lines += "rotate:${r.degrees}"
++        }
++        out.mkdirs()
++        File(out, "arona_desk.png").outputStream().use { page.compress(Bitmap.CompressFormat.PNG, 100, it) }
++        page.recycle()
++        File(out, "arona_desk.atlas").writeText(lines.joinToString("\n") + "\n")
++        skel.copyTo(File(out, "arona_desk.skel"), overwrite = true)
++    }
++}
+diff --git a/src/com/android/settings/notification/BlueOSLockSoundPreferenceController.java b/src/com/android/settings/notification/BlueOSLockSoundPreferenceController.java
+index 0f9d294bcad..42c59b142e9 100644
+--- a/src/com/android/settings/notification/BlueOSLockSoundPreferenceController.java
++++ b/src/com/android/settings/notification/BlueOSLockSoundPreferenceController.java
+@@ -27,8 +27,10 @@ public class BlueOSLockSoundPreferenceController extends BasePreferenceControlle
+         implements Preference.OnPreferenceChangeListener {
+ 
+     private static final String UI_DIR = "/product/media/audio/ui/";
+-    private static final String LOCK_PREFIX = UI_DIR + "BlueOS_Lock_";
+-    private static final String UNLOCK_PREFIX = UI_DIR + "BlueOS_Unlock_";
++    // 0.8.1: packs the user added on the phone (Settings → «Файлы персонажа»)
++    private static final String ADDED_UI_DIR = "/data/misc/blueos/audio/ui/";
++    private static final String LOCK = "BlueOS_Lock_";
++    private static final String UNLOCK = "BlueOS_Unlock_";
+     private static final String STOCK = "android";
+ 
+     public BlueOSLockSoundPreferenceController(Context context, String key) {
+@@ -90,18 +92,26 @@ public class BlueOSLockSoundPreferenceController extends BasePreferenceControlle
+     private String getCurrentPack() {
+         final String lock = Settings.Global.getString(mContext.getContentResolver(),
+                 Settings.Global.LOCK_SOUND);
+-        if (lock != null && lock.startsWith(LOCK_PREFIX) && lock.endsWith(".ogg")) {
+-            final String pack = lock.substring(LOCK_PREFIX.length(), lock.length() - ".ogg".length());
++        final String name = lock == null ? "" : new File(lock).getName();
++        if (name.startsWith(LOCK) && name.endsWith(".ogg")) {
++            final String pack = name.substring(LOCK.length(), name.length() - ".ogg".length());
+             if (hasPack(pack)) return pack;
+         }
+         return STOCK;
+     }
+ 
+     private static String getLockPath(String pack) {
+-        return STOCK.equals(pack) ? UI_DIR + "Lock.ogg" : LOCK_PREFIX + pack + ".ogg";
++        return STOCK.equals(pack) ? UI_DIR + "Lock.ogg" : file(LOCK + pack + ".ogg");
+     }
+ 
+     private static String getUnlockPath(String pack) {
+-        return STOCK.equals(pack) ? UI_DIR + "Unlock.ogg" : UNLOCK_PREFIX + pack + ".ogg";
++        return STOCK.equals(pack) ? UI_DIR + "Unlock.ogg" : file(UNLOCK + pack + ".ogg");
++    }
++
++    /** On /product, else the user's added copy. */
++    private static String file(String name) {
++        final File product = new File(UI_DIR + name);
++        final File added = new File(ADDED_UI_DIR + name);
++        return !product.isFile() && added.isFile() ? added.getPath() : product.getPath();
+     }
+ }
+diff --git a/src/com/android/settings/notification/BlueOSTouchSoundPreferenceController.java b/src/com/android/settings/notification/BlueOSTouchSoundPreferenceController.java
+index eaf2127c96c..97e5066b53e 100644
+--- a/src/com/android/settings/notification/BlueOSTouchSoundPreferenceController.java
++++ b/src/com/android/settings/notification/BlueOSTouchSoundPreferenceController.java
+@@ -32,6 +32,7 @@ public class BlueOSTouchSoundPreferenceController extends BasePreferenceControll
+     // unset = the stock tick, as in LineageOS (the audio service does the same)
+     private static final String DEFAULT_SOUND = STOCK;
+     private static final String STOCK_SOUND = "/product/media/audio/ui/Effect_Tick.ogg";
++    private static final String ADDED_UI_DIR = "/data/misc/blueos/audio/ui";
+ 
+     public BlueOSTouchSoundPreferenceController(Context context, String key) {
+         super(context, key);
+@@ -54,7 +55,12 @@ public class BlueOSTouchSoundPreferenceController extends BasePreferenceControll
+             final List<CharSequence> entries = new ArrayList<>();
+             final List<CharSequence> values = new ArrayList<>();
+             for (int i = 0; i < list.getEntryValues().length; i++) {
+-                final String value = list.getEntryValues()[i].toString();
++                String value = list.getEntryValues()[i].toString();
++                // 0.8.1: not on /product, but added by the user on the phone (Settings → «Файлы персонажа»)
++                final File added = new File(ADDED_UI_DIR, new File(value).getName());
++                if (!STOCK.equals(value) && !new File(value).isFile() && added.isFile()) {
++                    value = added.getPath();
++                }
+                 if (STOCK.equals(value) || new File(value).isFile()) {
+                     entries.add(list.getEntries()[i]);
+                     values.add(value);
