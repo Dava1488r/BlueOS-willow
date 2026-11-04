@@ -18,6 +18,23 @@
 > приложений (оплата телефоном, некоторые банки) может не работать. Всё — на ваш страх и риск. Подробно —
 > [INSTALL.md](INSTALL.md), раздел «Прочитайте до начала».
 
+## Как это выглядит
+<table>
+<tr>
+<td align="center" width="25%"><img src="docs/screenshots/lock-plana.jpg" alt="Плана и живые часы*"><br><sub>Плана и живые часы*</sub></td>
+<td align="center" width="25%"><img src="docs/screenshots/home-widgets.jpg" alt="Виджеты и эквалайзер"><br><sub>Виджеты и эквалайзер</sub></td>
+<td align="center" width="25%"><img src="docs/screenshots/lock-arona.jpg" alt="Арона на экране блокировки*"><br><sub>Арона на экране блокировки*</sub></td>
+<td align="center" width="25%"><img src="docs/screenshots/home-plana.jpg" alt="Плана в виджете*"><br><sub>Плана в виджете*</sub></td>
+</tr>
+<tr>
+<td align="center" width="25%"><img src="docs/screenshots/lock-moe.jpg" alt="Пиксельные часы Moe*"><br><sub>Пиксельные часы Moe*</sub></td>
+<td align="center" width="25%"><img src="docs/screenshots/home-arona.jpg" alt="Арона за партой*"><br><sub>Арона за партой*</sub></td>
+<td align="center" width="25%"><img src="docs/screenshots/about.jpg" alt="О телефоне"><br><sub>О телефоне</sub></td>
+</tr>
+</table>
+
+<sub>* Персонажи и их голоса появляются, только если добавить свои файлы. В прошивку они не входят, как и обои с этих скриншотов (кроме стандартных LineageOS). Снято на Pixel 6a.</sub>
+
 ## С чего начать
 | Что нужно | Где |
 |---|---|
@@ -54,6 +71,8 @@
 **BlueOS** is a fan-made Android ROM based on **LineageOS 24.0 (Android 17)**, inspired by *Blue Archive*: own boot
 animation and logo, a live halo lock-screen clock, live widgets, colour roles from the wallpaper, live weather and a
 music equalizer drawn on the wallpaper, and a live character on the lock screen and in a widget.
+
+Screenshots are [at the top of this page](#как-это-выглядит) (the characters and most wallpapers there are the author's own files and are not included in the ROM).
 
 It is developed on the Google Pixel 6a (`bluejay`); these sources let you build it for any device that LineageOS
 24.0 supports. **No game files are included** — BlueOS is unofficial and not affiliated with Nexon / Yostar; it works
