@@ -26,11 +26,11 @@
 ## Что скачать
 | Файл | Зачем |
 |---|---|
-| `BlueOS-0.8.1-bluejay-20261103.zip` | сама прошивка |
+| `BlueOS-0.8.1-bluejay-20261105.zip` | сама прошивка |
 | `boot.img`, `dtbo.img`, `vendor_boot.img` | для первой установки: загрузочный раздел и recovery BlueOS |
 | `SHA256SUMS` | контрольные суммы — проверить, что файлы скачались целиком |
 
-Проверка: Windows (PowerShell) — `Get-FileHash .\BlueOS-0.8.1-bluejay-20261103.zip`, Linux/macOS — `sha256sum -c SHA256SUMS`.
+Проверка: Windows (PowerShell) — `Get-FileHash .\BlueOS-0.8.1-bluejay-20261105.zip`, Linux/macOS — `sha256sum -c SHA256SUMS`.
 Суммы должны совпасть. Не совпали — скачайте заново, не прошивайте.
 
 ## Перед началом
@@ -67,7 +67,7 @@ fastboot flash vendor_boot vendor_boot.img
 2. Назад → **Apply update → Apply from ADB**.
 3. На компьютере:
 ```
-adb sideload BlueOS-0.8.1-bluejay-20261103.zip
+adb sideload BlueOS-0.8.1-bluejay-20261105.zip
 ```
    Дойдёт до 47 % или 100 % и напишет «Total xfer» — это нормально. На телефоне должно быть «Install completed».
 4. **Reboot system now.** Первая загрузка — несколько минут.
@@ -99,4 +99,4 @@ Updates install without a wipe only from builds on this page (same signing key).
 
 Steps: update stock to Android 17 (October 2026 or newer) → `fastboot flashing unlock` → `fastboot flash boot boot.img`,
 `dtbo dtbo.img`, `vendor_boot vendor_boot.img` → Recovery mode → Factory reset → Format data → Apply update → Apply
-from ADB → `adb sideload BlueOS-0.8.1-bluejay-20261103.zip` → Reboot. Check files against `SHA256SUMS` first.
+from ADB → `adb sideload BlueOS-0.8.1-bluejay-20261105.zip` → Reboot. Check files against `SHA256SUMS` first.
