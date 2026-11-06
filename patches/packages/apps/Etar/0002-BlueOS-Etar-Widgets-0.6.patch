@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sun, 25 Oct 2026 04:49:34 +0100
-Subject: [PATCH 2/5] BlueOS: Etar: Widgets 0.6
+Subject: [PATCH 2/6] BlueOS: Etar: Widgets 0.6
 
 - Date widget: card transparency, the user's font, one event in one row.
 - New countdown widget: days until a picked date (once or every year),

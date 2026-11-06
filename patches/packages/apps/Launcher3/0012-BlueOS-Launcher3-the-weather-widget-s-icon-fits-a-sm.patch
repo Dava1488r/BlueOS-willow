@@ -1,0 +1,158 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Thu, 5 Nov 2026 10:10:52 +0700
+Subject: [PATCH 12/12] BlueOS: Launcher3: the weather widget's icon fits a
+ small card
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: I0197da52199e3e52911e826397ea10d64602610d
+---
+ .../launcher3/blueos/BlueOSWeatherWidget.kt   | 89 +++++++++++++++++--
+ 1 file changed, 84 insertions(+), 5 deletions(-)
+
+diff --git a/src/com/android/launcher3/blueos/BlueOSWeatherWidget.kt b/src/com/android/launcher3/blueos/BlueOSWeatherWidget.kt
+index c35dd187d7..760ed0a3c1 100644
+--- a/src/com/android/launcher3/blueos/BlueOSWeatherWidget.kt
++++ b/src/com/android/launcher3/blueos/BlueOSWeatherWidget.kt
+@@ -51,7 +51,8 @@ object BlueOSWeatherWidget : CustomWidget {
+     override fun preview(context: Context, width: Int, height: Int): android.graphics.Bitmap? = BlueOSWidgetPreview.onMain {
+         val cr = context.contentResolver
+         val dp = context.resources.displayMetrics.density
+-        val root = FrameLayout(context).apply { val m = (8 * dp).toInt(); setPadding(m, m, m, m) }
++        val m = (8 * dp).toInt()
++        val root = FrameLayout(context).apply { setPadding(m, m, m, m) }
+         val card = FrameLayout(context).apply { background = BlueOSWidgetPreview.card(context) }
+         root.addView(card, FrameLayout.LayoutParams(-1, -1))
+         fun small() = TextView(context).apply {
+@@ -94,15 +95,84 @@ object BlueOSWeatherWidget : CustomWidget {
+             addView(captions, LinearLayout.LayoutParams(-2, -2).apply { marginStart = (12 * dp).toInt() })
+         }
+         card.addView(top, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_VERTICAL).apply { marginStart = (16 * dp).toInt() })
++        var icon: WeatherIconView? = null
+         if (w != null) {
+-            val icon = WeatherIconView(context).apply { live = false; color = BlueOSColors.onSurfaceVariant(context); weather = w }
++            icon = WeatherIconView(context).apply { live = false; color = BlueOSColors.onSurfaceVariant(context); weather = w }
+             card.addView(icon, FrameLayout.LayoutParams((40 * dp).toInt(), (40 * dp).toInt(), Gravity.END or Gravity.CENTER_VERTICAL)
+                 .apply { marginEnd = (14 * dp).toInt() })
+         }
++        fitWeatherWidget(dp, width - 2 * m, height - 2 * m, top, big, captions, hiLo, null, icon)
+         BlueOSWidgetPreview.draw(root, width, height)
+     }
+ }
+ 
++/**
++ * 0.8.1: the icon takes what the text leaves: it stood at 40 dp over the captions of a small card. Beside the text it
++ * shrinks to 28 dp; with less room than that the captions go under the temperature and the icon sits next to the
++ * temperature. What still doesn't fit is hidden: «Ощущается как», then the high/low. Sizes in px; [cardW]/[cardH] = the card.
++ */
++internal fun fitWeatherWidget(dp: Float, cardW: Int, cardH: Int, top: LinearLayout, big: View, captions: View, hiLo: View,
++    feels: View?, icon: View?) {
++    val unspecified = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
++    val start = (16 * dp).toInt()
++    val end = (14 * dp).toInt()
++    val feelsGap = (6 * dp).toInt()
++    fun measure(v: View) = v.measure(unspecified, unspecified)
++    fun visible(v: View, on: Boolean) {
++        val want = if (on) View.VISIBLE else View.GONE
++        if (v.visibility != want) v.visibility = want
++    }
++    fun arrange(vertical: Boolean) {
++        val orientation = if (vertical) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
++        if (top.orientation != orientation) top.orientation = orientation
++        val gravity = if (vertical) Gravity.START else Gravity.CENTER_VERTICAL
++        if (top.gravity != gravity) top.gravity = gravity
++        val lp = captions.layoutParams as LinearLayout.LayoutParams
++        val ms = if (vertical) 0 else (12 * dp).toInt()
++        val mt = if (vertical) (2 * dp).toInt() else 0
++        if (lp.marginStart != ms || lp.topMargin != mt) {
++            lp.marginStart = ms; lp.topMargin = mt
++            captions.layoutParams = lp
++        }
++    }
++    fun place(size: Int, gravity: Int, topMargin: Int) {
++        val v = icon ?: return
++        val lp = v.layoutParams as FrameLayout.LayoutParams
++        if (lp.width != size || lp.height != size || lp.gravity != gravity || lp.topMargin != topMargin || lp.marginEnd != end) {
++            lp.width = size; lp.height = size; lp.gravity = gravity; lp.topMargin = topMargin; lp.marginEnd = end
++            v.layoutParams = lp
++        }
++    }
++
++    visible(hiLo, true)
++    arrange(vertical = false)
++    measure(top)
++    val free = cardW - start - top.measuredWidth - end - (6 * dp).toInt()
++    if (free >= 28 * dp) {
++        val size = minOf(free, (40 * dp).toInt())
++        place(size, Gravity.END or Gravity.CENTER_VERTICAL, 0)
++        feels?.let {
++            measure(it)
++            visible(it, start + it.measuredWidth <= cardW - end - size && top.measuredHeight + feelsGap + it.measuredHeight <= cardH)
++        }
++        return
++    }
++    arrange(vertical = true)
++    measure(top)
++    if (top.measuredHeight > cardH) {
++        visible(hiLo, false)
++        measure(top)
++    }
++    val contentH = feels?.let {
++        measure(it)
++        val fits = start + it.measuredWidth <= cardW - (8 * dp).toInt() && top.measuredHeight + feelsGap + it.measuredHeight <= cardH
++        visible(it, fits)
++        if (fits) top.measuredHeight + feelsGap + it.measuredHeight else top.measuredHeight
++    } ?: top.measuredHeight
++    val size = (30 * dp).toInt()
++    place(size, Gravity.END or Gravity.TOP, ((cardH - contentH) / 2 + (big.measuredHeight - size) / 2).coerceAtLeast(0))
++}
++
+ /**
+  * Laid out like the «Дата» widget next to it (one big value + small captions): big temperature, the weather and
+  * today's high/low to its right, "feels like" below, a live weather icon. Taps open the phone's weather app.
+@@ -116,6 +186,8 @@ class BlueOSWeatherWidgetView(context: Context) : LauncherAppWidgetHostView(cont
+     private val hiLo = small()
+     private val feels = small()
+     private val icon = WeatherIconView(context)
++    private val captions = LinearLayout(context)
++    private val topRow = LinearLayout(context)
+     private val column = LinearLayout(context)
+     /** 0.8.1: no weather: this instead of [column], which got a width of 0 with empty captions (a blank card) */
+     private val empty = LinearLayout(context)
+@@ -151,11 +223,11 @@ class BlueOSWeatherWidgetView(context: Context) : LauncherAppWidgetHostView(cont
+         big.typeface = Typeface.create("blueos-clock", Typeface.NORMAL)
+         big.fontVariationSettings = "'wght' 600"
+         big.includeFontPadding = false
+-        val captions = LinearLayout(context).apply {
++        captions.apply {
+             orientation = LinearLayout.VERTICAL
+             addView(name); addView(hiLo)
+         }
+-        val top = LinearLayout(context).apply {
++        topRow.apply {
+             orientation = LinearLayout.HORIZONTAL
+             gravity = Gravity.CENTER_VERTICAL
+             addView(big)
+@@ -164,7 +236,7 @@ class BlueOSWeatherWidgetView(context: Context) : LauncherAppWidgetHostView(cont
+         column.apply {
+             orientation = LinearLayout.VERTICAL
+             gravity = Gravity.CENTER_VERTICAL
+-            addView(top)
++            addView(topRow)
+             addView(feels, LinearLayout.LayoutParams(-2, -2).apply { topMargin = (6 * dp).toInt() })
+         }
+         card.addView(column, FrameLayout.LayoutParams(-2, -1).apply { marginStart = (16 * dp).toInt() })
+@@ -227,6 +299,13 @@ class BlueOSWeatherWidgetView(context: Context) : LauncherAppWidgetHostView(cont
+         icon.weather = w
+     }
+ 
++    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
++        val w = MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight
++        val h = MeasureSpec.getSize(heightMeasureSpec) - paddingTop - paddingBottom
++        if (column.visibility != View.GONE && w > 0 && h > 0) fitWeatherWidget(dp, w, h, topRow, big, captions, hiLo, feels, icon)
++        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
++    }
++
+     override fun onAttachedToWindow() {
+         super.onAttachedToWindow()
+         bind()

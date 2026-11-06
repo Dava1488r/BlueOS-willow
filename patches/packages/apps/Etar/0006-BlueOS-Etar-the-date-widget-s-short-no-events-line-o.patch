@@ -1,0 +1,96 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GDmio <zhalin66@gmail.com>
+Date: Thu, 5 Nov 2026 10:12:39 +0700
+Subject: [PATCH 6/6] =?UTF-8?q?BlueOS:=20Etar:=20the=20date=20widget's=20s?=
+ =?UTF-8?q?hort=20=C2=ABno=20events=C2=BB=20line=20on=20a=20narrow=20card?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: I3e4566699c4b3904db231df3bea01393b7de4b48
+---
+ .../calendar/widget/BlueOSDateWidgetProvider.java  | 14 ++++++++------
+ app/src/main/res/layout/blueos_date_widget.xml     |  1 +
+ app/src/main/res/values-ru/blueos_strings.xml      |  2 ++
+ app/src/main/res/values/blueos_strings.xml         |  2 ++
+ 4 files changed, 13 insertions(+), 6 deletions(-)
+
+diff --git a/app/src/main/java/com/android/calendar/widget/BlueOSDateWidgetProvider.java b/app/src/main/java/com/android/calendar/widget/BlueOSDateWidgetProvider.java
+index 67fe05f2..a9f5ebb0 100644
+--- a/app/src/main/java/com/android/calendar/widget/BlueOSDateWidgetProvider.java
++++ b/app/src/main/java/com/android/calendar/widget/BlueOSDateWidgetProvider.java
+@@ -115,10 +115,12 @@ public class BlueOSDateWidgetProvider extends AppWidgetProvider {
+         }
+         final List<Event> events = loadEvents(context);
+         // One row (106.7 dp inside the card) fits the date and one event on one line; two rows
+-        // show both events with their times
++        // show both events with their times. 0.8.1: a card narrower than the full «no events»
++        // line (142 dp of text + 24 padding + 16 margin) gets the short one: it was cut to «Ближайших»
+         final Map<SizeF, RemoteViews> sized = new LinkedHashMap<>();
+-        sized.put(new SizeF(90f, 90f), buildViews(context, events, 1));
+-        sized.put(new SizeF(90f, 180f), buildViews(context, events, MAX_EVENTS));
++        sized.put(new SizeF(90f, 90f), buildViews(context, events, 1, true));
++        sized.put(new SizeF(185f, 90f), buildViews(context, events, 1, false));
++        sized.put(new SizeF(90f, 180f), buildViews(context, events, MAX_EVENTS, false));
+         final RemoteViews rv = new RemoteViews(sized);
+         for (int widgetId : widgetIds) {
+             wm.updateAppWidget(widgetId, rv);
+@@ -131,7 +133,7 @@ public class BlueOSDateWidgetProvider extends AppWidgetProvider {
+         context.getSystemService(AlarmManager.class).cancel(refreshIntent(context));
+     }
+ 
+-    private RemoteViews buildViews(Context context, List<Event> events, int maxShown) {
++    private RemoteViews buildViews(Context context, List<Event> events, int maxShown, boolean shortEmpty) {
+         final RemoteViews rv = new RemoteViews(context.getPackageName(),
+                 R.layout.blueos_date_widget);
+         rv.setInt(R.id.blueos_widget_bg, "setImageAlpha",
+@@ -163,8 +165,8 @@ public class BlueOSDateWidgetProvider extends AppWidgetProvider {
+         rv.setViewVisibility(R.id.blueos_no_events, events.isEmpty() ? View.VISIBLE : View.GONE);
+         rv.setInt(R.id.blueos_no_events, "setMaxLines", maxShown == 1 ? 1 : 2);
+         rv.setTextViewText(R.id.blueos_no_events, context.getString(canRead
+-                ? R.string.blueos_date_widget_no_events
+-                : R.string.blueos_date_widget_no_access));
++                ? (shortEmpty ? R.string.blueos_date_widget_no_events_short : R.string.blueos_date_widget_no_events)
++                : (shortEmpty ? R.string.blueos_date_widget_no_access_short : R.string.blueos_date_widget_no_access)));
+         setWeather(context, rv);
+ 
+         // Tapping opens the calendar at today
+diff --git a/app/src/main/res/layout/blueos_date_widget.xml b/app/src/main/res/layout/blueos_date_widget.xml
+index db7f8b23..e54589b1 100644
+--- a/app/src/main/res/layout/blueos_date_widget.xml
++++ b/app/src/main/res/layout/blueos_date_widget.xml
+@@ -167,6 +167,7 @@
+                 android:layout_width="match_parent"
+                 android:layout_height="wrap_content"
+                 android:layout_marginTop="8dp"
++                android:ellipsize="end"
+                 android:maxLines="2"
+                 android:text="@string/blueos_date_widget_no_events"
+                 android:fontFamily="google-sans-text"
+diff --git a/app/src/main/res/values-ru/blueos_strings.xml b/app/src/main/res/values-ru/blueos_strings.xml
+index 6c9d617c..834a6e01 100644
+--- a/app/src/main/res/values-ru/blueos_strings.xml
++++ b/app/src/main/res/values-ru/blueos_strings.xml
+@@ -2,6 +2,8 @@
+ <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+     <string name="blueos_date_widget">Дата и календарь</string>
+     <string name="blueos_date_widget_description">Сегодняшняя дата и ближайшие события</string>
++    <string name="blueos_date_widget_no_events_short">Событий нет</string>
++    <string name="blueos_date_widget_no_access_short">Откройте календарь</string>
+     <string name="blueos_date_widget_no_events">Ближайших событий нет</string>
+     <string name="blueos_date_widget_no_access">Откройте «Календарь», чтобы видеть события</string>
+     <string name="blueos_date_widget_tomorrow">Завтра, <xliff:g id="time" example="10:00">%1$s</xliff:g></string>
+diff --git a/app/src/main/res/values/blueos_strings.xml b/app/src/main/res/values/blueos_strings.xml
+index fa5599af..2b720311 100644
+--- a/app/src/main/res/values/blueos_strings.xml
++++ b/app/src/main/res/values/blueos_strings.xml
+@@ -4,6 +4,8 @@
+     <string name="blueos_date_widget">Date and calendar</string>
+     <string name="blueos_date_widget_description">Today\'s date and the next events</string>
+     <string name="blueos_date_widget_no_events">No upcoming events</string>
++    <string name="blueos_date_widget_no_events_short">No events</string>
++    <string name="blueos_date_widget_no_access_short">Open Calendar</string>
+     <string name="blueos_date_widget_no_access">Open Calendar to show your events</string>
+     <!-- An event tomorrow; the start time -->
+     <string name="blueos_date_widget_tomorrow">Tomorrow, <xliff:g id="time" example="10:00">%1$s</xliff:g></string>

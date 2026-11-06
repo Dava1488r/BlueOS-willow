@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Tue, 3 Nov 2026 22:56:28 +0100
-Subject: [PATCH 11/11] BlueOS: Launcher3: the weather widget says when it has
+Subject: [PATCH 11/12] BlueOS: Launcher3: the weather widget says when it has
  no data
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

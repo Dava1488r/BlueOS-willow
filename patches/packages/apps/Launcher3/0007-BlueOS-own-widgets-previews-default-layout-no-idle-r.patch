@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Fri, 30 Oct 2026 11:33:45 +0100
-Subject: [PATCH 07/11] BlueOS: own widgets' previews, default layout, no idle
+Subject: [PATCH 07/12] BlueOS: own widgets' previews, default layout, no idle
  redraws
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8

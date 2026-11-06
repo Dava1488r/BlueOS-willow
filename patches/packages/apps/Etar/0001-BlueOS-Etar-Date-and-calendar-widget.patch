@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: GDmio <zhalin66@gmail.com>
 Date: Sun, 25 Oct 2026 00:08:55 +0200
-Subject: [PATCH 1/5] BlueOS: Etar: "Date and calendar" widget
+Subject: [PATCH 1/6] BlueOS: Etar: "Date and calendar" widget
 
 2x2 widget next to the agenda one: today's date (big day number in the accent
 color, weekday, month) and the next two events within a week, in the system
