@@ -1,7 +1,8 @@
 # Установка готовой BlueOS на Google Pixel 6
 
 Эта инструкция и этот zip — только для **Pixel 6** (кодовое имя `oriole`), сборка на странице **Releases**
-(`v0.8.1-oriole`). На Pixel 6 Pro и Pixel 6a его ставить нельзя: не загрузится. Для Pixel 6a — [INSTALL.md](INSTALL.md).
+(`v0.8.1-oriole`). На Pixel 6 Pro и Pixel 6a его ставить нельзя: не загрузится. Для Pixel 6 Pro —
+[INSTALL-Pixel6Pro.md](INSTALL-Pixel6Pro.md), для Pixel 6a — [INSTALL.md](INSTALL.md).
 
 Сборку проверили на своём Pixel 6 тестеры: загружается и работает. Если найдёте ошибку, откройте Issue.
 

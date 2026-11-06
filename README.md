@@ -5,8 +5,8 @@
 роли), живая погода и эквалайзер прямо на обоях, живой персонаж на экране блокировки и в виджете — Арона или Плана
 (нужны свои файлы, см. ниже).
 
-Разрабатывается на **Google Pixel 6a (`bluejay`)**. Готовые сборки есть ещё для **Pixel 6** и **Galaxy S20 FE на
-Snapdragon** (их проверили тестеры). Под другие телефоны BlueOS можно собрать самому — эти исходники для этого и
+Разрабатывается на **Google Pixel 6a (`bluejay`)**. Готовые сборки есть ещё для **Pixel 6**, **Pixel 6 Pro** и
+**Galaxy S20 FE на Snapdragon** (их проверили тестеры). Под другие телефоны BlueOS можно собрать самому — эти исходники для этого и
 выложены — или попробовать экспериментальный GSI ([GSI.md](GSI.md)).
 
 📣 **Новости и новые версии: Telegram-канал [t.me/BlueOSfirmware](https://t.me/BlueOSfirmware).**
@@ -43,6 +43,7 @@ Snapdragon** (их проверили тестеры). Под другие те�
 |---|---|
 | **Поставить готовую BlueOS на Pixel 6a** | **Releases** + [INSTALL.md](INSTALL.md) |
 | **Поставить на Pixel 6** | **Releases** (`v0.8.1-oriole`) + [INSTALL-Pixel6.md](INSTALL-Pixel6.md) |
+| **Поставить на Pixel 6 Pro** | **Releases** (`v0.8.1-raven`) + [INSTALL-Pixel6Pro.md](INSTALL-Pixel6Pro.md) |
 | **Поставить на Galaxy S20 FE (Snapdragon)** | **Releases** (`v0.8.1-r8q`) + [INSTALL-S20FE.md](INSTALL-S20FE.md) |
 | **Попробовать на другом телефоне** (GSI, экспериментально, проверен только на Pixel 6a) | **Releases** + [GSI.md](GSI.md) |
 | Собрать BlueOS под свой телефон | [BUILDING.md](BUILDING.md) |
@@ -86,6 +87,6 @@ Wallpaper & style → Character → Add character files ([ASSETS.md](ASSETS.md))
 author's TikTok profile description, [tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun).
 
 **No warranty — flashing wipes the phone; use at your own risk.** Ready-made builds are under **Releases**: Pixel 6a
-([INSTALL.md](INSTALL.md)), Pixel 6 ([INSTALL-Pixel6.md](INSTALL-Pixel6.md)) and Galaxy S20 FE Snapdragon
-([INSTALL-S20FE.md](INSTALL-S20FE.md); the last two tested by testers), and an experimental GSI for other phones, tested only on a Pixel 6a ([GSI.md](GSI.md)). Start with [BUILDING.md](BUILDING.md) (build), [PORTING.md](PORTING.md) (other devices), [AGENTS.md](AGENTS.md)
+([INSTALL.md](INSTALL.md)), Pixel 6 ([INSTALL-Pixel6.md](INSTALL-Pixel6.md)), Pixel 6 Pro ([INSTALL-Pixel6Pro.md](INSTALL-Pixel6Pro.md)) and Galaxy S20 FE Snapdragon
+([INSTALL-S20FE.md](INSTALL-S20FE.md); the last three tested by testers), and an experimental GSI for other phones, tested only on a Pixel 6a ([GSI.md](GSI.md)). Start with [BUILDING.md](BUILDING.md) (build), [PORTING.md](PORTING.md) (other devices), [AGENTS.md](AGENTS.md)
 (let an AI coding agent such as Claude Code walk you through it). The guides are in Russian; the commands are the same.
