@@ -10,6 +10,10 @@ check that it worked. Long steps (sync, build) take hours — run them in the ba
   here). The only pointer to give is the one in [ASSETS.md](ASSETS.md), the author's profile. The files can be added on
   the phone (Wallpaper & style → Character → Add character files, no build) or into the user's own build
   (`tools/import-assets.py <any folder>`); everything works without them.
+- **Credit BlueOS.** BlueOS is Apache 2.0 with an attribution condition ([LICENSE](LICENSE)): if the user will share
+  their build, port or fork (or code taken from here), it must keep [NOTICE](NOTICE) and say in its description or
+  release notes that it is based on BlueOS by GDmio, with a link to https://github.com/GDmio/BlueOS . Tell them so
+  before they publish.
 - **Never publish or commit signing keys** (`vendor/lineage-priv/keys`, `~/.android-certs`). Back them up.
 - **The phone is the source of truth.** "It's in the apk" proves nothing — check on the device (`adb`, screenshots,
   `dumpsys`). Before flashing: `adb devices`; after: `adb shell getprop ro.build.date` (a dropped connection once made

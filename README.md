@@ -64,7 +64,14 @@
   анимации загрузки), `sepolicy/`, `tools/` (скрипты, которыми сделаны логотип, анимации, шрифты, часы Moe).
 
 ## Лицензии
-- Код BlueOS (патчи, `libs`, `tools`, `config`, `overlay`) — Apache License 2.0, как LineageOS ([LICENSE](LICENSE)).
+- **Если берёте что-то из BlueOS — укажите автора.** Код и материалы BlueOS (патчи, `libs`, `tools`, `config`,
+  `overlay`, логотип, анимации загрузки, свои звуки) — © 2026 GDmio, Apache License 2.0 с одним дополнительным
+  условием ([LICENSE](LICENSE)): кто распространяет BlueOS или работу на его основе (прошивку, GSI, порт, форк, код,
+  патчи или материалы отсюда), сохраняет файл [NOTICE](NOTICE) и пишет в описании, примечаниях к релизу или README
+  своего проекта, что он основан на BlueOS от GDmio, со ссылкой на https://github.com/GDmio/BlueOS . Без этого
+  распространение не разрешено, и автор может потребовать удалить его. Ставить BlueOS на свой телефон и пользоваться
+  им можно без всяких условий.
+- Код LineageOS/AOSP, который меняют патчи, остаётся под своей лицензией (Apache License 2.0).
 - Шрифты в `fonts/` — SIL Open Font License (файлы `OFL.txt` рядом).
 - Цифры часов Moe — проект [Moe-Counter](https://github.com/journey-ad/Moe-Counter), MIT (`media/moe/src/LICENSE-Moe-Counter`).
 - `prebuilts/spine` — [Spine Runtimes](https://esotericsoftware.com/spine-runtimes-license) (Esoteric Software):
@@ -90,3 +97,11 @@ author's TikTok profile description, [tiktok.com/@chozadaun](https://www.tiktok.
 ([INSTALL.md](INSTALL.md)), Pixel 6 ([INSTALL-Pixel6.md](INSTALL-Pixel6.md)), Pixel 6 Pro ([INSTALL-Pixel6Pro.md](INSTALL-Pixel6Pro.md)) and Galaxy S20 FE Snapdragon
 ([INSTALL-S20FE.md](INSTALL-S20FE.md); the last three tested by testers), and an experimental GSI for other phones, tested only on a Pixel 6a ([GSI.md](GSI.md)). Start with [BUILDING.md](BUILDING.md) (build), [PORTING.md](PORTING.md) (other devices), [AGENTS.md](AGENTS.md)
 (let an AI coding agent such as Claude Code walk you through it). The guides are in Russian; the commands are the same.
+
+### Licence
+BlueOS' own work (patches, code, scripts, configuration, logo, boot animations, sounds) is © 2026 GDmio, under the
+Apache License 2.0 with one added condition ([LICENSE](LICENSE)): if you distribute BlueOS or anything based on it
+(a ROM, GSI, port, fork, or code, patches or media from here), keep the [NOTICE](NOTICE) file and say in your project's
+description, release notes or README that it is based on BlueOS by GDmio, linking https://github.com/GDmio/BlueOS .
+Distribution without that is not licensed and may be taken down. Using BlueOS on your own phone needs nothing.
+Third-party parts: [NOTICE.md](NOTICE.md).

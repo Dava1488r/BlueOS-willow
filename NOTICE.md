@@ -1,7 +1,9 @@
 # Third-party notices
 
+BlueOS itself: Copyright 2026 GDmio, Apache License 2.0 with an attribution condition — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
 - **LineageOS / AOSP.** The patches in `patches/` modify LineageOS and Android Open Source Project code, licensed under
-  the Apache License 2.0. BlueOS' own code is under the same licence ([LICENSE](LICENSE)).
+  the Apache License 2.0. BlueOS' own code is under the same licence plus the attribution condition ([LICENSE](LICENSE)).
 - **Fonts** (`fonts/`): Nunito, Comfortaa, Manrope, M PLUS Rounded 1c, Outfit — SIL Open Font License 1.1 (`OFL.txt`
   in each folder).
 - **Moe-Counter** digit pictures (`media/moe`, the Moe lock screen clocks) — github.com/journey-ad/Moe-Counter, MIT
