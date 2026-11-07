@@ -50,10 +50,10 @@ Google Play внутри (MindTheGapps). Персонажей и звуков и
 ## Что скачать
 | Файл | Зачем |
 |---|---|
-| `BlueOS-0.8.1-gsi_arm64_bvN4-20261107.img.gz` | сам образ: 1,7 ГБ, распакованный 3,5 ГБ |
+| `BlueOS-0.8.1-gsi_arm64_bvN4-20261107-2.img.gz` | сам образ: 1,7 ГБ, распакованный 3,5 ГБ |
 | `SHA256SUMS` | контрольная сумма, чтобы проверить, что файл скачался целиком |
 
-Проверка: Windows (PowerShell) — `Get-FileHash .\BlueOS-0.8.1-gsi_arm64_bvN4-20261107.img.gz`, Linux/macOS —
+Проверка: Windows (PowerShell) — `Get-FileHash .\BlueOS-0.8.1-gsi_arm64_bvN4-20261107-2.img.gz`, Linux/macOS —
 `sha256sum -c SHA256SUMS`. Суммы должны совпасть.
 
 Понадобятся компьютер, кабель и [Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools)
@@ -64,10 +64,12 @@ GSI запускается рядом с вашей системой, данны
 разблокированный загрузчик и примерно 12 ГБ свободного места. Распаковывать файл **не нужно**.
 
 ```
-adb push BlueOS-0.8.1-gsi_arm64_bvN4-20261107.img.gz /sdcard/Download/blueos_gsi.img.gz
+adb push BlueOS-0.8.1-gsi_arm64_bvN4-20261107-2.img.gz /sdcard/Download/blueos_gsi.img.gz
 adb shell setprop persist.sys.fflag.override.settings_dynamic_system true
-adb shell am start-activity -n com.android.dynsystem/com.android.dynsystem.VerificationActivity -a android.os.image.action.START_INSTALL -d file:///storage/emulated/0/Download/blueos_gsi.img.gz --el KEY_SYSTEM_SIZE 3512135680 --el KEY_USERDATA_SIZE 8589934592
+adb shell am start-activity -n com.android.dynsystem/com.android.dynsystem.VerificationActivity -a android.os.image.action.START_INSTALL -d file:///storage/emulated/0/Download/blueos_gsi.img.gz --el KEY_SYSTEM_SIZE 3512172544 --el KEY_USERDATA_SIZE 8589934592
 ```
+Число после `KEY_SYSTEM_SIZE` — точный размер распакованного образа в байтах, он свой у каждого образа. С другим числом установка закончится ошибкой, поэтому копируйте команду из этой инструкции для того образа, который скачали.
+
 Появится уведомление с ходом установки. Когда она закончится, перезагрузите телефон в GSI кнопкой в этом уведомлении.
 Там же есть кнопка, которая удалит установленный образ.
 
@@ -80,7 +82,7 @@ adb shell am start-activity -n com.android.dynsystem/com.android.dynsystem.Verif
 **Этот способ на реальном телефоне не проверялся.** Это обычная установка GSI для Android, но отдельные телефоны требуют
 своих шагов. Сначала попробуйте способ 1.
 
-1. Распакуйте `.img.gz` (Windows — 7-Zip, Linux/macOS — `gunzip`), получится `BlueOS-0.8.1-gsi_arm64_bvN4-20261107.img`.
+1. Распакуйте `.img.gz` (Windows — 7-Zip, Linux/macOS — `gunzip`), получится `BlueOS-0.8.1-gsi_arm64_bvN4-20261107-2.img`.
 2. Возьмите файл `vbmeta.img` из заводской прошивки своего телефона и выключите проверку системы:
 ```
 adb reboot bootloader
@@ -89,7 +91,7 @@ fastboot flash --disable-verity --disable-verification vbmeta vbmeta.img
 3. Поставьте образ и сотрите данные:
 ```
 fastboot reboot fastboot
-fastboot flash system BlueOS-0.8.1-gsi_arm64_bvN4-20261107.img
+fastboot flash system BlueOS-0.8.1-gsi_arm64_bvN4-20261107-2.img
 fastboot -w
 fastboot reboot
 ```
