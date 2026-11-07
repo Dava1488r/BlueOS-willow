@@ -8,7 +8,7 @@ check that it worked. Long steps (sync, build) take hours — run them in the ba
 - **No game files.** Never download Blue Archive assets for the user, never point them to other collections of ripped
   files, never add such files to a public repository (`scripts/check-public.sh` refuses them: run it before committing
   here). The only pointer to give is the one in [ASSETS.md](ASSETS.md), the author's profile. The files can be added on
-  the phone (Wallpaper & style → Character → Add character files, no build) or into the user's own build
+  the phone (Wallpaper & style → Character → Character files, no build) or into the user's own build
   (`tools/import-assets.py <any folder>`); everything works without them.
 - **Credit BlueOS.** BlueOS is Apache 2.0 with an attribution condition ([LICENSE](LICENSE)): if the user will share
   their build, port or fork (or code taken from here), it must keep [NOTICE](NOTICE) and say in its description or
@@ -57,7 +57,7 @@ check that it worked. Long steps (sync, build) take hours — run them in the ba
   `wallpapers/ImageWallpaper.java`), `BlueOSDefaults` (fresh-phone defaults). Clocks:
   `packages/SystemUI/customization/.../shared/clocks/` (Halo, Moe).
 - Launcher3 `src/com/android/launcher3/blueos/`: `BlueOSWidgetDecorator` (live layer over BlueOS widgets),
-  materials/blur, the launcher's own widgets («Погода», «Персонаж»). Default layout `res/xml/default_workspace_4x5.xml`
+  materials/blur, the launcher's own widgets («Weather», «Character»). Default layout `res/xml/default_workspace_4x5.xml`
   (`packageName="custom-widget"` entries are the launcher's own widgets).
 - ThemePicker (Wallpaper & style) `src/com/android/customization/blueos/BlueOSSettingsActivity.kt` — all BlueOS
   settings pages. Strings: `res/values{,-ru}/blueos_*_strings.xml`.

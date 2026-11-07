@@ -1,55 +1,57 @@
-# Установка готовой BlueOS на Google Pixel 6
+# Installing ready-made BlueOS on a Google Pixel 6
 
-Эта инструкция и этот zip — только для **Pixel 6** (кодовое имя `oriole`), сборка на странице **Releases**
-(`v0.8.1-oriole`). На Pixel 6 Pro и Pixel 6a его ставить нельзя: не загрузится. Для Pixel 6 Pro —
-[INSTALL-Pixel6Pro.md](INSTALL-Pixel6Pro.md), для Pixel 6a — [INSTALL.md](INSTALL.md).
+**English** | [Русский](INSTALL-Pixel6.ru.md)
 
-Сборку проверили на своём Pixel 6 тестеры: загружается и работает. Если найдёте ошибку, откройте Issue.
+This guide and this zip are **only for the Pixel 6** (codename `oriole`); the build is on the **Releases** page
+(`v0.8.1-oriole`). Don't install it on a Pixel 6 Pro or a Pixel 6a: it won't boot. For the Pixel 6 Pro see
+[INSTALL-Pixel6Pro.md](INSTALL-Pixel6Pro.md), for the Pixel 6a [INSTALL.md](INSTALL.md).
 
-## ⚠️ Прочитайте до начала
-- **Неофициальная фанатская прошивка, без каких-либо гарантий.** Всё, что вы делаете с телефоном, — на ваш страх и
-  риск. Это не сборка LineageOS: об ошибках BlueOS не пишите в LineageOS, пишите сюда (Issues).
-- **Все данные на телефоне сотрутся** — при разблокировке загрузчика и ещё раз при установке. Сохраните фото,
-  переписки, **коды двухфакторной защиты** (Google Authenticator и т. п.) заранее. Удалите с телефона аккаунт Google,
-  чтобы после сброса он не спрашивал старый.
-- **Загрузчик останется разблокированным.** При каждом включении телефон покажет предупреждение об этом — так и
-  должно быть. **Не блокируйте загрузчик, пока стоит BlueOS**: телефон перестанет загружаться.
-- **Некоторые приложения могут не работать:** оплата телефоном (Google Wallet), часть банковских приложений и игр.
-- **Персонажа и звуков из Blue Archive в этой сборке нет.** Всё остальное работает. Файлы игры можно добавить
-  прямо на телефоне: «Обои и стиль» → «Персонаж» → «Добавить файлы персонажа» ([ASSETS.md](ASSETS.md)). Где их взять:
-  ссылка в описании профиля автора в TikTok — [tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun).
-- **Google Play внутри** (MindTheGapps).
-- Телефон, купленный у оператора с блокировкой, загрузчик не разблокирует — тогда установить нельзя.
+Testers checked the build on their own Pixel 6: it boots and works. If you find a bug, open an Issue.
 
-## Что скачать
-| Файл | Зачем |
+## ⚠️ Read before you start
+- **Unofficial fan ROM, no warranty of any kind.** Whatever you do to your phone is at your own risk. This is not a
+  LineageOS build: don't report BlueOS bugs to LineageOS, report them here (Issues).
+- **Everything on the phone will be erased**: once when you unlock the bootloader and again when you install. Save
+  your photos, chats and **two-factor codes** (Google Authenticator and the like) beforehand. Remove your Google
+  account from the phone so that it doesn't ask for the old one after the reset.
+- **The bootloader stays unlocked.** The phone shows a warning about it on every boot, and that is expected.
+  **Don't lock the bootloader while BlueOS is installed**: the phone will stop booting.
+- **Some apps may not work:** tap to pay (Google Wallet), some banking apps and games.
+- **This build has no Blue Archive character or sounds.** Everything else works. You can add the game files right
+  on the phone: Wallpaper & style → Character → Character files ([ASSETS.md](ASSETS.md)). Where to get them: the link
+  in the description of the author's TikTok profile, [tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun).
+- **Google Play is included** (MindTheGapps).
+- A carrier-locked phone can't unlock its bootloader, and then BlueOS can't be installed.
+
+## What to download
+| File | What for |
 |---|---|
-| `BlueOS-0.8.1-oriole-20261105.zip` | сама прошивка, его не распаковывать |
-| `boot.img`, `dtbo.img`, `vendor_boot.img` | для первой установки: загрузочный раздел и recovery BlueOS |
-| `SHA256SUMS` | контрольные суммы — проверить, что файлы скачались целиком |
+| `BlueOS-0.8.1-oriole-20261105.zip` | the ROM itself, don't unpack it |
+| `boot.img`, `dtbo.img`, `vendor_boot.img` | for the first install: the boot partition and the BlueOS recovery |
+| `SHA256SUMS` | checksums, to check that the files downloaded completely |
 
-Проверка: Windows (PowerShell) — `Get-FileHash .\BlueOS-0.8.1-oriole-20261105.zip`, Linux/macOS — `sha256sum -c SHA256SUMS`.
-Суммы должны совпасть. Не совпали — скачайте заново, не прошивайте.
+Check: Windows (PowerShell) `Get-FileHash .\BlueOS-0.8.1-oriole-20261105.zip`, Linux/macOS `sha256sum -c SHA256SUMS`.
+The sums must match. If they don't, download again and don't flash.
 
-## Перед началом
-- Обновите стоковую прошивку до **Android 17, обновление октября 2026 или новее**. На старой BlueOS может не загрузиться.
-- Проверьте, что на стоковой прошивке работают звонки и SMS.
-- Компьютер, кабель USB и [Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools)
-  (`adb` и `fastboot`). На Windows ещё [Google USB Driver](https://developer.android.com/studio/run/win-usb).
-- Зарядите телефон хотя бы до 50 %.
+## Before you start
+- Update the stock firmware to **Android 17, the October 2026 update or newer**. BlueOS may not boot on older firmware.
+- Check that calls and SMS work on the stock firmware.
+- A computer, a USB cable and [Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools)
+  (`adb` and `fastboot`). On Windows also the [Google USB Driver](https://developer.android.com/studio/run/win-usb).
+- Charge the phone to at least 50 %.
 
-## 1. Разблокировать загрузчик (один раз)
-1. «Настройки» → «О телефоне» → 7 раз нажать «Номер сборки» — включится режим разработчика.
-2. «Настройки» → «Система» → «Для разработчиков»: включить **«Заводская разблокировка»** и **«Отладка по USB»**.
-3. Подключить к компьютеру, разрешить отладку на телефоне. В папке platform-tools:
+## 1. Unlock the bootloader (once)
+1. Settings → About phone → tap «Build number» 7 times: developer mode turns on.
+2. Settings → System → Developer options: turn on **OEM unlocking** and **USB debugging**.
+3. Connect the phone to the computer and allow debugging on the phone. In the platform-tools folder:
 ```
 adb reboot bootloader
 fastboot flashing unlock
 ```
-4. На телефоне кнопками громкости выбрать «Unlock the bootloader», подтвердить кнопкой питания. Телефон сотрётся.
-   После загрузки снова включите «Отладку по USB».
+4. On the phone, pick «Unlock the bootloader» with the volume buttons and confirm with the power button. The phone is
+   erased. After it boots, turn on USB debugging again.
 
-## 2. Поставить recovery BlueOS
+## 2. Flash the BlueOS recovery
 ```
 adb reboot bootloader
 fastboot flash boot boot.img
@@ -57,38 +59,27 @@ fastboot flash dtbo dtbo.img
 fastboot reboot bootloader
 fastboot flash vendor_boot vendor_boot.img
 ```
-Затем кнопками громкости выбрать **Recovery mode** и нажать питание — откроется recovery BlueOS (логотип с нимбом).
-Если логотипа BlueOS нет, дальше не идите.
+Then pick **Recovery mode** with the volume buttons and press power: the BlueOS recovery opens (the logo with a halo).
+If there is no BlueOS logo, stop here.
 
-## 3. Установить BlueOS
-1. В recovery: **Factory reset → Format data / factory reset** → подтвердить.
-2. Назад → **Apply update → Apply from ADB**.
-3. На компьютере:
+## 3. Install BlueOS
+1. In recovery: **Factory reset → Format data / factory reset** → confirm.
+2. Back → **Apply update → Apply from ADB**.
+3. On the computer:
 ```
 adb sideload BlueOS-0.8.1-oriole-20261105.zip
 ```
-   Может остановиться на 47 % или написать «failed to read command» — это нормально. На телефоне должно быть
-   «Install completed».
-4. Если recovery спросит про перезагрузку для дополнений — «No», Google Play уже внутри.
-5. **Reboot system now.** Первая загрузка — несколько минут.
+   It may stop at 47 % or print «failed to read command»: that's normal. The phone should say «Install completed».
+4. If recovery asks whether to reboot to install add-ons, answer «No»: Google Play is already included.
+5. **Reboot system now.** The first boot takes a few minutes.
 
-## Обновления
-Новые версии BlueOS для Pixel 6 ставятся **без сброса**: recovery → Apply update → Apply from ADB →
-`adb sideload <новый zip>`. Данные остаются.
+## Updates
+New BlueOS versions for the Pixel 6 install **without a wipe**: recovery → Apply update → Apply from ADB →
+`adb sideload <new zip>`. Your data stays.
 
-## Если что-то пошло не так
-- Не загружается дальше логотипа больше 10 минут — зайдите в recovery (питание + громкость вниз, затем Recovery mode),
-  сделайте Format data и поставьте zip ещё раз.
-- **Вернуть стоковую прошивку:** [flash.android.com](https://flash.android.com) (Chrome или Edge). Данные сотрутся.
-  Загрузчик блокируйте только после возврата на стоковую прошивку.
-- Нашли ошибку — откройте Issue: что делали, что увидели, лучше со скриншотом.
-
----
-
-## English (short)
-This zip is **only for the Pixel 6 (`oriole`)**, release `v0.8.1-oriole`; not for the Pixel 6 Pro or 6a. Tested by
-testers on their Pixel 6. Unofficial fan ROM, **no warranty**; installing **wipes the phone**; never relock the
-bootloader while BlueOS is installed. No Blue Archive files are included ([ASSETS.md](ASSETS.md)). Steps: update stock to
-Android 17 (October 2026 or newer) → `fastboot flashing unlock` → `fastboot flash boot boot.img`, `dtbo dtbo.img`,
-`fastboot reboot bootloader`, `fastboot flash vendor_boot vendor_boot.img` → Recovery mode → Format data → Apply from
-ADB → `adb sideload BlueOS-0.8.1-oriole-20261105.zip` → Reboot. Check files against `SHA256SUMS` first.
+## If something goes wrong
+- Stuck on the logo for more than 10 minutes: go to recovery (power + volume down, then Recovery mode), do Format data
+  and install the zip again.
+- **Going back to stock:** [flash.android.com](https://flash.android.com) (Chrome or Edge). Your data is erased. Lock
+  the bootloader only after you are back on the stock firmware.
+- Found a bug? Open an Issue: what you did and what you saw, ideally with a screenshot.

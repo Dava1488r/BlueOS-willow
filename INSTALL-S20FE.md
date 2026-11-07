@@ -1,119 +1,112 @@
-# Установка готовой BlueOS на Samsung Galaxy S20 FE (Snapdragon)
+# Installing ready-made BlueOS on a Samsung Galaxy S20 FE (Snapdragon)
 
-Эта инструкция и этот zip — только для **Galaxy S20 FE на Snapdragon 865** (кодовое имя `r8q`), сборка на странице
-**Releases** (`v0.8.1-r8q`). Сборку проверили на своём S20 FE тестеры: загружается и работает. Если найдёте ошибку,
-откройте Issue.
+**English** | [Русский](INSTALL-S20FE.ru.md)
 
-Проверьте модель: «Настройки» → «Сведения о телефоне» → «Номер модели».
+This guide and this zip are **only for the Galaxy S20 FE with a Snapdragon 865** (codename `r8q`); the build is on the
+**Releases** page (`v0.8.1-r8q`). Testers checked the build on their own S20 FE: it boots and works. If you find a
+bug, open an Issue.
 
-| Модель | Подходит? |
+Check your model: Settings → About phone → Model number.
+
+| Model | Does it fit? |
 |---|---|
 | SM-G780G, SM-G780G/DS (S20 FE) | ✅ |
 | SM-G781B, SM-G781B/DS, SM-G781N, SM-G7810 (S20 FE 5G) | ✅ |
-| **SM-G780F** и другие на Exynos | ❌ **нельзя**, это другой телефон |
+| **SM-G780F** and other Exynos models | ❌ **no**, that is a different phone |
 
-Официальная LineageOS для S20 FE выходит пока только на Android 16. BlueOS для него собрана на Android 17: дерево
-устройства от 16, общая часть и ядро от 17, а то, чего не хватало, перенесено с планшетов Samsung на том же
-процессоре ([ports/r8q](ports/r8q/README.md)).
+Official LineageOS for the S20 FE only comes with Android 16 so far. BlueOS for it is built on Android 17: the device
+tree is from 16, the common part and the kernel are from 17, and what was missing was ported from Samsung tablets with
+the same chip ([ports/r8q](ports/r8q/README.md)).
 
-## ⚠️ Прочитайте до начала
-- **Неофициальная фанатская прошивка, без каких-либо гарантий.** Всё, что вы делаете с телефоном, — на ваш страх и
-  риск. Это не сборка LineageOS: об ошибках BlueOS не пишите в LineageOS, пишите сюда (Issues).
-- **Разблокировка загрузчика навсегда ломает Samsung Knox:** Samsung Pay, «Защищённая папка» и часть банковских
-  приложений перестанут работать, даже если потом вернуть заводскую прошивку. Гарантия тоже может пропасть.
-- **Все данные на телефоне сотрутся**, и не один раз. Сохраните фото, переписки, **коды двухфакторной защиты**
-  (Google Authenticator и т. п.). Удалите с телефона аккаунты Google и Samsung, чтобы после сброса он не спрашивал старые.
-- **Загрузчик не блокируйте, пока стоит BlueOS**: телефон перестанет загружаться. Предупреждение о разблокированном
-  загрузчике при каждом включении — это нормально, убрать его нельзя.
-- **Персонажа и звуков из Blue Archive в этой сборке нет.** Всё остальное работает. Файлы игры можно добавить
-  прямо на телефоне: «Обои и стиль» → «Персонаж» → «Добавить файлы персонажа» ([ASSETS.md](ASSETS.md)). Где их взять:
-  ссылка в описании профиля автора в TikTok — [tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun).
-- **Google Play внутри** (MindTheGapps).
+## ⚠️ Read before you start
+- **Unofficial fan ROM, no warranty of any kind.** Whatever you do to your phone is at your own risk. This is not a
+  LineageOS build: don't report BlueOS bugs to LineageOS, report them here (Issues).
+- **Unlocking the bootloader breaks Samsung Knox for good:** Samsung Pay, Secure Folder and some banking apps stop
+  working, even if you go back to the stock firmware later. The warranty may be void too.
+- **Everything on the phone will be erased**, more than once. Save your photos, chats and **two-factor codes**
+  (Google Authenticator and the like). Remove your Google and Samsung accounts from the phone so that it doesn't ask
+  for the old ones after the reset.
+- **Don't lock the bootloader while BlueOS is installed**: the phone will stop booting. The unlocked-bootloader
+  warning on every boot is normal and can't be removed.
+- **This build has no Blue Archive character or sounds.** Everything else works. You can add the game files right
+  on the phone: Wallpaper & style → Character → Character files ([ASSETS.md](ASSETS.md)). Where to get them: the link
+  in the description of the author's TikTok profile, [tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun).
+- **Google Play is included** (MindTheGapps).
 
-## Что скачать
-| Файл | Зачем |
+## What to download
+| File | What for |
 |---|---|
-| `BlueOS-0.8.1-r8q-20261105.zip` | сама прошивка, его не распаковывать |
-| `recovery.img` | recovery BlueOS — нужен именно он: recovery LineageOS эту прошивку не примет |
-| `vbmeta.img` | для первой установки |
-| `SHA256SUMS` | контрольные суммы — проверить, что файлы скачались целиком |
+| `BlueOS-0.8.1-r8q-20261105.zip` | the ROM itself, don't unpack it |
+| `recovery.img` | the BlueOS recovery; you need exactly this one, the LineageOS recovery won't accept this ROM |
+| `vbmeta.img` | for the first install |
+| `SHA256SUMS` | checksums, to check that the files downloaded completely |
 
-Проверка: Windows (PowerShell) — `Get-FileHash .\BlueOS-0.8.1-r8q-20261105.zip`, Linux/macOS — `sha256sum -c SHA256SUMS`.
-Суммы должны совпасть. Не совпали — скачайте заново, не прошивайте.
+Check: Windows (PowerShell) `Get-FileHash .\BlueOS-0.8.1-r8q-20261105.zip`, Linux/macOS `sha256sum -c SHA256SUMS`.
+The sums must match. If they don't, download again and don't flash.
 
-## Перед началом
-- На телефоне должна стоять **заводская прошивка Samsung на Android 13**, последняя её версия. Это обязательно:
-  «Настройки» → «Сведения о телефоне» → «Сведения о ПО» → «Версия Android» (смотрите версию Android, а не One UI).
-- Проверьте, что на заводской прошивке работают звонки и SMS.
-- Зарядите телефон хотя бы до 50 %.
-- Компьютер, кабель USB и:
+## Before you start
+- The phone must run **Samsung's stock firmware on Android 13**, its latest version. This is required:
+  Settings → About phone → Software information → Android version (look at the Android version, not One UI).
+- Check that calls and SMS work on the stock firmware.
+- Charge the phone to at least 50 %.
+- A computer, a USB cable and:
   - [Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools) (`adb`);
-  - программа **samloader-rs** для прошивки Samsung — ссылка на неё есть на
-    [странице LineageOS для S20 FE](https://wiki.lineageos.org/devices/r8q/install/variant1/);
-  - на Windows — [драйвер Samsung](https://developer.samsung.com/android-usb-driver).
+  - **samloader-rs**, a tool for flashing Samsung phones; the link to it is on the
+    [LineageOS page for the S20 FE](https://wiki.lineageos.org/devices/r8q/install/variant1/);
+  - on Windows, the [Samsung driver](https://developer.samsung.com/android-usb-driver).
 
-Шаги ниже те же, что [у LineageOS для этого телефона](https://wiki.lineageos.org/devices/r8q/install/variant1/),
-только с файлами BlueOS.
+The steps below are the same as [LineageOS' steps for this phone](https://wiki.lineageos.org/devices/r8q/install/variant1/),
+just with the BlueOS files.
 
-## 1. Разблокировать загрузчик (сотрёт телефон)
-1. Подключите телефон к Wi-Fi.
-2. «Настройки» → «Сведения о телефоне» → «Сведения о ПО» → 7 раз нажать «Номер сборки».
-3. «Настройки» → «Параметры разработчика»: включить **«Заводская разблокировка»** и **«Отладка по USB»**.
-4. Выключите телефон. Зажмите обе кнопки громкости и, не отпуская, подключите кабель к компьютеру — откроется режим
-   загрузки (Download).
-5. Следуйте подсказкам на экране: «Device unlock mode» / «Unlock Bootloader», подтвердить. Телефон сотрётся и
-   перезагрузится.
-6. Снова включите параметры разработчика и проверьте, что «Заводская разблокировка» всё ещё включена.
-7. Выключите телефон и снова войдите в режим загрузки теми же кнопками. На компьютере, в папке с файлами:
+## 1. Unlock the bootloader (erases the phone)
+1. Connect the phone to Wi-Fi.
+2. Settings → About phone → Software information → tap «Build number» 7 times.
+3. Settings → Developer options: turn on **OEM unlocking** and **USB debugging**.
+4. Turn the phone off. Hold both volume buttons and, while holding them, plug the cable into the computer: Download
+   mode opens.
+5. Follow the prompts on the screen: «Device unlock mode» / «Unlock Bootloader», confirm. The phone is erased and
+   reboots.
+6. Turn developer options on again and check that «OEM unlocking» is still on.
+7. Turn the phone off and enter Download mode again with the same buttons. On the computer, in the folder with the
+   files:
 ```
 samloader flash --partition VBMETA vbmeta.img
 ```
-8. Телефон перезагрузится и попросит сброс — сделайте его по подсказкам. Пройдите начальную настройку, пропуская всё,
-   что можно, подключитесь к Wi-Fi и ещё раз проверьте, что «Заводская разблокировка» включена.
+8. The phone reboots and asks for a reset: do it as the prompts say. Go through the initial setup, skipping everything
+   you can, connect to Wi-Fi and check once more that «OEM unlocking» is on.
 
-## 2. Поставить recovery BlueOS
-1. Выключите телефон, войдите в режим загрузки теми же кнопками, на экране выберите «Continue» и подключите кабель.
-2. На компьютере:
+## 2. Flash the BlueOS recovery
+1. Turn the phone off, enter Download mode with the same buttons, pick «Continue» on the screen and plug in the cable.
+2. On the computer:
 ```
 samloader flash --partition RECOVERY recovery.img --no-reboot
 ```
-3. На телефоне останется надпись «Downloading... Do not turn off target!!», даже когда всё закончилось, — это нормально.
-4. Зажмите **громкость вниз + питание** на 8–10 секунд. Как только экран погаснет, сразу отпустите и зажмите
-   **громкость вверх + питание** (кабель должен быть подключён к компьютеру) — откроется recovery.
-   В recovery нужно попасть **сразу**: иначе заводская прошивка заменит его своим, и шаг 2 придётся повторить.
-5. Должен открыться экран с логотипом BlueOS. Если его нет, дальше не идите.
+3. The phone keeps showing «Downloading... Do not turn off target!!» even after it has finished: that's normal.
+4. Hold **volume down + power** for 8–10 seconds. As soon as the screen goes dark, let go and at once hold
+   **volume up + power** (the cable must be connected to the computer): recovery opens.
+   You have to get into recovery **right away**: otherwise the stock firmware replaces it with its own, and you'll
+   have to repeat step 2.
+5. A screen with the BlueOS logo should open. If it doesn't, stop here.
 
-## 3. Установить BlueOS
-1. В recovery: **Factory reset → Format data / factory reset** → подтвердить.
-2. Назад → **Apply update → Apply from ADB**.
-3. На компьютере:
+## 3. Install BlueOS
+1. In recovery: **Factory reset → Format data / factory reset** → confirm.
+2. Back → **Apply update → Apply from ADB**.
+3. On the computer:
 ```
 adb -d sideload BlueOS-0.8.1-r8q-20261105.zip
 ```
-   Может остановиться на 47 % или написать «failed to read command» — это нормально. На телефоне должно быть
-   сообщение, что установка завершена.
-4. Если recovery спросит про перезагрузку для дополнений — «No», Google Play уже внутри.
-5. **Reboot system now.** Первая загрузка может идти до 15 минут.
+   It may stop at 47 % or print «failed to read command»: that's normal. The phone should say that the install is
+   complete.
+4. If recovery asks whether to reboot to install add-ons, answer «No»: Google Play is already included.
+5. **Reboot system now.** The first boot can take up to 15 minutes.
 
-## Обновления
-Новые версии BlueOS для S20 FE ставятся **без сброса**: recovery (громкость вверх + питание при подключённом кабеле)
-→ Apply update → Apply from ADB → `adb -d sideload <новый zip>`. Данные остаются.
+## Updates
+New BlueOS versions for the S20 FE install **without a wipe**: recovery (volume up + power with the cable connected)
+→ Apply update → Apply from ADB → `adb -d sideload <new zip>`. Your data stays.
 
-## Если что-то пошло не так
-- Не загружается дальше логотипа больше 15 минут — зайдите в recovery (громкость вниз + питание, пока экран не
-  погаснет, затем сразу громкость вверх + питание), сделайте Format data и поставьте zip ещё раз.
-- **Вернуть заводскую прошивку:** режим загрузки + заводские файлы Samsung для вашей модели (AP, BL, CP, CSC);
-  инструкции легко найти по номеру модели. Данные сотрутся, Knox останется сломанным.
-- Нашли ошибку — откройте Issue: что делали, что увидели, лучше со скриншотом.
-
----
-
-## English (short)
-This zip is **only for the Galaxy S20 FE with Snapdragon 865 (`r8q`)**: SM-G780G(/DS), SM-G781B(/DS), SM-G781N,
-SM-G7810 — **never the Exynos SM-G780F**. Release `v0.8.1-r8q`, tested by testers on their S20 FE. Unofficial fan ROM,
-**no warranty**; unlocking **permanently trips Samsung Knox** and **wipes the phone**; never relock the bootloader while
-BlueOS is installed. Needs stock **Android 13** firmware first. No Blue Archive files are included ([ASSETS.md](ASSETS.md)).
-Steps follow the [LineageOS r8q guide](https://wiki.lineageos.org/devices/r8q/install/variant1/) with BlueOS files:
-unlock in Download mode → `samloader flash --partition VBMETA vbmeta.img` → reset → `samloader flash --partition
-RECOVERY recovery.img --no-reboot` → boot straight into recovery → Format data → Apply from ADB →
-`adb -d sideload BlueOS-0.8.1-r8q-20261105.zip` → Reboot. Check files against `SHA256SUMS` first.
+## If something goes wrong
+- Stuck on the logo for more than 15 minutes: go to recovery (volume down + power until the screen goes dark, then at
+  once volume up + power), do Format data and install the zip again.
+- **Going back to stock:** Download mode + Samsung's stock files for your model (AP, BL, CP, CSC); guides are easy to
+  find by the model number. Your data is erased, and Knox stays broken.
+- Found a bug? Open an Issue: what you did and what you saw, ideally with a screenshot.

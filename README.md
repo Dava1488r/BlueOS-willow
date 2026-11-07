@@ -1,107 +1,96 @@
 # BlueOS
 
-Фанатская прошивка на основе **LineageOS 24.0 (Android 17)**, вдохновлённая **Blue Archive**: свой логотип и анимация
-загрузки, живой нимб на часах экрана блокировки, живые виджеты, «Цвета» (каждая деталь берёт цвет из обоев по своей
-роли), живая погода и эквалайзер прямо на обоях, живой персонаж на экране блокировки и в виджете — Арона или Плана
-(нужны свои файлы, см. ниже).
+**English** | [Русский](README.ru.md)
 
-Разрабатывается на **Google Pixel 6a (`bluejay`)**. Готовые сборки есть ещё для **Pixel 6**, **Pixel 6 Pro** и
-**Galaxy S20 FE на Snapdragon** (их проверили тестеры). Под другие телефоны BlueOS можно собрать самому — эти исходники для этого и
-выложены — или попробовать экспериментальный GSI ([GSI.md](GSI.md)).
+A fan-made Android ROM based on **LineageOS 24.0 (Android 17)** and inspired by **Blue Archive**. It has:
 
-📣 **Новости и новые версии: Telegram-канал [t.me/BlueOSfirmware](https://t.me/BlueOSfirmware).**
+- its own logo and boot animation;
+- a live halo on the lock-screen clock;
+- live widgets;
+- «Colors», where every detail takes its colour from the wallpaper according to its role;
+- live weather and a music equalizer drawn right on the wallpaper;
+- a live character on the lock screen and in a widget: Arona or Plana (you need your own files, see below).
 
-> BlueOS — неофициальный фанатский проект. Он не связан с Nexon, Yostar и NEXON Games. **Файлов из игры здесь нет**:
-> модели персонажей, их голоса, музыка, звуки и обои из игры не входят в исходники. Без них прошивка полностью
-> работает, просто без персонажа и этих звуков. Файлы игры можно добавить **прямо на телефоне**, без сборки:
-> «Обои и стиль» → «Персонаж» → «Добавить файлы персонажа» ([ASSETS.md](ASSETS.md)). Где их взять: ссылка в описании
-> профиля автора в TikTok — [tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun).
+BlueOS is developed on the **Google Pixel 6a (`bluejay`)**. Ready-made builds also exist for the **Pixel 6**,
+**Pixel 6 Pro** and **Galaxy S20 FE (Snapdragon)**, and testers have checked them. For other phones you can build
+BlueOS yourself (that is why these sources are public) or try the experimental GSI ([GSI.md](GSI.md)).
 
-> ⚠️ **Без гарантий.** Установка любой прошивки стирает телефон и требует разблокированного загрузчика; часть
-> приложений (оплата телефоном, некоторые банки) может не работать. Всё — на ваш страх и риск. Подробно —
-> [INSTALL.md](INSTALL.md), раздел «Прочитайте до начала».
+📣 **News and new versions: the Telegram channel [t.me/BlueOSfirmware](https://t.me/BlueOSfirmware).**
 
-## Как это выглядит
+> BlueOS is an unofficial fan project. It is not affiliated with Nexon, Yostar or NEXON Games. **There are no game
+> files here**: the sources do not include the characters' models, their voices, or the game's music, sounds and
+> wallpapers. The ROM works fully without them, just without the character and those sounds. You can add the game
+> files **right on the phone**, no build needed: Wallpaper & style → Character → Character files
+> ([ASSETS.md](ASSETS.md)). Where to get them: the link in the description of the author's TikTok profile,
+> [tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun).
+
+> ⚠️ **No warranty.** Installing any custom ROM wipes the phone and needs an unlocked bootloader. Some apps may not
+> work (tap to pay, some banking apps). Use it at your own risk. Details: [INSTALL.md](INSTALL.md), section
+> «Read before you start».
+
+## What it looks like
 <table>
 <tr>
-<td align="center" width="25%"><img src="docs/screenshots/lock-plana.jpg" alt="Плана и живые часы*"><br><sub>Плана и живые часы*</sub></td>
-<td align="center" width="25%"><img src="docs/screenshots/home-widgets.jpg" alt="Виджеты и эквалайзер"><br><sub>Виджеты и эквалайзер</sub></td>
-<td align="center" width="25%"><img src="docs/screenshots/lock-arona.jpg" alt="Арона на экране блокировки*"><br><sub>Арона на экране блокировки*</sub></td>
-<td align="center" width="25%"><img src="docs/screenshots/home-plana.jpg" alt="Плана в виджете*"><br><sub>Плана в виджете*</sub></td>
+<td align="center" width="25%"><img src="docs/screenshots/lock-plana.jpg" alt="Plana and the live clock*"><br><sub>Plana and the live clock*</sub></td>
+<td align="center" width="25%"><img src="docs/screenshots/home-widgets.jpg" alt="Widgets and the equalizer"><br><sub>Widgets and the equalizer</sub></td>
+<td align="center" width="25%"><img src="docs/screenshots/lock-arona.jpg" alt="Arona on the lock screen*"><br><sub>Arona on the lock screen*</sub></td>
+<td align="center" width="25%"><img src="docs/screenshots/home-plana.jpg" alt="Plana in the widget*"><br><sub>Plana in the widget*</sub></td>
 </tr>
 <tr>
-<td align="center" width="25%"><img src="docs/screenshots/lock-moe.jpg" alt="Пиксельные часы Moe*"><br><sub>Пиксельные часы Moe*</sub></td>
-<td align="center" width="25%"><img src="docs/screenshots/home-arona.jpg" alt="Арона за партой*"><br><sub>Арона за партой*</sub></td>
-<td align="center" width="25%"><img src="docs/screenshots/about.jpg" alt="О телефоне"><br><sub>О телефоне</sub></td>
+<td align="center" width="25%"><img src="docs/screenshots/lock-moe.jpg" alt="Moe pixel clock*"><br><sub>Moe pixel clock*</sub></td>
+<td align="center" width="25%"><img src="docs/screenshots/home-arona.jpg" alt="Arona at her desk*"><br><sub>Arona at her desk*</sub></td>
+<td align="center" width="25%"><img src="docs/screenshots/about.jpg" alt="About phone"><br><sub>About phone</sub></td>
 </tr>
 </table>
 
-<sub>* Персонажи и их голоса появляются, только если добавить свои файлы. В прошивку они не входят, как и обои с этих скриншотов (кроме стандартных LineageOS). Снято на Pixel 6a.</sub>
+<sub>* The characters and their voices appear only after you add your own files. They are not part of the ROM, and
+neither are the wallpapers in these screenshots (except the stock LineageOS ones). Taken on a Pixel 6a with the
+interface in Russian; BlueOS is in English too.</sub>
 
-## С чего начать
-| Что нужно | Где |
+## Where to start
+| What you need | Where |
 |---|---|
-| **Поставить готовую BlueOS на Pixel 6a** | **Releases** + [INSTALL.md](INSTALL.md) |
-| **Поставить на Pixel 6** | **Releases** (`v0.8.1-oriole`) + [INSTALL-Pixel6.md](INSTALL-Pixel6.md) |
-| **Поставить на Pixel 6 Pro** | **Releases** (`v0.8.1-raven`) + [INSTALL-Pixel6Pro.md](INSTALL-Pixel6Pro.md) |
-| **Поставить на Galaxy S20 FE (Snapdragon)** | **Releases** (`v0.8.1-r8q`) + [INSTALL-S20FE.md](INSTALL-S20FE.md) |
-| **Попробовать на другом телефоне** (GSI, экспериментально, проверен только на Pixel 6a) | **Releases** + [GSI.md](GSI.md) |
-| Собрать BlueOS под свой телефон | [BUILDING.md](BUILDING.md) |
-| Телефона нет в списке / что подстроить под другой экран | [PORTING.md](PORTING.md) |
-| Вернуть персонажа и звуки (на телефоне, без сборки) | [ASSETS.md](ASSETS.md) |
-| Собирать с помощью ИИ-агента (Claude Code и др.) | [AGENTS.md](AGENTS.md) |
+| **Install ready-made BlueOS on a Pixel 6a** | **Releases** + [INSTALL.md](INSTALL.md) |
+| **Install on a Pixel 6** | **Releases** (`v0.8.1-oriole`) + [INSTALL-Pixel6.md](INSTALL-Pixel6.md) |
+| **Install on a Pixel 6 Pro** | **Releases** (`v0.8.1-raven`) + [INSTALL-Pixel6Pro.md](INSTALL-Pixel6Pro.md) |
+| **Install on a Galaxy S20 FE (Snapdragon)** | **Releases** (`v0.8.1-r8q`) + [INSTALL-S20FE.md](INSTALL-S20FE.md) |
+| **Try it on another phone** (GSI, experimental, checked only on a Pixel 6a) | **Releases** + [GSI.md](GSI.md) |
+| Build BlueOS for your own phone | [BUILDING.md](BUILDING.md) |
+| Your phone isn't listed / what to adjust for another screen | [PORTING.md](PORTING.md) |
+| Bring back the character and sounds (on the phone, no build) | [ASSETS.md](ASSETS.md) |
+| Build with an AI coding agent (Claude Code and others) | [AGENTS.md](AGENTS.md) |
 
-**Проще всего — с агентом.** Откройте папку с исходниками LineageOS в Claude Code (или другом агенте, который
-читает `AGENTS.md`) и скажите: «собери BlueOS для моего телефона». В `AGENTS.md` описано, что ему проверить,
-в каком порядке делать и где обычно ломается.
+Every guide is in English and in Russian: the Russian version sits next to it as `*.ru.md`, and each page has a
+language switch at the top.
 
-## Что внутри
-- `config/blueos.mk` — всё подключение BlueOS (одна строка в `vendor/extra/product.mk`).
-- `patches/<проект>/*.patch` — изменения кода LineageOS/AOSP: SystemUI, лаунчер, «Обои и стиль», Настройки,
-  Часы, Календарь, Галерея, recovery. Ставятся сами при `source build/envsetup.sh`.
-- `libs/arona` — общая библиотека: настройки BlueOS, роли цветов, движение телефона, погода, персонажи.
-- `overlay/` — ресурсы поверх стоковых (названия, значения по умолчанию), `fonts/`, `media/` (логотип,
-  анимации загрузки), `sepolicy/`, `tools/` (скрипты, которыми сделаны логотип, анимации, шрифты, часы Moe).
+**The easiest way is with an agent.** Open the LineageOS source folder in Claude Code (or another agent that reads
+`AGENTS.md`) and say "build BlueOS for my phone". `AGENTS.md` tells the agent what to check, in what order to do
+things and where builds usually break.
 
-## Лицензии
-- **Если берёте что-то из BlueOS — укажите автора.** Код и материалы BlueOS (патчи, `libs`, `tools`, `config`,
-  `overlay`, логотип, анимации загрузки, свои звуки) — © 2026 GDmio, Apache License 2.0 с одним дополнительным
-  условием ([LICENSE](LICENSE)): кто распространяет BlueOS или работу на его основе (прошивку, GSI, порт, форк, код,
-  патчи или материалы отсюда), сохраняет файл [NOTICE](NOTICE) и пишет в описании, примечаниях к релизу или README
-  своего проекта, что он основан на BlueOS от GDmio, со ссылкой на https://github.com/GDmio/BlueOS . Без этого
-  распространение не разрешено, и автор может потребовать удалить его. Ставить BlueOS на свой телефон и пользоваться
-  им можно без всяких условий.
-- Код LineageOS/AOSP, который меняют патчи, остаётся под своей лицензией (Apache License 2.0).
-- Шрифты в `fonts/` — SIL Open Font License (файлы `OFL.txt` рядом).
-- Цифры часов Moe — проект [Moe-Counter](https://github.com/journey-ad/Moe-Counter), MIT (`media/moe/src/LICENSE-Moe-Counter`).
-- `prebuilts/spine` — [Spine Runtimes](https://esotericsoftware.com/spine-runtimes-license) (Esoteric Software):
-  по их лицензии каждому, кто использует рантайм Spine, нужна своя лицензия Spine Editor. Подробнее — [NOTICE.md](NOTICE.md).
+## What's inside
+- `config/blueos.mk` — everything that hooks BlueOS into the build (one line in `vendor/extra/product.mk`).
+- `patches/<project>/*.patch` — changes to LineageOS/AOSP code: SystemUI, the launcher, Wallpaper & style,
+  Settings, Clock, Calendar, Gallery, recovery. They apply by themselves on `source build/envsetup.sh`.
+- `libs/arona` — the shared library: BlueOS settings, colour roles, phone motion, weather, characters.
+- `overlay/` — resources over the stock ones (names, default values).
+- `fonts/`, `media/` (logo, boot animations), `sepolicy/`.
+- `tools/` — the scripts that made the logo, the animations, the fonts and the Moe clocks.
 
----
-
-## English
-
-**BlueOS** is a fan-made Android ROM based on **LineageOS 24.0 (Android 17)**, inspired by *Blue Archive*: own boot
-animation and logo, a live halo lock-screen clock, live widgets, colour roles from the wallpaper, live weather and a
-music equalizer drawn on the wallpaper, and a live character on the lock screen and in a widget.
-
-Screenshots are [at the top of this page](#как-это-выглядит) (the characters and most wallpapers there are the author's own files and are not included in the ROM).
-
-It is developed on the Google Pixel 6a (`bluejay`); these sources let you build it for any device that LineageOS
-24.0 supports. **No game files are included** — BlueOS is unofficial and not affiliated with Nexon / Yostar; it works
-fully without them (no character and no game sounds). Game files can be added on the phone, no build needed:
-Wallpaper & style → Character → Add character files ([ASSETS.md](ASSETS.md)). Where to get them: the link in the
-author's TikTok profile description, [tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun).
-
-**No warranty — flashing wipes the phone; use at your own risk.** Ready-made builds are under **Releases**: Pixel 6a
-([INSTALL.md](INSTALL.md)), Pixel 6 ([INSTALL-Pixel6.md](INSTALL-Pixel6.md)), Pixel 6 Pro ([INSTALL-Pixel6Pro.md](INSTALL-Pixel6Pro.md)) and Galaxy S20 FE Snapdragon
-([INSTALL-S20FE.md](INSTALL-S20FE.md); the last three tested by testers), and an experimental GSI for other phones, tested only on a Pixel 6a ([GSI.md](GSI.md)). Start with [BUILDING.md](BUILDING.md) (build), [PORTING.md](PORTING.md) (other devices), [AGENTS.md](AGENTS.md)
-(let an AI coding agent such as Claude Code walk you through it). The guides are in Russian; the commands are the same.
-
-### Licence
-BlueOS' own work (patches, code, scripts, configuration, logo, boot animations, sounds) is © 2026 GDmio, under the
-Apache License 2.0 with one added condition ([LICENSE](LICENSE)): if you distribute BlueOS or anything based on it
-(a ROM, GSI, port, fork, or code, patches or media from here), keep the [NOTICE](NOTICE) file and say in your project's
-description, release notes or README that it is based on BlueOS by GDmio, linking https://github.com/GDmio/BlueOS .
-Distribution without that is not licensed and may be taken down. Using BlueOS on your own phone needs nothing.
-Third-party parts: [NOTICE.md](NOTICE.md).
+## Licences
+- **If you take something from BlueOS, credit the author.** BlueOS' own code and media are © 2026 GDmio: the
+  patches, `libs`, `tools`, `config`, `overlay`, the logo, the boot animations and its own sounds. They are under the
+  Apache License 2.0 with one added condition ([LICENSE](LICENSE)).
+  - The condition applies when you distribute BlueOS or work based on it: a ROM, GSI, port or fork, or code, patches
+    or media from here.
+  - Keep the [NOTICE](NOTICE) file.
+  - Say in your project's description, release notes or README that it is based on BlueOS by GDmio, with a link to
+    https://github.com/GDmio/BlueOS .
+  - Distribution without that is not licensed, and the author may ask for it to be taken down.
+  - Installing and using BlueOS on your own phone needs nothing at all.
+- The LineageOS/AOSP code that the patches change keeps its own licence (Apache License 2.0).
+- The fonts in `fonts/` are under the SIL Open Font License (`OFL.txt` files next to them).
+- The Moe clock digits come from [Moe-Counter](https://github.com/journey-ad/Moe-Counter), MIT
+  (`media/moe/src/LICENSE-Moe-Counter`).
+- `prebuilts/spine` — [Spine Runtimes](https://esotericsoftware.com/spine-runtimes-license) by Esoteric Software.
+  Under their licence everyone who uses the Spine runtime needs their own Spine Editor licence. More in
+  [NOTICE.md](NOTICE.md).

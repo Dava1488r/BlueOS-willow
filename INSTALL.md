@@ -1,102 +1,90 @@
-# Установка готовой BlueOS на Google Pixel 6a
+# Installing ready-made BlueOS on a Google Pixel 6a
 
-Эта инструкция и этот zip — только для **Pixel 6a** (кодовое имя `bluejay`), сборка на странице **Releases** этого
-репозитория. На другой телефон его ставить нельзя: не загрузится. Для Pixel 6, Pixel 6 Pro и Galaxy S20 FE свои сборки и инструкции:
-[INSTALL-Pixel6.md](INSTALL-Pixel6.md), [INSTALL-Pixel6Pro.md](INSTALL-Pixel6Pro.md), [INSTALL-S20FE.md](INSTALL-S20FE.md). Для других телефонов есть экспериментальный образ
-([GSI.md](GSI.md)), или BlueOS можно собрать самому ([BUILDING.md](BUILDING.md)).
+**English** | [Русский](INSTALL.ru.md)
 
-## ⚠️ Прочитайте до начала
-- **Неофициальная фанатская прошивка, без каких-либо гарантий.** Всё, что вы делаете с телефоном, — на ваш страх и
-  риск. Это не сборка LineageOS: об ошибках BlueOS не пишите в LineageOS, пишите сюда (Issues).
-- **Все данные на телефоне сотрутся** — при разблокировке загрузчика и ещё раз при установке. Сохраните фото,
-  переписки, **коды двухфакторной защиты** (Google Authenticator и т. п.) заранее.
-- **Загрузчик останется разблокированным.** При каждом включении телефон покажет предупреждение об этом — так и
-  должно быть. **Не блокируйте загрузчик, пока стоит BlueOS** (`fastboot flashing lock`): телефон перестанет
-  загружаться. Заблокировать можно только после возврата на стоковую прошивку (ниже).
-- **Некоторые приложения могут не работать:** оплата телефоном (Google Wallet), часть банковских приложений и игр
-  проверяют, что прошивка «заводская» (Play Integrity), и с BlueOS откажутся работать. Проверьте, нужны ли вам они.
-- **Персонажа и звуков из Blue Archive в этой сборке нет.** Всё остальное работает. Файлы игры можно добавить
-  прямо на телефоне: «Обои и стиль» → «Персонаж» → «Добавить файлы персонажа» ([ASSETS.md](ASSETS.md)). Где их взять:
-  ссылка в описании профиля автора в TikTok — [tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun).
-- **Google Play внутри** (MindTheGapps).
-- **Обновления** ставятся без сброса, но только сборки с этой страницы: они подписаны одним ключом. Сборка, которую
-  вы сделали сами, подписана вашим ключом — поверх неё эти обновления не встанут (и наоборот) без сброса данных.
-- Телефон, купленный у оператора с блокировкой, загрузчик не разблокирует — тогда установить нельзя.
+This guide and this zip are **only for the Pixel 6a** (codename `bluejay`); the build is on this repository's
+**Releases** page. Don't install it on any other phone: it won't boot. The Pixel 6, Pixel 6 Pro and Galaxy S20 FE have
+their own builds and guides: [INSTALL-Pixel6.md](INSTALL-Pixel6.md), [INSTALL-Pixel6Pro.md](INSTALL-Pixel6Pro.md),
+[INSTALL-S20FE.md](INSTALL-S20FE.md). For other phones there is an experimental image ([GSI.md](GSI.md)), or you can
+build BlueOS yourself ([BUILDING.md](BUILDING.md)).
 
-## Что скачать
-| Файл | Зачем |
+## ⚠️ Read before you start
+- **Unofficial fan ROM, no warranty of any kind.** Whatever you do to your phone is at your own risk. This is not a
+  LineageOS build: don't report BlueOS bugs to LineageOS, report them here (Issues).
+- **Everything on the phone will be erased**: once when you unlock the bootloader and again when you install. Save
+  your photos, chats and **two-factor codes** (Google Authenticator and the like) beforehand.
+- **The bootloader stays unlocked.** The phone shows a warning about it on every boot, and that is expected.
+  **Don't lock the bootloader while BlueOS is installed** (`fastboot flashing lock`): the phone will stop booting. You
+  can lock it only after going back to the stock firmware (below).
+- **Some apps may not work:** tap to pay (Google Wallet) and some banking apps and games check that the firmware is
+  "factory" (Play Integrity) and refuse to run on BlueOS. Check whether you need them.
+- **This build has no Blue Archive character or sounds.** Everything else works. You can add the game files right
+  on the phone: Wallpaper & style → Character → Character files ([ASSETS.md](ASSETS.md)). Where to get them: the link
+  in the description of the author's TikTok profile, [tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun).
+- **Google Play is included** (MindTheGapps).
+- **Updates** install without a wipe, but only builds from this page: they are signed with the same key. A build you
+  made yourself is signed with your key, so these updates won't install over it (and the other way round) without
+  wiping the data.
+- A carrier-locked phone can't unlock its bootloader, and then BlueOS can't be installed.
+
+## What to download
+| File | What for |
 |---|---|
-| `BlueOS-0.8.1-bluejay-20261105.zip` | сама прошивка |
-| `boot.img`, `dtbo.img`, `vendor_boot.img` | для первой установки: загрузочный раздел и recovery BlueOS |
-| `SHA256SUMS` | контрольные суммы — проверить, что файлы скачались целиком |
+| `BlueOS-0.8.1-bluejay-20261105.zip` | the ROM itself |
+| `boot.img`, `dtbo.img`, `vendor_boot.img` | for the first install: the boot partition and the BlueOS recovery |
+| `SHA256SUMS` | checksums, to check that the files downloaded completely |
 
-Проверка: Windows (PowerShell) — `Get-FileHash .\BlueOS-0.8.1-bluejay-20261105.zip`, Linux/macOS — `sha256sum -c SHA256SUMS`.
-Суммы должны совпасть. Не совпали — скачайте заново, не прошивайте.
+Check: Windows (PowerShell) `Get-FileHash .\BlueOS-0.8.1-bluejay-20261105.zip`, Linux/macOS `sha256sum -c SHA256SUMS`.
+The sums must match. If they don't, download again and don't flash.
 
-## Перед началом
-- Обновите стоковую прошивку до **Android 17, обновление октября 2026 или новее** («Настройки» → «Система» →
-  «Обновление системы»). На старой прошивке BlueOS может не загрузиться.
-- Компьютер, кабель USB и [Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools)
-  (`adb` и `fastboot`). На Windows ещё [Google USB Driver](https://developer.android.com/studio/run/win-usb).
-- Зарядите телефон хотя бы до 50 %.
+## Before you start
+- Update the stock firmware to **Android 17, the October 2026 update or newer** (Settings → System → System update).
+  BlueOS may not boot on older firmware.
+- A computer, a USB cable and [Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools)
+  (`adb` and `fastboot`). On Windows also the [Google USB Driver](https://developer.android.com/studio/run/win-usb).
+- Charge the phone to at least 50 %.
 
-## 1. Разблокировать загрузчик (один раз)
-1. «Настройки» → «О телефоне» → 7 раз нажать «Номер сборки» — включится режим разработчика.
-2. «Настройки» → «Система» → «Для разработчиков»: включить **«Заводская разблокировка» (OEM unlocking)** и
-   **«Отладка по USB»**.
-3. Подключить к компьютеру, разрешить отладку на телефоне. В папке platform-tools:
+## 1. Unlock the bootloader (once)
+1. Settings → About phone → tap «Build number» 7 times: developer mode turns on.
+2. Settings → System → Developer options: turn on **OEM unlocking** and **USB debugging**.
+3. Connect the phone to the computer and allow debugging on the phone. In the platform-tools folder:
 ```
 adb reboot bootloader
 fastboot flashing unlock
 ```
-4. На телефоне кнопками громкости выбрать «Unlock the bootloader», подтвердить кнопкой питания. Телефон сотрётся.
-   После загрузки снова включите «Отладку по USB» (шаг 2).
+4. On the phone, pick «Unlock the bootloader» with the volume buttons and confirm with the power button. The phone is
+   erased. After it boots, turn on USB debugging again (step 2).
 
-## 2. Поставить recovery BlueOS
+## 2. Flash the BlueOS recovery
 ```
 adb reboot bootloader
 fastboot flash boot boot.img
 fastboot flash dtbo dtbo.img
 fastboot flash vendor_boot vendor_boot.img
 ```
-Затем кнопками громкости выбрать **Recovery mode** и нажать питание — откроется recovery BlueOS (логотип с нимбом).
+Then pick **Recovery mode** with the volume buttons and press power: the BlueOS recovery opens (the logo with a halo).
 
-## 3. Установить BlueOS
-1. В recovery: **Factory reset → Format data / factory reset** → подтвердить. (Обязательно при переходе со стока
-   или другой прошивки.)
-2. Назад → **Apply update → Apply from ADB**.
-3. На компьютере:
+## 3. Install BlueOS
+1. In recovery: **Factory reset → Format data / factory reset** → confirm. (Required when you come from stock or
+   another ROM.)
+2. Back → **Apply update → Apply from ADB**.
+3. On the computer:
 ```
 adb sideload BlueOS-0.8.1-bluejay-20261105.zip
 ```
-   Дойдёт до 47 % или 100 % и напишет «Total xfer» — это нормально. На телефоне должно быть «Install completed».
-4. **Reboot system now.** Первая загрузка — несколько минут.
+   It stops at 47 % or 100 % and prints «Total xfer»: that's normal. The phone should say «Install completed».
+4. **Reboot system now.** The first boot takes a few minutes.
 
-## Обновления
-Новые версии BlueOS ставятся **без сброса**: recovery → Apply update → Apply from ADB → `adb sideload <новый zip>`
-(или `adb reboot sideload` из системы с включённой отладкой по USB). Данные остаются. Откатиться на более старую
-версию так нельзя — только со сбросом.
+## Updates
+New BlueOS versions install **without a wipe**: recovery → Apply update → Apply from ADB → `adb sideload <new zip>`
+(or `adb reboot sideload` from the system with USB debugging on). Your data stays. You can't go back to an older
+version this way, only with a wipe.
 
-## Если что-то пошло не так
-- Не загружается дальше логотипа больше 10 минут — зайдите в recovery (питание + громкость вниз, затем Recovery mode),
-  сделайте Format data и поставьте zip ещё раз.
-- **Вернуть стоковую прошивку:** [flash.android.com](https://flash.android.com) (Android Flash Tool, Chrome/Edge) —
-  он прошьёт заводскую систему и, если хотите, снова заблокирует загрузчик. Данные сотрутся.
-- Пропало размытие в шторке сразу после установки или на зарядке — телефон нагрелся, Android сам отключает размытие;
-  остынет — вернётся.
-- Нашли ошибку — откройте Issue: что делали, что увидели, лучше со скриншотом.
-
----
-
-## English (short)
-This zip is **only for the Pixel 6a (`bluejay`)** — see **Releases**; for other phones see [GSI.md](GSI.md). Unofficial fan ROM, **no warranty,
-use at your own risk**; not a LineageOS build — don't report its bugs to LineageOS. Unlocking the bootloader and
-installing **wipe the phone**. **Never relock the bootloader while BlueOS is installed** (the phone won't boot); go back
-to stock with flash.android.com first. Tap-to-pay and some banking apps/games may refuse to work (Play Integrity).
-No Blue Archive files are included (no character, no game sounds); to add them on the phone see [ASSETS.md](ASSETS.md),
-where to get them: the link in the author's TikTok profile description, [tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun). Google Play is included (MindTheGapps).
-Updates install without a wipe only from builds on this page (same signing key).
-
-Steps: update stock to Android 17 (October 2026 or newer) → `fastboot flashing unlock` → `fastboot flash boot boot.img`,
-`dtbo dtbo.img`, `vendor_boot vendor_boot.img` → Recovery mode → Factory reset → Format data → Apply update → Apply
-from ADB → `adb sideload BlueOS-0.8.1-bluejay-20261105.zip` → Reboot. Check files against `SHA256SUMS` first.
+## If something goes wrong
+- Stuck on the logo for more than 10 minutes: go to recovery (power + volume down, then Recovery mode), do Format data
+  and install the zip again.
+- **Going back to stock:** [flash.android.com](https://flash.android.com) (Android Flash Tool, Chrome/Edge). It flashes
+  the factory system and, if you want, locks the bootloader again. Your data is erased.
+- Blur in the shade disappears right after installing or while charging: the phone got warm and Android turned blur
+  off by itself. It comes back when the phone cools down.
+- Found a bug? Open an Issue: what you did and what you saw, ideally with a screenshot.

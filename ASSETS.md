@@ -1,75 +1,82 @@
-# Персонаж, звуки и обои — свои файлы
+# Character, sounds and wallpapers: your own files
 
-В исходниках и готовых сборках BlueOS **нет файлов из Blue Archive**: моделей персонажей, голосов, звуков, музыки и
-картинок из игры: они принадлежат Nexon / Yostar. Без них BlueOS работает полностью — нет только того, что из них
-сделано. Файлы можно добавить **прямо на телефоне, без сборки**. Где их взять — [ниже](#откуда-файлы) и в описании
-профиля автора в TikTok: [tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun). **Не добавляйте эти файлы в этот репозиторий, его форки и Issues.**
+**English** | [Русский](ASSETS.ru.md)
 
-## Что без файлов
-| Без файлов | С файлами |
+The BlueOS sources and ready-made builds have **no files from Blue Archive**: no character models, voices, sounds,
+music or pictures from the game, which belong to Nexon / Yostar. BlueOS works fully without them; only what is made
+from them is missing. You can add the files **right on the phone, without a build**. Where to get them:
+[below](#where-to-get-the-files) and in the description of the author's TikTok profile,
+[tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun). **Don't add these files to this repository, its forks or
+Issues.**
+
+## What you get without the files
+| Without the files | With the files |
 |---|---|
-| Экран блокировки без персонажа (часы, нимб, приветствие, погода, AOD — есть) | Арона или Плана на экране блокировки и в AOD, реагирует на касания, наклон, тряску, говорит своим голосом |
-| Нет виджета «Персонаж»; в «Обоях и стиле» → «Персонаж» — только «Добавить файлы персонажа» | Виджет с ней на рабочем столе, парта, реплики, все настройки персонажа |
-| Звонок, уведомления, будильник, звуки зарядки — стандартные LineageOS; звуки блокировки — «Старт», «Огонь» и «Android» | Музыка и звуки из игры (MomoTalk и др.) в списках звуков, остальные звуки блокировки |
-| Обои — стандартные LineageOS | (при сборке) свой набор «BlueOS» в «Обоях и стиле» |
-| Анимация загрузки BlueOS (нимб + надпись) | (при сборке) плюс «классические» анимации на выбор |
+| A lock screen without a character (the clock, halo, greeting, weather and AOD are there) | Arona or Plana on the lock screen and on AOD; she reacts to touches, tilting and shaking and talks in her own voice |
+| No «Character» widget; Wallpaper & style → Character has only «Character files» | A widget with her on the home screen, the desk, her lines, all the character settings |
+| Ringtone, notifications, alarm, charging sounds: the stock LineageOS ones; lock sounds: «Start», «Fire» and «Android» | Music and sounds from the game (MomoTalk and others) in the sound lists, the other lock sounds |
+| Wallpapers: the stock LineageOS ones | (in your own build) a «BlueOS» set in Wallpaper & style |
+| The BlueOS boot animation (a halo + the name) | (in your own build) plus «classic» animations to choose from |
 
-## Способ 1 — на телефоне (готовая прошивка, без компьютера)
-1. Положите файлы на телефон одной папкой (или одним архивом `.zip`) — **в любом виде**, как они у вас лежат после
-   распаковки: BlueOS ищет нужные файлы по именам во всех вложенных папках.
-2. «Обои и стиль» → «Персонаж» → **«Добавить файлы персонажа»** → «Выбрать папку» (или «Выбрать архив .zip»).
-3. BlueOS покажет, что нашёл: «Арона: 3 из 3», «Голос Ароны: 47 из 47», … и сколько файлов отличаются от проверенных
-   (обычно — другая версия игры). Нажмите **«Перезагрузить телефон»** — после перезагрузки персонаж появится.
-   Виджет «Персонаж» — в списке виджетов рабочего стола.
+## Method 1: on the phone (ready-made ROM, no computer)
+1. Put the files on the phone as one folder (or one `.zip` archive), **in any layout**, just as they are after
+   unpacking: BlueOS looks for the files it needs by name in all subfolders.
+2. Wallpaper & style → Character → **Character files** → «Pick a folder» (or «Pick a .zip archive»).
+3. BlueOS shows what it found: «Arona: 3 of 3», «Arona's voice: 47 of 47», … and how many files differ from the
+   checked ones (usually another version of the game). Tap **«Restart the phone»**: after the restart the character
+   appears. The «Character» widget is in the home screen's widget list.
 
-Что находит импорт:
-- **модели** — по именам `arona_spr.*` (Арона), `NP0035_spr.*` (Плана); подходят и имена после распаковки Unity:
+What the import finds:
+- **models**: by the names `arona_spr.*` (Arona) and `NP0035_spr.*` (Plana); names as Unity unpacks them work too:
   `arona_spr.skel.bytes`, `arona_spr.atlas.txt`;
-- **парту** — `arona_desk.*`, а если её нет — **вырезает сама** из сцены кабинета `arona_workpage_daytime.*`
-  (`.atlas`, `.skel` и обе картинки страниц);
-- **голоса** — `.ogg` с именами как на вики (`Arona_Work_In_1.ogg` или `Work_In_1.ogg`). Чей голос, BlueOS понимает по
-  приставке в имени или по папке: в её пути должно быть `arona`/`арона` или `plana`/`np0035`/`плана`;
-- **звуки эмоций** `SFX_Emoticon_Motion_*.wav`; **звуки и мелодии** с именами как в [ASSETS-files.txt](ASSETS-files.txt)
-  (звонки, уведомления и будильники попадут в общие папки телефона `Ringtones`/`Notifications`/`Alarms` → `BlueOS`).
+- **the desk**: `arona_desk.*`, and if it isn't there, the import **cuts it out by itself** from the office scene
+  `arona_workpage_daytime.*` (`.atlas`, `.skel` and both page pictures);
+- **voices**: `.ogg` files named as on the wiki (`Arona_Work_In_1.ogg` or `Work_In_1.ogg`). BlueOS tells whose voice
+  it is by the prefix in the name or by the folder: its path must contain `arona`/`арона` or `plana`/`np0035`/`плана`;
+- **emotion sounds** `SFX_Emoticon_Motion_*.wav`; **sounds and tunes** named as in [ASSETS-files.txt](ASSETS-files.txt)
+  (ringtones, notifications and alarms go to the phone's shared `Ringtones`/`Notifications`/`Alarms` → `BlueOS`
+  folders).
 
-Файлы персонажа хранятся в `/data/misc/blueos` и переживают обновления BlueOS. Удалить их — там же, «Удалить
-добавленные файлы». Звуки из игры в мелодии/уведомления можно добавить и вручную: положите `.ogg` в папку
-`Ringtones`, `Notifications` или `Alarms` во внутренней памяти — они появятся в списках звуков.
+The character files are kept in `/data/misc/blueos` and survive BlueOS updates. To delete them, use «Remove added
+files» on the same page. You can also add game sounds as ringtones/notifications by hand: put `.ogg` files into the
+`Ringtones`, `Notifications` or `Alarms` folder in internal storage, and they appear in the sound lists.
 
-## Способ 2 — при сборке (вшить в свою прошивку)
-1. Запустите из корня исходников (нужны `python3-pil` и `ffmpeg`), указав **любую** папку с файлами:
+## Method 2: in a build (bake them into your own ROM)
+1. Run this from the top of the source tree (you need `python3-pil` and `ffmpeg`), pointing it at **any** folder with
+   the files:
 ```
-python3 vendor/blueos/tools/import-assets.py /путь/к/файлам
+python3 vendor/blueos/tools/import-assets.py /path/to/files
 ```
-   Без папки `characters/` внутри он ищет файлы персонажей по именам везде, как телефон, и сам вырезает парту из сцены
-   кабинета. Звуки, обои и анимации загрузки берутся из папок с точными именами (ниже), им нужна конвертация.
-2. Пересоберите (`m bacon`). Первая сборка после добавления файлов дольше обычного — это нормально.
-3. Проверьте на телефоне: `adb shell ls /product/media/blueos/spine/arona` — три файла модели.
+   Without a `characters/` folder inside, it looks for the character files by name everywhere, like the phone does,
+   and cuts the desk out of the office scene by itself. Sounds, wallpapers and boot animations are taken from folders
+   with exact names (below), since they need converting.
+2. Rebuild (`m bacon`). The first build after adding the files takes longer than usual: that's normal.
+3. Check on the phone: `adb shell ls /product/media/blueos/spine/arona` shows the three model files.
 
-Папки для звуков, обоев и анимаций (части, которых нет, пропускаются):
+Folders for sounds, wallpapers and animations (missing parts are skipped):
 ```
-<папка>/
-  notification/  clockAlarm/  "Unlock, lock"/  touch/   ← звуки (любой формат, который читает ffmpeg)
-  boot/bootanimation/light/bootanimation.zip  boot/bootanimation/dark/bootanimation.zip   ← анимации загрузки
-  wallpaper/     *.jpg / *.png                ← свои обои (файл «25.*» станет обоями по умолчанию)
-  stickers/      arona.png                    ← стикер для фото-виджета Галереи
-  characters/arona/{spine,voice,sfx,desk}/  characters/plana/{spine,voice}/   ← или так, если удобнее
+<folder>/
+  notification/  clockAlarm/  "Unlock, lock"/  touch/   ← sounds (any format ffmpeg can read)
+  boot/bootanimation/light/bootanimation.zip  boot/bootanimation/dark/bootanimation.zip   ← boot animations
+  wallpaper/     *.jpg / *.png                ← your own wallpapers (the file «25.*» becomes the default wallpaper)
+  stickers/      arona.png                    ← the sticker for Gallery's photo widget
+  characters/arona/{spine,voice,sfx,desk}/  characters/plana/{spine,voice}/   ← or like this, if you prefer
 ```
-Точные имена всех файлов, которые использует BlueOS, с размерами и контрольными суммами — [ASSETS-files.txt](ASSETS-files.txt).
+The exact names of all files BlueOS uses, with sizes and checksums, are in [ASSETS-files.txt](ASSETS-files.txt).
 
-## Откуда файлы
-**Проще всего:** архив с файлами — по ссылке в описании профиля автора в TikTok, [tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun). Скачайте его на телефон и
-выберите в «Добавить файлы персонажа» (способ 1). В этом репозитории и в релизах файлов нет.
+## Where to get the files
+**The easiest way:** an archive with the files, at the link in the description of the author's TikTok profile,
+[tiktok.com/@chozadaun](https://www.tiktok.com/@chozadaun). Download it to the phone and pick it in «Character files»
+(method 1). There are no files in this repository or in the releases.
 
-**Самому:** это файлы самой игры (Unity): модели Spine 4.2 персонажей (`arona_spr`, `NP0035_spr`), сцена кабинета
-`Arona_workpage_daytime` (из неё парта), голоса персонажей, звуки интерфейса и эмоций, музыкальные темы. Их достают из
-**своей** установленной копии игры программами для распаковки Unity-ассетов (например, AssetStudio или AssetRipper):
-модели Spine лежат там как текстовые ассеты (`.skel.bytes`, `.atlas.txt`) и текстуры (`.png`). Имена голосов — как на
-вики игры. Как именно хранит файлы ваша версия игры, меняется с
-обновлениями — если что-то не находится, напишите в Issues, что и где лежит.
+**Yourself:** these are files of the game itself (Unity): the characters' Spine 4.2 models (`arona_spr`,
+`NP0035_spr`), the office scene `Arona_workpage_daytime` (the desk comes from it), the characters' voices, interface
+and emotion sounds, music themes. They are taken from **your own** installed copy of the game with tools that unpack
+Unity assets (for example AssetStudio or AssetRipper): the Spine models are stored there as text assets
+(`.skel.bytes`, `.atlas.txt`) and textures (`.png`). The voices are named as on the game's wiki. How your version of
+the game stores the files changes with updates: if something isn't found, write in Issues what is where.
 
-## Звуки по умолчанию
-По умолчанию звонок, уведомление, будильник, звуки зарядки и касания — стандартные LineageOS, звук
-блокировки и разблокировки — «Старт» (он есть в исходниках). Добавленные звуки появляются в списках
-«Настройки» → «Звук» (мелодия, уведомление, будильник, «Звуки зарядки», «Звук блокировки экрана», «Звук касания»),
-выбрать их можно там.
+## Default sounds
+By default the ringtone, notification, alarm, charging and touch sounds are the stock LineageOS ones, and the lock and
+unlock sound is «Start» (it is in the sources). Added sounds appear in the lists in Settings → Sound
+(ringtone, notification, alarm, «Charging sounds», «Screen lock sound», «Touch sound»), and you pick them there.

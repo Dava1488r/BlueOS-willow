@@ -1,55 +1,60 @@
-# Порт BlueOS на другой телефон
+# Porting BlueOS to another phone
 
-## Что от телефона не зависит
-`vendor/blueos` про конкретный телефон ничего не знает: он подключается одной строкой в `vendor/extra/product.mk`
-и патчит только общие проекты LineageOS/AOSP (SystemUI, лаунчер, Настройки, «Обои и стиль», Часы, Календарь,
-Галерея, мастер настройки, recovery, `vendor/lineage`). Деревья устройств, ядро и блобы не трогаются.
+**English** | [Русский](PORTING.ru.md)
 
-Поэтому «порт» — это обычно:
-1. **Ваш телефон поддерживается LineageOS 24.0** (официально или неофициальным деревом под lineage-24.0) — собираете
-   по [BUILDING.md](BUILDING.md), проверяете пункты ниже.
-2. **Не поддерживается** — сначала нужна сама LineageOS 24.0 для него (дерево устройства, ядро, блобы). Это отдельная
-   большая работа, не связанная с BlueOS: ищите дерево на XDA / GitHub по кодовому имени телефона. BlueOS ставится
-   поверх уже работающей сборки.
-3. **Есть только на прошлой версии (23.2)** — иногда можно взять дерево устройства от 23.2, а общую часть от 24.0 и
-   перенести недостающее с соседних устройств. Так сделан Galaxy S20 FE: [ports/r8q](ports/r8q/README.md).
+## What doesn't depend on the phone
+`vendor/blueos` knows nothing about any particular phone: it is hooked in with one line in `vendor/extra/product.mk`
+and patches only the common LineageOS/AOSP projects (SystemUI, the launcher, Settings, Wallpaper & style, Clock,
+Calendar, Gallery, the setup wizard, recovery, `vendor/lineage`). Device trees, the kernel and blobs are not touched.
 
-## Что проверить на другом экране
-Всё ниже настроено и измерено на Pixel 6a (1080×2400, 420 dpi, сетка рабочего стола 4×5).
-- **Сетка и раскладка по умолчанию.** Патч лаунчера делает сеткой по умолчанию `4_by_5`, а раскладка новой прошивки —
-  `packages/apps/Launcher3/res/xml/default_workspace_4x5.xml`. На планшете или телефоне с другой сеткой по умолчанию
-  возьмётся раскладка LineageOS для неё — скопируйте нашу в `default_workspace_<сетка>.xml` и поправьте клетки.
-- **Размеры виджетов.** Виджеты BlueOS выбирают макет по своему размеру в dp (например, «Музыка + эквалайзер»
-  широкий от 250 dp, переключатели с подписями от 300×110 dp; пороги — `SizeF(...)` в
-  `frameworks/base/packages/SystemUI/src/com/android/systemui/blueos/widgets/*.kt`). В пороги входит внешний отступ
-  виджета 8 dp. На Pixel 6a клетка сетки 4×5 — 98,7×145,5 dp. На другом экране проверьте, что виджеты 2×1 и 4×1 берут
-  нужный макет (`adb shell dumpsys appwidget` показывает размеры).
-- **Персонаж на экране блокировки** (если добавили файлы, см. [ASSETS.md](ASSETS.md)): места задаются долями экрана,
-  на других пропорциях может понадобиться «Своё место» (Обои и стиль → Персонаж).
-- **Анимация загрузки** — кадр 640×336 по центру, подходит для любого экрана. Логотип recovery есть для всех плотностей.
+So a "port" is usually one of these:
+1. **Your phone is supported by LineageOS 24.0** (officially or with an unofficial lineage-24.0 tree): build it with
+   [BUILDING.md](BUILDING.md) and check the points below.
+2. **It isn't supported**: first you need LineageOS 24.0 itself for it (device tree, kernel, blobs). That is a
+   separate, big job unrelated to BlueOS: look for a tree on XDA / GitHub by the phone's codename. BlueOS goes on top
+   of a build that already works.
+3. **It exists only for the previous version (23.2)**: sometimes you can take the device tree from 23.2 and the common
+   part from 24.0, and port what is missing from related devices. That is how the Galaxy S20 FE was done:
+   [ports/r8q](ports/r8q/README.md).
 
-## Частые проблемы
-- **`BlueOS: FAILED to apply …`** при `source build/envsetup.sh` — патч не встал: LineageOS ушла вперёд от той версии,
-  на которой его делали. Откройте проект (`cd frameworks/base`), `git am --3way <путь к патчу>`, разрешите конфликт
-  (`git status` покажет файлы), `git add`, `git am --continue`. Подобрать правку под новый код — хорошая задача для
-  ИИ-агента ([AGENTS.md](AGENTS.md)).
-- **`duplicate sysprop`** — дерево устройства задаёт то же свойство (`ro.*`), что и BlueOS.
-  В дереве устройства сделайте присваивание необязательным (`?=`) или уберите свойство.
-- **Наши значения по умолчанию не действуют** (тёмная тема, AOD выключен, звук блокировки…) — дерево устройства или
-  LineageOS кладёт свои оверлеи, они становятся RRO и могут перебивать наши. Проверьте:
-  `adb shell cmd overlay list | grep -i auto_generated`, и посмотрите оверлеи в `device/<производитель>/<телефон>/overlay*`.
-- **Сборка требует ~1 час на «анализ»** после изменения `Android.bp`/`.mk` или новых файлов — это нормально, дальше
-  быстрее. **Не хватает памяти** (`ninja: build stopped`, OOM) — увеличьте подкачку или соберите с `-j4`.
+## What to check on a different screen
+Everything below was tuned and measured on a Pixel 6a (1080×2400, 420 dpi, a 4×5 home screen grid).
+- **The grid and the default layout.** The launcher patch makes `4_by_5` the default grid, and the layout of a fresh
+  install is `packages/apps/Launcher3/res/xml/default_workspace_4x5.xml`. On a tablet or a phone with another default
+  grid, the LineageOS layout for that grid is used instead: copy ours to `default_workspace_<grid>.xml` and adjust the
+  cells.
+- **Widget sizes.** BlueOS widgets pick their layout by their size in dp (for example, «Music + equalizer» is wide
+  from 250 dp, the toggles with labels from 300×110 dp; the thresholds are `SizeF(...)` in
+  `frameworks/base/packages/SystemUI/src/com/android/systemui/blueos/widgets/*.kt`). The thresholds include the
+  widget's 8 dp outer margin. On a Pixel 6a a 4×5 grid cell is 98.7×145.5 dp. On another screen check that the 2×1
+  and 4×1 widgets get the right layout (`adb shell dumpsys appwidget` shows the sizes).
+- **The character on the lock screen** (if you added the files, see [ASSETS.md](ASSETS.md)): her positions are set as
+  fractions of the screen, so other aspect ratios may need «Custom» (Wallpaper & style → Character).
+- **The boot animation** is a 640×336 frame in the centre and fits any screen. The recovery logo exists for every
+  density.
 
-## Проверка на телефоне
-1. Анимация загрузки BlueOS, «О телефоне» — BlueOS, мастер настройки — экран BlueOS с нимбом.
-2. Экран блокировки: часы с нимбом, приветствие, дата; AOD серый.
-3. Рабочий стол: виджеты BlueOS; «Обои и стиль» → «Виджеты и значки», «Цвета», «Погода», «Движение телефона».
-4. Смена обоев и тёмной/светлой темы: цвета перестраиваются, тёмного текста на экране блокировки нет.
-5. Если добавляли персонажа — она на экране блокировки и в виджете «Персонаж».
+## Common problems
+- **`BlueOS: FAILED to apply …`** on `source build/envsetup.sh`: the patch didn't apply, because LineageOS has moved
+  on from the version it was made on. Go into the project (`cd frameworks/base`), run
+  `git am --3way <path to the patch>`, resolve the conflict (`git status` shows the files), `git add`,
+  `git am --continue`. Fitting the change to the new code is a good task for an AI agent ([AGENTS.md](AGENTS.md)).
+- **`duplicate sysprop`**: the device tree sets the same property (`ro.*`) as BlueOS. In the device tree make the
+  assignment optional (`?=`) or remove the property.
+- **Our defaults don't take effect** (dark theme, AOD off, lock sound…): the device tree or LineageOS adds its own
+  overlays, they become RROs and can override ours. Check `adb shell cmd overlay list | grep -i auto_generated` and look
+  at the overlays in `device/<maker>/<phone>/overlay*`.
+- **The build spends ~1 hour on "analysis"** after a change to `Android.bp`/`.mk` or new files: that's normal, it is
+  faster after that. **Out of memory** (`ninja: build stopped`, OOM): increase swap or build with `-j4`.
 
-Получилось на новом телефоне — поделитесь (issue / pull request с тем, что пришлось поправить), это поможет следующим.
+## Checking on the phone
+1. The BlueOS boot animation; About phone says BlueOS; the setup wizard shows the BlueOS screen with a halo.
+2. Lock screen: the clock with a halo, the greeting, the date; AOD is grey.
+3. Home screen: BlueOS widgets; Wallpaper & style → «Widgets and icons», «Colors», «Weather», «Phone motion».
+4. Changing the wallpaper and dark/light theme: the colours rebuild, and there is no dark text on the lock screen.
+5. If you added the character: she is on the lock screen and in the «Character» widget.
 
-## Сначала можно попробовать GSI
-Прежде чем собирать под свой телефон, можно запустить готовый экспериментальный образ: он не привязан к устройству и через
-DSU не стирает данные ([GSI.md](GSI.md)). Он проверен только на Pixel 6a.
+If it worked on a new phone, share it (an issue / pull request with what you had to fix): it will help the next people.
+
+## You can try the GSI first
+Before building for your phone, you can start the ready-made experimental image: it isn't tied to a device, and
+through DSU it doesn't erase anything ([GSI.md](GSI.md)). It has been checked only on a Pixel 6a.
