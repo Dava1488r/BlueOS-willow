@@ -1,8 +1,8 @@
-# Установка BlueOS на Redmi Note 8 / Redmi Note 8T (`ginkgo` / `willow`)
+# Установка готовой BlueOS на Redmi Note 8 / Redmi Note 8T
 
-[English](INSTALL-ginkgo.md) | **Русский**
+[English](INSTALL-RedmiNote8T.md) | **Русский**
 
-Эта инструкция предназначена для **Redmi Note 8** и **Redmi Note 8T** (платформа Snapdragon 665 / `sm6125`).
+Эта инструкция и архив предназначены для **Redmi Note 8T** (`willow`) и **Redmi Note 8** (`ginkgo`); готовая сборка находится на вкладке **Releases** (`v0.8.1-willow`).
 
 ### Совместимость моделей:
 

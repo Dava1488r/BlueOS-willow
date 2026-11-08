@@ -38,5 +38,4 @@ breakfast ginkgo
 m bacon -j$(nproc)
 ```
 
-The install generates `recovery.img` and the flashable ROM zip in `out/target/product/ginkgo/`.
-See [INSTALL-ginkgo.ru.md](../../INSTALL-ginkgo.ru.md) for step-by-step flashing instructions.
+See [INSTALL-RedmiNote8T.md](../../INSTALL-RedmiNote8T.md) ([Русский](../../INSTALL-RedmiNote8T.ru.md)) for step-by-step flashing instructions.
