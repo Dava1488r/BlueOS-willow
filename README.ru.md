@@ -52,6 +52,9 @@ BlueOS разрабатывается на **Google Pixel 6a (`bluejay`)**. Го
 | **Поставить на Pixel 6** | **Releases** (`v0.8.1-oriole`) + [INSTALL-Pixel6.ru.md](INSTALL-Pixel6.ru.md) |
 | **Поставить на Pixel 6 Pro** | **Releases** (`v0.8.1-raven`) + [INSTALL-Pixel6Pro.ru.md](INSTALL-Pixel6Pro.ru.md) |
 | **Поставить на Galaxy S20 FE (Snapdragon)** | **Releases** (`v0.8.1-r8q`) + [INSTALL-S20FE.ru.md](INSTALL-S20FE.ru.md) |
+| **Поставить на Pixel 7** | **Releases** (`v0.8.1-panther`) + [INSTALL-Pixel7.ru.md](INSTALL-Pixel7.ru.md) |
+| **Поставить на Pixel 7 Pro** | **Releases** (`v0.8.1-cheetah`) + [INSTALL-Pixel7Pro.ru.md](INSTALL-Pixel7Pro.ru.md) |
+| **Поставить на Pixel 7a** | **Releases** (`v0.8.1-lynx`) + [INSTALL-Pixel7a.ru.md](INSTALL-Pixel7a.ru.md) |
 | **Поставить на Redmi Note 8 / 8T** | **Releases** (`v0.8.1-willow`) + [INSTALL-RedmiNote8T.ru.md](INSTALL-RedmiNote8T.ru.md) |
 | **Попробовать на другом телефоне** (GSI, экспериментально, проверен только на Pixel 6a) | **Releases** + [GSI.ru.md](GSI.ru.md) |
 | Собрать BlueOS под свой телефон | [BUILDING.ru.md](BUILDING.ru.md) |

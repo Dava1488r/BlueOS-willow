@@ -54,6 +54,9 @@ interface in Russian; BlueOS is in English too.</sub>
 | **Install on a Pixel 6** | **Releases** (`v0.8.1-oriole`) + [INSTALL-Pixel6.md](INSTALL-Pixel6.md) |
 | **Install on a Pixel 6 Pro** | **Releases** (`v0.8.1-raven`) + [INSTALL-Pixel6Pro.md](INSTALL-Pixel6Pro.md) |
 | **Install on a Galaxy S20 FE (Snapdragon)** | **Releases** (`v0.8.1-r8q`) + [INSTALL-S20FE.md](INSTALL-S20FE.md) |
+| **Install on a Pixel 7** | **Releases** (`v0.8.1-panther`) + [INSTALL-Pixel7.md](INSTALL-Pixel7.md) |
+| **Install on a Pixel 7 Pro** | **Releases** (`v0.8.1-cheetah`) + [INSTALL-Pixel7Pro.md](INSTALL-Pixel7Pro.md) |
+| **Install on a Pixel 7a** | **Releases** (`v0.8.1-lynx`) + [INSTALL-Pixel7a.md](INSTALL-Pixel7a.md) |
 | **Install on a Redmi Note 8 / 8T** | **Releases** (`v0.8.1-willow`) + [INSTALL-RedmiNote8T.md](INSTALL-RedmiNote8T.md) |
 | **Try it on another phone** (GSI, experimental, checked only on a Pixel 6a) | **Releases** + [GSI.md](GSI.md) |
 | Build BlueOS for your own phone | [BUILDING.md](BUILDING.md) |
